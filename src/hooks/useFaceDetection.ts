@@ -1,0 +1,296 @@
+import { useRef, useState, useEffect } from "react"
+import * as faceapi from "face-api.js"
+
+const MODELS_BASE = "/models"
+
+type FaceDetectionResult = {
+  confidence: number
+  box: { x: number; y: number; width: number; height: number }
+  landmarksCount: number
+  descriptor: Float32Array
+}
+
+type DetectedFace = {
+  detection: FaceDetectionResult
+}
+
+type RawDetection = {
+  detection: {
+    score: number
+    forSize(width: number, height: number): {
+      box: { x: number; y: number; width: number; height: number }
+    }
+  }
+  landmarks?: {
+    positions: { x: number; y: number }[]
+    forSize(width: number, height: number): { positions: { x: number; y: number }[] }
+  }
+  descriptor?: Float32Array
+}
+
+type UseFaceDetectionReturn = {
+  videoRef: React.RefObject<HTMLVideoElement | null>
+  canvasRef: React.RefObject<HTMLCanvasElement | null>
+  results: DetectedFace[]
+  faceCount: number
+  isLoading: boolean
+  error: string | null
+  landmarksReady: boolean
+  recognitionReady: boolean
+}
+
+async function loadDetectionModel(): Promise<void> {
+  await faceapi.nets.ssdMobilenetv1.loadFromUri(MODELS_BASE)
+}
+
+async function loadDeferredModels(
+  onLandmarksReady: () => void,
+  onRecognitionReady: () => void,
+): Promise<void> {
+  try {
+    await faceapi.nets.faceLandmark68Net.loadFromUri(MODELS_BASE)
+    onLandmarksReady()
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODELS_BASE)
+    onRecognitionReady()
+  } catch (err) {
+    console.error("Failed to load deferred models:", err)
+  }
+}
+
+async function setupCamera(video: HTMLVideoElement): Promise<MediaStream> {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      width: { ideal: 640 },
+      height: { ideal: 480 },
+      facingMode: "user",
+    },
+    audio: false,
+  })
+  video.srcObject = stream
+  return new Promise((resolve, reject) => {
+    video.onloadedmetadata = () => {
+      video.play().then(() => resolve(stream)).catch(reject)
+    }
+    video.onerror = () => reject(new Error("Video element error"))
+  })
+}
+
+function drawDetection(
+  ctx: CanvasRenderingContext2D,
+  box: { x: number; y: number; width: number; height: number },
+) {
+  ctx.strokeStyle = "#22c55e"
+  ctx.lineWidth = 3
+  ctx.strokeRect(box.x, box.y, box.width, box.height)
+
+  ctx.fillStyle = "#22c55e"
+  ctx.font = "14px monospace"
+  ctx.fillText(
+    "face",
+    box.x,
+    box.y > 20 ? box.y - 6 : box.y + box.height + 18,
+  )
+}
+
+function drawFaceLandmarks(
+  ctx: CanvasRenderingContext2D,
+  positions: { x: number; y: number }[],
+) {
+  ctx.fillStyle = "#3b82f6"
+  for (const pt of positions) {
+    ctx.beginPath()
+    ctx.arc(pt.x, pt.y, 1.5, 0, 2 * Math.PI)
+    ctx.fill()
+  }
+}
+
+export function useFaceDetection(): UseFaceDetectionReturn {
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const isMountedRef = useRef(true)
+
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [results, setResults] = useState<DetectedFace[]>([])
+  const [faceCount, setFaceCount] = useState(0)
+  const [landmarksReady, setLandmarksReady] = useState(false)
+  const [recognitionReady, setRecognitionReady] = useState(false)
+
+  const landmarksReadyRef = useRef(false)
+  const recognitionReadyRef = useRef(false)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    let detectionActive = true
+
+      async function init() {
+        try {
+          setError(null)
+          setIsLoading(true)
+
+          // Phase 1: load detection model only
+          await loadDetectionModel()
+
+          if (!isMountedRef.current) return
+
+          const video = videoRef.current
+          if (!video) throw new Error("Video ref not attached")
+
+          // Phase 2: start camera
+          const stream = await setupCamera(video)
+          streamRef.current = stream
+
+          if (!isMountedRef.current) {
+            stream.getTracks().forEach((t) => t.stop())
+            return
+          }
+
+          // Phase 3: detection is ready
+          setIsLoading(false)
+
+          intervalRef.current = setInterval(async () => {
+            if (!detectionActive) return
+
+            const currentVideo = videoRef.current
+            const currentCanvas = canvasRef.current
+            if (!currentVideo || !currentCanvas) return
+
+            if (
+              currentVideo.readyState < 2 ||
+              currentVideo.paused ||
+              currentVideo.ended
+            ) {
+              return
+            }
+
+            const displayWidth = currentVideo.clientWidth
+            const displayHeight = currentVideo.clientHeight
+
+            if (displayWidth === 0 || displayHeight === 0) return
+
+            currentCanvas.width = displayWidth
+            currentCanvas.height = displayHeight
+
+            try {
+              const baseTask = faceapi.detectAllFaces(
+                currentVideo,
+                new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }),
+              )
+              const landmarkedTask = landmarksReadyRef.current
+                ? baseTask.withFaceLandmarks()
+                : null
+              const descriptorTask =
+                landmarkedTask && recognitionReadyRef.current
+                  ? landmarkedTask.withFaceDescriptors()
+                  : landmarkedTask
+              const detections = await (descriptorTask ??
+                baseTask) as unknown as RawDetection[]
+
+              if (!detectionActive) return
+
+              setFaceCount(detections.length)
+
+              const ctx = currentCanvas.getContext("2d")
+              if (!ctx) return
+
+              ctx.clearRect(0, 0, displayWidth, displayHeight)
+
+              if (detections.length === 0) {
+                setResults([])
+                return
+              }
+
+              const mappedResults: DetectedFace[] = []
+              for (const d of detections) {
+                const scaledBox = d.detection.forSize(displayWidth, displayHeight)
+                const box = {
+                  x: scaledBox.box.x,
+                  y: scaledBox.box.y,
+                  width: scaledBox.box.width,
+                  height: scaledBox.box.height,
+                }
+
+                const r: DetectedFace = {
+                  detection: {
+                    confidence: d.detection.score,
+                    box,
+                    landmarksCount: d.landmarks?.positions?.length ?? 0,
+                    descriptor: (d as { descriptor: Float32Array }).descriptor ?? new Float32Array(128),
+                  },
+                }
+
+                mappedResults.push(r)
+
+                drawDetection(ctx, box)
+                if (d.landmarks?.positions) {
+                  const shifted = d.landmarks.forSize(
+                    displayWidth,
+                    displayHeight,
+                  )
+                  drawFaceLandmarks(ctx, shifted.positions)
+                }
+              }
+
+              setResults(mappedResults)
+            } catch (detectErr) {
+              if (detectionActive) {
+                console.error("face-api detection error:", detectErr)
+              }
+            }
+          }, 200)
+
+          // Phase 4: load landmarks and recognition in background
+          loadDeferredModels(
+            () => {
+              landmarksReadyRef.current = true
+              setLandmarksReady(true)
+            },
+            () => {
+              recognitionReadyRef.current = true
+              setRecognitionReady(true)
+            },
+          )
+        } catch (err) {
+          if (!isMountedRef.current) return
+          const message =
+            err instanceof Error ? err.message : "Unknown error during initialization"
+          setError(message)
+          setIsLoading(false)
+        }
+      }
+
+      init()
+
+    const currentVideo = videoRef.current
+
+    return () => {
+      detectionActive = false
+      isMountedRef.current = false
+
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop())
+        streamRef.current = null
+      }
+      if (currentVideo) {
+        currentVideo.srcObject = null
+      }
+    }
+  }, [])
+
+  return {
+    videoRef,
+    canvasRef,
+    results,
+    faceCount,
+    isLoading,
+    error,
+    landmarksReady,
+    recognitionReady,
+  }
+}
