@@ -26,3 +26,25 @@ export type ClassSessionRow = {
   actual_end: string | null
   status: SessionStatus
 }
+
+export type SandboxSessionStatus = "live" | "ended"
+
+export type SandboxSessionRow = {
+  id: string
+  lecturer_id: string
+  class_label: string
+  course_label: string
+  venue_label: string
+  status: SandboxSessionStatus
+  started_at: string
+  ended_at: string | null
+}
+
+export type SandboxCheckinRow = {
+  id: string
+  session_id: string
+  participant_id: string
+  display_name: string
+  embedding: string | null
+  created_at: string
+}

@@ -9,6 +9,9 @@ import Onboarding from './pages/Onboarding'
 import LecturerDashboard from './pages/LecturerDashboard'
 import LecturerCourses from './pages/LecturerCourses'
 import NewSession from './pages/NewSession'
+import SandboxLanding from './pages/SandboxLanding'
+import SandboxLecturer from './pages/SandboxLecturer'
+import SandboxStudent from './pages/SandboxStudent'
 import ProtectedRoute from './components/ProtectedRoute'
 import LecturerRoute from './components/LecturerRoute'
 
@@ -19,6 +22,9 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/sandbox" element={<SandboxLanding />} />
+        <Route path="/sandbox/lecturer" element={<SandboxLecturer />} />
+        <Route path="/sandbox/student" element={<SandboxStudent />} />
         <Route
           path="/onboarding"
           element={

@@ -120,6 +120,12 @@ export default function Home() {
           >
             Learn more
           </Link>
+          <Link
+            to="/sandbox"
+            className="inline-flex h-10 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+          >
+            Try the demo
+          </Link>
         </div>
       </header>
 
