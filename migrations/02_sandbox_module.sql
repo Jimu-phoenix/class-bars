@@ -23,20 +23,27 @@
 -- LIVE UPDATES (spec §7): clients poll (~3s interval) instead of
 -- Supabase Realtime so no publication/replication config is required.
 --
--- Re-runnable: replaces functions and drops/recreates its objects.
+-- Re-runnable: all CREATE statements use IF NOT EXISTS; policies are
+-- dropped before re-creation; GRANTs are additive.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
 -- Enum (matches project convention of enum-typed status columns)
 -- ---------------------------------------------------------------------
-create type sandbox_session_status as enum ('live', 'ended');
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'sandbox_session_status') then
+    create type sandbox_session_status as enum ('live', 'ended');
+  end if;
+end
+$$;
 
 -- ---------------------------------------------------------------------
 -- sandbox_sessions (one row per "Start Class" press)
 -- Labels are denormalized demo text -- no references to real
 -- courses/venues rows, per Option B isolation.
 -- ---------------------------------------------------------------------
-create table sandbox_sessions (
+create table if not exists sandbox_sessions (
   id           uuid primary key default gen_random_uuid(),
   lecturer_id  uuid not null,
   class_label  text not null default 'Sandbox / Test Class',
@@ -48,8 +55,8 @@ create table sandbox_sessions (
   created_at   timestamptz not null default now()
 );
 
-create index idx_sandbox_sessions_status on sandbox_sessions(status, started_at desc);
-create index idx_sandbox_sessions_lecturer on sandbox_sessions(lecturer_id);
+create index if not exists idx_sandbox_sessions_status on sandbox_sessions(status, started_at desc);
+create index if not exists idx_sandbox_sessions_lecturer on sandbox_sessions(lecturer_id);
 
 -- ---------------------------------------------------------------------
 -- sandbox_checkins (face capture + display name; throwaway embedding)
@@ -57,7 +64,7 @@ create index idx_sandbox_sessions_lecturer on sandbox_sessions(lecturer_id);
 -- realism only -- it is never matched against real face_embeddings.
 -- unique(session_id, participant_id) enforces one check-in per guest.
 -- ---------------------------------------------------------------------
-create table sandbox_checkins (
+create table if not exists sandbox_checkins (
   id             uuid primary key default gen_random_uuid(),
   session_id     uuid not null references sandbox_sessions(id) on delete cascade,
   participant_id uuid not null,
@@ -67,8 +74,8 @@ create table sandbox_checkins (
   unique (session_id, participant_id)
 );
 
-create index idx_sandbox_checkins_session on sandbox_checkins(session_id, created_at);
-create index idx_sandbox_checkins_participant on sandbox_checkins(participant_id);
+create index if not exists idx_sandbox_checkins_session on sandbox_checkins(session_id, created_at);
+create index if not exists idx_sandbox_checkins_participant on sandbox_checkins(participant_id);
 
 -- =====================================================================
 -- Row Level Security (sandbox tables ONLY -- no real-table changes)
@@ -83,6 +90,16 @@ create index idx_sandbox_checkins_participant on sandbox_checkins(participant_id
 -- =====================================================================
 alter table sandbox_sessions enable row level security;
 alter table sandbox_checkins enable row level security;
+
+-- Drop existing policies so re-runs are idempotent
+drop policy if exists "Authenticated users view sandbox sessions" on sandbox_sessions;
+drop policy if exists "Lecturers start own sandbox sessions" on sandbox_sessions;
+drop policy if exists "Lecturers update own sandbox sessions" on sandbox_sessions;
+drop policy if exists "Authenticated users reset sandbox sessions" on sandbox_sessions;
+
+drop policy if exists "Authenticated users view sandbox checkins" on sandbox_checkins;
+drop policy if exists "Students check in as themselves" on sandbox_checkins;
+drop policy if exists "Authenticated users reset sandbox checkins" on sandbox_checkins;
 
 create policy "Authenticated users view sandbox sessions"
   on sandbox_sessions for select
@@ -112,3 +129,12 @@ create policy "Students check in as themselves"
 create policy "Authenticated users reset sandbox checkins"
   on sandbox_checkins for delete
   using (auth.role() = 'authenticated');
+
+-- =====================================================================
+-- Table-level GRANTs
+-- RLS is the security layer, but the role still needs table privileges
+-- to execute queries. Without these, Supabase returns
+-- "permission denied for table <name>" even when RLS would allow it.
+-- =====================================================================
+grant select, insert, update, delete on sandbox_sessions to authenticated;
+grant select, insert, update, delete on sandbox_checkins to authenticated;

@@ -1,9 +1,12 @@
-import { useState, type FormEvent } from "react"
+import { useRef, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import HcaptchaGate, {
+  type HcaptchaGateHandle,
+} from "@/components/HcaptchaGate"
 
 export default function Login() {
   const { signIn } = useAuth()
@@ -12,13 +15,15 @@ export default function Login() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const captchaRef = useRef<HcaptchaGateHandle>(null)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError("")
     setSubmitting(true)
     try {
-      await signIn(email, password)
+      await signIn(email, password, captchaToken ?? undefined)
       const {
         data: { user },
       } = await supabase.auth.getUser()
@@ -35,6 +40,8 @@ export default function Login() {
       navigate(target)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed")
+      setCaptchaToken(null)
+      captchaRef.current?.reset()
     } finally {
       setSubmitting(false)
     }
@@ -79,7 +86,13 @@ export default function Login() {
                 className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               />
             </div>
-            <Button type="submit" disabled={submitting}>
+            <HcaptchaGate
+              ref={captchaRef}
+              onVerify={setCaptchaToken}
+              onExpire={() => setCaptchaToken(null)}
+              onError={() => setCaptchaToken(null)}
+            />
+            <Button type="submit" disabled={submitting || !captchaToken}>
               {submitting ? "Signing in…" : "Sign in"}
             </Button>
             <p className="text-center text-sm text-muted-foreground">

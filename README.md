@@ -47,6 +47,7 @@ SQL files are applied manually via Supabase Dashboard -> SQL Editor, **in this o
 2. `migrations/01_security_and_policies.sql` — staff policies, hardened check-in, immutability guards
 3. `migrations/02_sandbox_module.sql` — sandbox tables + RLS (isolated from all real tables)
 4. `migrations/04_sandbox_profile_exclusion.sql` — signup trigger: creates profiles with correct roles, keeps anonymous/sandbox identities out of `profiles`
+5. `migrations/05_sandbox_participants.sql` — sandbox participant profiles: stored face templates for the 2-step onboarding → check-in flow
 
 `migrations/03_table_details.sql` is **not** part of the chain — it's a read-only report of your live schema (columns, constraints, RLS policies, triggers) for verification and drift checks.
 

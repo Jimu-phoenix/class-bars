@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase"
 import type { User } from "@supabase/supabase-js"
+import type { SandboxParticipantRow } from "@/types/db"
 
 export type SandboxRole = "sandbox_lecturer" | "sandbox_student"
 
@@ -63,4 +64,49 @@ export async function joinSandbox(
 
 export async function leaveSandbox(): Promise<void> {
   await supabase.auth.signOut()
+}
+
+export async function getSandboxParticipant(
+  participantId: string,
+): Promise<SandboxParticipantRow | null> {
+  const { data } = await supabase
+    .from("sandbox_participants")
+    .select("*")
+    .eq("participant_id", participantId)
+    .maybeSingle()
+
+  return (data as SandboxParticipantRow | null) ?? null
+}
+
+export async function upsertSandboxParticipant(
+  participantId: string,
+  displayName: string,
+  embedding: string,
+): Promise<SandboxParticipantRow | null> {
+  const { data, error } = await supabase
+    .from("sandbox_participants")
+    .upsert(
+      {
+        participant_id: participantId,
+        display_name: displayName,
+        embedding,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "participant_id" },
+    )
+    .select("*")
+    .single()
+
+  if (error) throw error
+  return (data as SandboxParticipantRow) ?? null
+}
+
+export async function deleteSandboxParticipant(
+  participantId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("sandbox_participants")
+    .delete()
+    .eq("participant_id", participantId)
+  if (error) throw error
 }

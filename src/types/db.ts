@@ -48,3 +48,11 @@ export type SandboxCheckinRow = {
   embedding: string | null
   created_at: string
 }
+
+export type SandboxParticipantRow = {
+  participant_id: string
+  display_name: string
+  embedding: string
+  created_at: string
+  updated_at: string
+}

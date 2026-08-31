@@ -10,8 +10,8 @@ async function read(rel: string) {
 
 test("sandbox migration creates only sandbox-scoped tables", async () => {
   const sql = await read("migrations/02_sandbox_module.sql")
-  assert.match(sql, /create table sandbox_sessions/)
-  assert.match(sql, /create table sandbox_checkins/)
+  assert.match(sql, /create table (if not exists )?sandbox_sessions/)
+  assert.match(sql, /create table (if not exists )?sandbox_checkins/)
 
   const realTables = ["attendance_records", "face_embeddings", "profiles", "courses", "enrollments"]
   for (const table of realTables) {
@@ -28,6 +28,18 @@ test("sandbox tables have row level security enabled", async () => {
   const sql = await read("migrations/02_sandbox_module.sql")
   for (const table of ["sandbox_sessions", "sandbox_checkins"]) {
     assert.match(sql, new RegExp(`alter table ${table} enable row level security`, "i"))
+  }
+})
+
+test("sandbox participant migration is sandbox-scoped and RLS-enabled", async () => {
+  const sql = await read("migrations/05_sandbox_participants.sql")
+  assert.match(sql, /create table (if not exists )?sandbox_participants/)
+  assert.match(sql, /alter table sandbox_participants enable row level security/i)
+
+  const realTables = ["attendance_records", "face_embeddings", "profiles", "courses", "enrollments"]
+  for (const table of realTables) {
+    const alters = sql.match(new RegExp(`alter\\s+table\\s+(only\\s+)?public\\.${table}`, "gi")) ?? []
+    assert.equal(alters.length, 0, `migration must not alter real table ${table}`)
   }
 })
 

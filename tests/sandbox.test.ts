@@ -9,6 +9,7 @@ type MockState = {
   signInError: { message: string } | null
   signInCalls: Array<unknown>
   signOutCalls: number
+  participants: Array<Record<string, unknown>>
 }
 
 const state: MockState = {
@@ -16,9 +17,62 @@ const state: MockState = {
   signInError: null,
   signInCalls: [],
   signOutCalls: 0,
+  participants: [],
+}
+
+function eqFilter(
+  rows: Array<Record<string, unknown>>,
+  column: string,
+  value: unknown,
+): Array<Record<string, unknown>> {
+  return rows.filter((r) => r[column] === value)
+}
+
+function fromMock(table: string) {
+  const allRows = (state.participants as Array<Record<string, unknown>>) ?? []
+  const rows = allRows.slice()
+
+  return {
+    select() {
+      return {
+        eq(column: string, value: unknown) {
+          const filtered = eqFilter(rows, column, value)
+          return {
+            maybeSingle: async () => ({ data: filtered[0] ?? null, error: null }),
+          }
+        },
+        single: async () => ({ data: rows[0] ?? null, error: null }),
+      }
+    },
+    upsert(row: Record<string, unknown>) {
+      return {
+        select() {
+          return {
+            single: async () => {
+              const idx = allRows.findIndex((r) => r.participant_id === row.participant_id)
+              if (idx >= 0) allRows[idx] = { ...allRows[idx], ...row }
+              else allRows.push(row)
+              return { data: row, error: null }
+            },
+          }
+        },
+      }
+    },
+    delete() {
+      return {
+        eq(column: string, value: unknown) {
+          for (let i = allRows.length - 1; i >= 0; i--) {
+            if (allRows[i][column] === value) allRows.splice(i, 1)
+          }
+          return { error: null }
+        },
+      }
+    },
+  }
 }
 
 ;(globalThis as Record<string, unknown>).__MOCK_SUPABASE__ = {
+  from: (table: string) => fromMock(table),
   auth: {
     getSession: async () => ({ data: { session: state.session } }),
     signOut: async () => {
@@ -39,9 +93,15 @@ const state: MockState = {
   },
 }
 
-const { SANDBOX_DEFAULTS, getSandboxRole, joinSandbox, leaveSandbox } = await import(
-  "../src/lib/sandbox.ts"
-)
+const {
+  SANDBOX_DEFAULTS,
+  getSandboxRole,
+  joinSandbox,
+  leaveSandbox,
+  getSandboxParticipant,
+  upsertSandboxParticipant,
+  deleteSandboxParticipant,
+} = await import("../src/lib/sandbox.ts")
 
 function makeUser(metadata: Record<string, unknown>): User {
   return { user_metadata: metadata } as unknown as User
@@ -135,4 +195,53 @@ test("leaveSandbox signs the anonymous session out", async () => {
   await leaveSandbox()
   assert.equal(state.signOutCalls, 1)
   assert.equal(state.session, null)
+})
+
+test("getSandboxParticipant returns null when no profile exists", async () => {
+  state.participants = []
+  const p = await getSandboxParticipant("anon-1")
+  assert.equal(p, null)
+})
+
+test("getSandboxParticipant returns the matching participant", async () => {
+  state.participants = [
+    { participant_id: "anon-1", display_name: "Alice", embedding: "[1,2]" },
+  ]
+  const p = await getSandboxParticipant("anon-1")
+  assert.equal(p?.display_name, "Alice")
+  assert.equal(p?.embedding, "[1,2]")
+})
+
+test("getSandboxParticipant ignores other participants", async () => {
+  state.participants = [
+    { participant_id: "anon-other", display_name: "Bob", embedding: "[9]" },
+  ]
+  const p = await getSandboxParticipant("anon-1")
+  assert.equal(p, null)
+})
+
+test("upsertSandboxParticipant inserts a new participant", async () => {
+  state.participants = []
+  const p = await upsertSandboxParticipant("anon-1", "Alice", "[1,2,3]")
+  assert.equal(p?.participant_id, "anon-1")
+  assert.equal(state.participants.length, 1)
+})
+
+test("upsertSandboxParticipant updates an existing participant", async () => {
+  state.participants = [
+    { participant_id: "anon-1", display_name: "Old", embedding: "[0]" },
+  ]
+  await upsertSandboxParticipant("anon-1", "Alice", "[1,2,3]")
+  assert.equal(state.participants.length, 1)
+  assert.equal(state.participants[0].display_name, "Alice")
+  assert.equal(state.participants[0].embedding, "[1,2,3]")
+})
+
+test("deleteSandboxParticipant removes only the target participant", async () => {
+  state.participants = [
+    { participant_id: "anon-1", display_name: "Alice", embedding: "[1]" },
+    { participant_id: "anon-2", display_name: "Bob", embedding: "[2]" },
+  ]
+  await deleteSandboxParticipant("anon-1")
+  assert.deepEqual(state.participants.map((p) => p.participant_id), ["anon-2"])
 })

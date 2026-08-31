@@ -20,7 +20,11 @@ type AuthContextValue = {
     fullName: string,
     role?: SignUpRole
   ) => Promise<{ needsConfirmation: boolean }>
-  signIn: (email: string, password: string) => Promise<void>
+  signIn: (
+    email: string,
+    password: string,
+    captchaToken?: string
+  ) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -63,10 +67,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { needsConfirmation: !data.session }
   }
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (
+    email: string,
+    password: string,
+    captchaToken?: string
+  ) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
+      options: captchaToken ? { captchaToken } : undefined,
     })
     if (error) throw error
   }
