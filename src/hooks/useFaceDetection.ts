@@ -173,7 +173,7 @@ export function useFaceDetection(): UseFaceDetectionReturn {
                 DETECTION_OPTIONS,
               )
               const landmarkedTask = landmarksReadyRef.current
-                ? baseTask.withFaceLandmarks()
+                ? baseTask.withFaceLandmarks(true)
                 : null
               const descriptorTask =
                 landmarkedTask && recognitionReadyRef.current
