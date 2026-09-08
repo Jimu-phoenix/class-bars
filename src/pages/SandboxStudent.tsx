@@ -52,6 +52,10 @@ function formatStartedAt(iso: string) {
   })
 }
 
+function isModelError(message: string | null): boolean {
+  return message?.startsWith("Face models failed to load") ?? false
+}
+
 function OnboardingStep({
   submitting,
   error,
@@ -107,7 +111,11 @@ function OnboardingStep({
                 </>
               ) : (
                 <>
-                  <p className="font-medium">Camera unavailable</p>
+                  <p className="font-medium">
+                    {isModelError(cameraError)
+                      ? "Face models unavailable"
+                      : "Camera unavailable"}
+                  </p>
                   <p className="text-sm text-muted-foreground">{cameraError}</p>
                 </>
               )}
@@ -239,7 +247,11 @@ function VerifyStep({
                 </>
               ) : (
                 <>
-                  <p className="font-medium">Camera unavailable</p>
+                  <p className="font-medium">
+                    {isModelError(cameraError)
+                      ? "Face models unavailable"
+                      : "Camera unavailable"}
+                  </p>
                   <p className="text-sm text-muted-foreground">{cameraError}</p>
                 </>
               )}

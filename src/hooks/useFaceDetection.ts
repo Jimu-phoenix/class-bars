@@ -2,8 +2,10 @@ import { useRef, useState, useEffect } from "react"
 import * as faceapi from "face-api.js"
 import {
   DETECTION_OPTIONS,
+  faceModelsStatus,
   loadDeferredModels,
   loadDetectionModel,
+  type FaceModelsStatus,
 } from "@/lib/faceModels"
 
 type FaceDetectionResult = {
@@ -40,6 +42,7 @@ type UseFaceDetectionReturn = {
   error: string | null
   landmarksReady: boolean
   recognitionReady: boolean
+  models: FaceModelsStatus
 }
 
 async function setupCamera(video: HTMLVideoElement): Promise<MediaStream> {
@@ -102,6 +105,11 @@ export function useFaceDetection(): UseFaceDetectionReturn {
   const [faceCount, setFaceCount] = useState(0)
   const [landmarksReady, setLandmarksReady] = useState(false)
   const [recognitionReady, setRecognitionReady] = useState(false)
+  const [models, setModels] = useState<FaceModelsStatus>({
+    detector: false,
+    landmarks: false,
+    recognition: false,
+  })
 
   const landmarksReadyRef = useRef(false)
   const recognitionReadyRef = useRef(false)
@@ -117,6 +125,7 @@ export function useFaceDetection(): UseFaceDetectionReturn {
 
           // Phase 1: load detection model only
           await loadDetectionModel()
+          setModels((m) => ({ ...m, detector: true }))
 
           if (!isMountedRef.current) return
 
@@ -231,10 +240,19 @@ export function useFaceDetection(): UseFaceDetectionReturn {
             () => {
               landmarksReadyRef.current = true
               setLandmarksReady(true)
+              setModels((m) => ({ ...m, landmarks: true }))
             },
             () => {
               recognitionReadyRef.current = true
               setRecognitionReady(true)
+              setModels((m) => ({ ...m, recognition: true }))
+            },
+            (err) => {
+              if (!isMountedRef.current) return
+              const status = faceModelsStatus()
+              setError(
+                `Face models failed to load (detector ${status.detector ? "ok" : "missing"}, landmarks ${status.landmarks ? "ok" : "missing"}, recognition ${status.recognition ? "ok" : "missing"}): ${err.message}`,
+              )
             },
           )
         } catch (err) {
@@ -277,5 +295,6 @@ export function useFaceDetection(): UseFaceDetectionReturn {
     error,
     landmarksReady,
     recognitionReady,
+    models,
   }
 }

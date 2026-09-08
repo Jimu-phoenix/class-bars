@@ -2,6 +2,7 @@ import { useFaceDetection } from "@/hooks/useFaceDetection"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Link } from "react-router-dom"
+import type { FaceModelsStatus } from "@/lib/faceModels"
 
 function formatDescriptor(desc: Float32Array): string {
   const values = Array.from(desc.slice(0, 10))
@@ -70,6 +71,43 @@ function ParamRow({ label, value }: { label: string; value: string }) {
       <span className="text-muted-foreground">{label}</span>
       <span className="font-mono text-xs text-foreground">{value}</span>
     </div>
+  )
+}
+
+function ModelsStatus({
+  models,
+}: {
+  models: FaceModelsStatus
+}) {
+  const entries: { key: keyof FaceModelsStatus; label: string }[] = [
+    { key: "detector", label: "Detector (TinyFaceDetector)" },
+    { key: "landmarks", label: "Landmarks (68-point tiny)" },
+    { key: "recognition", label: "Recognition (128-d)" },
+  ]
+
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle>Models</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-1.5">
+        {entries.map(({ key, label }) => (
+          <div
+            key={key}
+            className="flex items-center justify-between gap-2 text-sm"
+          >
+            <span className="text-muted-foreground">{label}</span>
+            <Badge variant={models[key] ? "default" : "destructive"}>
+              {models[key] ? "Loaded" : "Missing"}
+            </Badge>
+          </div>
+        ))}
+        <p className="mt-1 text-xs text-muted-foreground">
+          Files load from <code className="font-mono">/models</code> on first
+          use. If any are Missing, check the browser console for fetch errors.
+        </p>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -149,6 +187,7 @@ export default function FaceTest() {
     faceCount,
     isLoading,
     error,
+    models,
   } = useFaceDetection()
 
   return (
@@ -165,7 +204,7 @@ export default function FaceTest() {
             Face Detection Test
           </h1>
           <p className="text-sm text-muted-foreground">
-            Diagnostic page — face-api.js SSD Mobilenet v1
+            Diagnostic page — face-api.js TinyFaceDetector
           </p>
         </div>
       </header>
@@ -195,7 +234,8 @@ export default function FaceTest() {
           )}
         </div>
 
-        <div className="w-full lg:w-1/2">
+        <div className="flex flex-col gap-6 lg:w-1/2">
+          <ModelsStatus models={models} />
           {error ? null : isLoading ? null : faceCount === 0 ? (
             <NoFaceDetected />
           ) : (

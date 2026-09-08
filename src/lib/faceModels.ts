@@ -7,6 +7,20 @@ export const DETECTION_OPTIONS = new faceapi.TinyFaceDetectorOptions({
   scoreThreshold: 0.4,
 })
 
+export type FaceModelsStatus = {
+  detector: boolean
+  landmarks: boolean
+  recognition: boolean
+}
+
+export function faceModelsStatus(): FaceModelsStatus {
+  return {
+    detector: faceapi.nets.tinyFaceDetector.isLoaded,
+    landmarks: faceapi.nets.faceLandmark68TinyNet.isLoaded,
+    recognition: faceapi.nets.faceRecognitionNet.isLoaded,
+  }
+}
+
 export async function loadDetectionModel(): Promise<void> {
   await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODELS_BASE)
 }
@@ -14,6 +28,7 @@ export async function loadDetectionModel(): Promise<void> {
 export async function loadDeferredModels(
   onLandmarksReady: () => void,
   onRecognitionReady: () => void,
+  onError: (err: Error) => void = () => {},
 ): Promise<void> {
   try {
     await Promise.all([
@@ -25,6 +40,7 @@ export async function loadDeferredModels(
         .then(onRecognitionReady),
     ])
   } catch (err) {
+    onError(err instanceof Error ? err : new Error(String(err)))
     console.error("Failed to load deferred models:", err)
   }
 }
