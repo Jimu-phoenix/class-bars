@@ -1,17 +1,27 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { CircleCheck, Loader2, RefreshCw, ScanFace, UserRound } from "lucide-react"
+import {
+  CalendarClock,
+  CircleCheck,
+  Loader2,
+  Presentation,
+  RefreshCw,
+  ScanFace,
+  UserRound,
+} from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
-import { getSandboxRole } from "@/lib/sandbox"
 import {
   getSandboxParticipant,
+  getSandboxRole,
   upsertSandboxParticipant,
 } from "@/lib/sandbox"
 import { usePoll } from "@/hooks/usePoll"
 import { useFaceDetection } from "@/hooks/useFaceDetection"
 import { euclideanDistance, isMatch } from "@/lib/faceCompare"
+import { cn } from "@/lib/utils"
 import SandboxShell from "@/components/SandboxShell"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -20,7 +30,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import type {
   SandboxCheckinRow,
   SandboxParticipantRow,
@@ -32,7 +41,16 @@ const POLL_MS = 3000
 const inputClass =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
 
-type Stage = "boarding" | "idle" | "verifying" | "checkedIn"
+type Stage = "boarding" | "select" | "verifying" | "confirmed"
+
+type VerifyVerdict = { status: "no-match"; distance: number } | null
+
+function formatStartedAt(iso: string) {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
 
 function OnboardingStep({
   submitting,
@@ -52,11 +70,16 @@ function OnboardingStep({
     results,
   } = useFaceDetection()
   const [name, setName] = useState("")
+  const [frozenFace, setFrozenFace] = useState<Float32Array | null>(null)
 
-  const face =
+  const liveFace =
     recognitionReady && results.length > 0
       ? results[0].detection.descriptor
       : null
+  if (liveFace && !frozenFace) {
+    setFrozenFace(liveFace)
+  }
+  const face = frozenFace ?? liveFace
   const descriptorReady = face !== null && face.length === 128
 
   return (
@@ -132,14 +155,20 @@ function VerifyStep({
   participant,
   submitting,
   error,
+  verdict,
   onMatch,
+  onNoMatch,
+  onRetry,
   onCancel,
 }: {
   classNameLabel: string
   participant: SandboxParticipantRow
   submitting: boolean
   error: string
+  verdict: VerifyVerdict
   onMatch: (descriptor: Float32Array) => void
+  onNoMatch: (distance: number) => void
+  onRetry: () => void
   onCancel: () => void
 }) {
   const {
@@ -165,16 +194,25 @@ function VerifyStep({
       ? results[0].detection.descriptor
       : null
 
-  const distance =
-    stored && liveFace ? euclideanDistance(stored, liveFace) : null
-  const matched = distance !== null && stored !== null && liveFace !== null &&
-    isMatch(stored, liveFace)
+  const capturedRef = useRef(false)
 
   useEffect(() => {
-    if (matched && liveFace && !submitting) {
+    if (verdict !== null) return
+    if (!stored || !liveFace) return
+    if (capturedRef.current) return
+    capturedRef.current = true
+    if (isMatch(stored, liveFace)) {
       onMatch(liveFace)
+    } else {
+      onNoMatch(euclideanDistance(stored, liveFace))
     }
-  }, [matched, liveFace, submitting, onMatch])
+  }, [liveFace, stored, verdict, onMatch, onNoMatch])
+
+  useEffect(() => {
+    if (verdict === null) {
+      capturedRef.current = false
+    }
+  }, [verdict])
 
   return (
     <CardContent className="flex flex-col gap-5">
@@ -211,16 +249,34 @@ function VerifyStep({
       </div>
 
       {!isLoading && !cameraError && (
-        <div className="flex items-center justify-center gap-2">
-          <Badge
-            variant={matched ? "default" : distance !== null ? "destructive" : "outline"}
-          >
-            {matched ? "MATCH" : liveFace ? "NO MATCH" : "Looking for face…"}
-          </Badge>
-          {distance !== null && (
-            <Badge variant="outline" className="font-mono text-xs">
-              distance {distance.toFixed(4)}
-            </Badge>
+        <div className="flex flex-col items-center gap-2.5">
+          <div className="flex items-center justify-center gap-2">
+            {submitting ? (
+              <Badge variant="outline" className="gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Recording attendance…
+              </Badge>
+            ) : verdict ? (
+              <>
+                <Badge variant="destructive">NO MATCH</Badge>
+                <Badge variant="outline" className="font-mono text-xs">
+                  distance {verdict.distance.toFixed(4)}
+                </Badge>
+              </>
+            ) : (
+              <Badge variant="outline">Looking for face…</Badge>
+            )}
+          </div>
+          {verdict && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onRetry}
+              disabled={submitting}
+            >
+              <RefreshCw data-icon="inline-start" />
+              Try again
+            </Button>
           )}
         </div>
       )}
@@ -231,7 +287,7 @@ function VerifyStep({
         </Button>
       </div>
       <p className="text-center text-xs text-muted-foreground">
-        Matching against {participant.display_name}&apos;s stored template. This checks in {classNameLabel}.
+        Matching against {participant.display_name}&apos;s stored template. This registers you in {classNameLabel}.
       </p>
     </CardContent>
   )
@@ -243,11 +299,16 @@ export default function SandboxStudent() {
 
   const [participant, setParticipant] = useState<SandboxParticipantRow | null>(null)
   const [participantLoaded, setParticipantLoaded] = useState(false)
-  const [stage, setStage] = useState<Stage>("idle")
-  const [liveSession, setLiveSession] = useState<SandboxSessionRow | null>(null)
-  const [myCheckin, setMyCheckin] = useState<SandboxCheckinRow | null>(null)
+  const [stage, setStage] = useState<Stage>("boarding")
+  const [liveSessions, setLiveSessions] = useState<SandboxSessionRow[]>([])
+  const [checkedInBySession, setCheckedInBySession] = useState<
+    Record<string, SandboxCheckinRow>
+  >({})
+  const [selectedSession, setSelectedSession] = useState<SandboxSessionRow | null>(null)
+  const [confirmedCheckin, setConfirmedCheckin] = useState<SandboxCheckinRow | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
+  const [verifyResult, setVerifyResult] = useState<VerifyVerdict>(null)
 
   useEffect(() => {
     if (!authLoading && (!user || getSandboxRole(user) !== "sandbox_student")) {
@@ -260,51 +321,46 @@ export default function SandboxStudent() {
     const p = await getSandboxParticipant(user.id)
     setParticipant(p)
     setParticipantLoaded(true)
+    setStage(p ? "select" : "boarding")
   }, [user])
 
   useEffect(() => {
-    void loadParticipant()
+    const timer = window.setTimeout(() => void loadParticipant(), 0)
+    return () => window.clearTimeout(timer)
   }, [loadParticipant])
 
-  const loadLiveSession = useCallback(async () => {
-    const { data } = await supabase
+  const refresh = useCallback(async () => {
+    if (!user) return
+    const { data: sessionsData, error: sessionsError } = await supabase
       .from("sandbox_sessions")
       .select("*")
       .eq("status", "live")
       .order("started_at", { ascending: false })
-      .limit(1)
 
-    setLiveSession((data as SandboxSessionRow[])[0] ?? null)
-  }, [])
+    if (sessionsError) return
+    const sessionRows = (sessionsData as SandboxSessionRow[] | null) ?? []
+    setLiveSessions(sessionRows)
 
-  const sessionId = liveSession?.id ?? null
-
-  const loadMyCheckin = useCallback(async () => {
-    if (!sessionId || !user) {
-      setMyCheckin(null)
+    if (sessionRows.length === 0) {
+      setCheckedInBySession({})
       return
     }
-    const { data } = await supabase
+
+    const { data: checkinsData, error: checkinsError } = await supabase
       .from("sandbox_checkins")
       .select("*")
-      .eq("session_id", sessionId)
+      .in("session_id", sessionRows.map((s) => s.id))
       .eq("participant_id", user.id)
-      .limit(1)
 
-    setMyCheckin((data as SandboxCheckinRow[])[0] ?? null)
-  }, [sessionId, user])
-
-  usePoll(loadLiveSession, user && participantLoaded ? POLL_MS : null)
-  usePoll(loadMyCheckin, sessionId && user ? POLL_MS : null)
-
-  useEffect(() => {
-    if (!participantLoaded) return
-    if (!participant && myCheckin === null) {
-      setStage("boarding")
-    } else {
-      setStage(myCheckin ? "checkedIn" : "idle")
+    if (checkinsError) return
+    const map: Record<string, SandboxCheckinRow> = {}
+    for (const c of (checkinsData as SandboxCheckinRow[] | null) ?? []) {
+      map[c.session_id] = c
     }
-  }, [participant, participantLoaded, myCheckin])
+    setCheckedInBySession(map)
+  }, [user])
+
+  usePoll(refresh, user && participantLoaded ? POLL_MS : null)
 
   const saveOnboarding = async (displayName: string, descriptor: Float32Array) => {
     if (!user) return
@@ -317,6 +373,7 @@ export default function SandboxStudent() {
         JSON.stringify(Array.from(descriptor)),
       )
       setParticipant(p)
+      setStage("select")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save your face")
     } finally {
@@ -324,15 +381,36 @@ export default function SandboxStudent() {
     }
   }
 
+  const selectClass = (session: SandboxSessionRow) => {
+    setError("")
+    setVerifyResult(null)
+    setSelectedSession(session)
+    setStage("verifying")
+  }
+
+  const cancelVerify = () => {
+    setError("")
+    setVerifyResult(null)
+    setSelectedSession(null)
+    setStage("select")
+  }
+
   const checkIn = async (descriptor: Float32Array) => {
-    if (!user || !liveSession) return
+    if (!user || !selectedSession) return
+    if (!liveSessions.some((s) => s.id === selectedSession.id)) {
+      setSelectedSession(null)
+      setVerifyResult(null)
+      setStage("select")
+      setError("That class is no longer live.")
+      return
+    }
     setSubmitting(true)
     setError("")
     try {
       const { data, error: insertError } = await supabase
         .from("sandbox_checkins")
         .insert({
-          session_id: liveSession.id,
+          session_id: selectedSession.id,
           participant_id: user.id,
           display_name: participant?.display_name ?? "Sandbox Student",
           embedding: JSON.stringify(Array.from(descriptor)),
@@ -340,20 +418,60 @@ export default function SandboxStudent() {
         .select("*")
         .single()
 
+      let row = (data as SandboxCheckinRow | null) ?? null
       if (insertError) {
-        if (/duplicate key/i.test(insertError.message)) {
-          await loadMyCheckin()
-          return
-        }
-        throw insertError
+        if (!/duplicate key/i.test(insertError.message)) throw insertError
+        const { data: existing } = await supabase
+          .from("sandbox_checkins")
+          .select("*")
+          .eq("session_id", selectedSession.id)
+          .eq("participant_id", user.id)
+          .maybeSingle()
+        row = (existing as SandboxCheckinRow | null) ?? null
+        if (!row) throw insertError
       }
-      setMyCheckin(data as SandboxCheckinRow)
+
+      if (row) {
+        setCheckedInBySession((m) => ({ ...m, [selectedSession.id]: row as SandboxCheckinRow }))
+        setConfirmedCheckin(row)
+        setStage("confirmed")
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Check-in failed")
-      setStage("idle")
+      setVerifyResult(null)
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const doneConfirming = () => {
+    setConfirmedCheckin(null)
+    setVerifyResult(null)
+    setSelectedSession(null)
+    setStage("select")
+  }
+
+  const redoOnboarding = async () => {
+    if (!user) return
+    setSubmitting(true)
+    setError("")
+    try {
+      await supabase
+        .from("sandbox_participants")
+        .delete()
+        .eq("participant_id", user.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reset onboarding")
+      setSubmitting(false)
+      return
+    }
+    setSubmitting(false)
+    setParticipant(null)
+    setCheckedInBySession({})
+    setConfirmedCheckin(null)
+    setVerifyResult(null)
+    setSelectedSession(null)
+    setStage("boarding")
   }
 
   if (authLoading || !user || getSandboxRole(user) !== "sandbox_student") {
@@ -366,11 +484,22 @@ export default function SandboxStudent() {
     )
   }
 
+  const confirmedClassName =
+    confirmedCheckin
+      ? liveSessions.find((s) => s.id === confirmedCheckin.session_id)?.class_label
+      : undefined
+
   return (
     <SandboxShell
       title="Student check-in"
-      description="Onboard once, then verify your face to register attendance."
+      description="Pick a live class, then verify your face to register attendance."
     >
+      {error && (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      )}
+
       {stage === "boarding" && (
         <Card>
           <CardHeader>
@@ -390,86 +519,114 @@ export default function SandboxStudent() {
         </Card>
       )}
 
-      {stage === "idle" && !liveSession && (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-            <span className="relative flex size-3">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-muted-foreground opacity-40" />
-              <span className="relative inline-flex size-3 rounded-full bg-muted-foreground" />
-            </span>
-            {participant && (
-              <p className="text-sm font-medium text-muted-foreground">
-                Enrolled as {participant.display_name}
+      {stage === "select" &&
+        (liveSessions.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+              <span className="relative flex size-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-muted-foreground opacity-40" />
+                <span className="relative inline-flex size-3 rounded-full bg-muted-foreground" />
+              </span>
+              {participant && (
+                <p className="text-sm font-medium text-muted-foreground">
+                  Enrolled as {participant.display_name}
+                </p>
+              )}
+              <p className="text-lg font-medium">No class is live right now</p>
+              <p className="text-sm text-muted-foreground">
+                Ask your lecturer to start one. This page updates automatically.
               </p>
-            )}
-            <p className="text-lg font-medium">No class is live right now</p>
-            <p className="text-sm text-muted-foreground">
-              Ask your lecturer to start one. This page updates automatically.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {liveSessions.map((s) => {
+              const done = checkedInBySession[s.id]
+              return (
+                <Card
+                  key={s.id}
+                  className={cn(
+                    done && "border-green-500/30 bg-green-500/5",
+                  )}
+                >
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle className="flex items-center gap-2">
+                        <Presentation className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{s.class_label}</span>
+                      </CardTitle>
+                      {done ? (
+                        <Badge>Checked in</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-green-700 dark:text-green-400">
+                          Live
+                        </Badge>
+                      )}
+                    </div>
+                    <CardDescription>
+                      {s.course_label} · {s.venue_label}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <CalendarClock className="size-3.5" aria-hidden="true" />
+                        Started {formatStartedAt(s.started_at)}
+                      </p>
+                      {done ? (
+                        <p className="flex items-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-400">
+                          <CircleCheck className="size-4" />
+                          Registered
+                        </p>
+                      ) : (
+                        <Button size="sm" onClick={() => selectClass(s)} disabled={submitting}>
+                          <ScanFace data-icon="inline-start" />
+                          Join class
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        ))}
 
-      {stage === "idle" && liveSession && (
+      {stage === "verifying" && selectedSession && participant && (
         <Card>
           <CardHeader>
-            <CardTitle>{liveSession.class_label} is live</CardTitle>
-            <CardDescription>
-              Verify your face to register attendance as {participant?.display_name}.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {error && (
-              <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            <Button
-              size="lg"
-              onClick={() => {
-                setError("")
-                setStage("verifying")
-              }}
-            >
-              <ScanFace data-icon="inline-start" />
-              Register attendance
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {stage === "verifying" && liveSession && participant && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{liveSession.class_label} — verify</CardTitle>
+            <CardTitle>{selectedSession.class_label} — verify</CardTitle>
             <CardDescription>
               Look at the camera. Your attendance is recorded automatically on a match.
             </CardDescription>
           </CardHeader>
           <VerifyStep
-            classNameLabel={liveSession.class_label}
+            classNameLabel={selectedSession.class_label}
             participant={participant}
             submitting={submitting}
             error={error}
+            verdict={verifyResult}
             onMatch={(d) => void checkIn(d)}
-            onCancel={() => {
-              setError("")
-              setStage("idle")
-            }}
+            onNoMatch={(distance) => setVerifyResult({ status: "no-match", distance })}
+            onRetry={() => setVerifyResult(null)}
+            onCancel={cancelVerify}
           />
         </Card>
       )}
 
-      {stage === "checkedIn" && myCheckin && (
+      {stage === "confirmed" && confirmedCheckin && (
         <Card className="border-green-500/30 bg-green-500/5">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <CircleCheck className="size-10 text-green-600" />
             <p className="text-xl font-semibold">
-              You&apos;re checked in as {myCheckin.display_name}
+              You&apos;re checked in as {confirmedCheckin.display_name}
             </p>
             <p className="text-sm text-muted-foreground">
-              Your name now appears on the lecturer&apos;s live list.
+              {confirmedClassName ?? "Your class"} — your name now appears on the lecturer&apos;s live list.
             </p>
+            <Button onClick={doneConfirming} className="mt-2">
+              Back to classes
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -479,22 +636,7 @@ export default function SandboxStudent() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={async () => {
-              setSubmitting(true)
-              try {
-                await supabase
-                  .from("sandbox_participants")
-                  .delete()
-                  .eq("participant_id", user!.id)
-                setParticipant(null)
-                setMyCheckin(null)
-                setStage("boarding")
-              } catch (err) {
-                setError(err instanceof Error ? err.message : "Failed to reset onboarding")
-              } finally {
-                setSubmitting(false)
-              }
-            }}
+            onClick={() => void redoOnboarding()}
             disabled={submitting}
           >
             <RefreshCw data-icon="inline-start" />

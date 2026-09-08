@@ -1,7 +1,10 @@
 import { useRef, useState, useEffect } from "react"
 import * as faceapi from "face-api.js"
-
-const MODELS_BASE = "/models"
+import {
+  DETECTION_OPTIONS,
+  loadDeferredModels,
+  loadDetectionModel,
+} from "@/lib/faceModels"
 
 type FaceDetectionResult = {
   confidence: number
@@ -37,24 +40,6 @@ type UseFaceDetectionReturn = {
   error: string | null
   landmarksReady: boolean
   recognitionReady: boolean
-}
-
-async function loadDetectionModel(): Promise<void> {
-  await faceapi.nets.ssdMobilenetv1.loadFromUri(MODELS_BASE)
-}
-
-async function loadDeferredModels(
-  onLandmarksReady: () => void,
-  onRecognitionReady: () => void,
-): Promise<void> {
-  try {
-    await faceapi.nets.faceLandmark68Net.loadFromUri(MODELS_BASE)
-    onLandmarksReady()
-    await faceapi.nets.faceRecognitionNet.loadFromUri(MODELS_BASE)
-    onRecognitionReady()
-  } catch (err) {
-    console.error("Failed to load deferred models:", err)
-  }
 }
 
 async function setupCamera(video: HTMLVideoElement): Promise<MediaStream> {
@@ -176,7 +161,7 @@ export function useFaceDetection(): UseFaceDetectionReturn {
             try {
               const baseTask = faceapi.detectAllFaces(
                 currentVideo,
-                new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }),
+                DETECTION_OPTIONS,
               )
               const landmarkedTask = landmarksReadyRef.current
                 ? baseTask.withFaceLandmarks()

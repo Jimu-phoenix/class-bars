@@ -1,7 +1,8 @@
-import { useRef, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { GraduationCap, Loader2, Presentation } from "lucide-react"
 import { joinSandbox, SANDBOX_DEFAULTS } from "@/lib/sandbox"
+import { warmFaceModels } from "@/lib/faceModels"
 import HcaptchaGate, { type HcaptchaGateHandle } from "@/components/HcaptchaGate"
 import SandboxShell from "@/components/SandboxShell"
 import {
@@ -24,6 +25,10 @@ export default function SandboxLanding() {
   const captchaRef = useRef<HcaptchaGateHandle>(null)
 
   const canJoin = !CAPTCHA_REQUIRED || captchaToken !== ""
+
+  useEffect(() => {
+    void warmFaceModels()
+  }, [])
 
   const join = async (role: Role) => {
     setJoining(role)

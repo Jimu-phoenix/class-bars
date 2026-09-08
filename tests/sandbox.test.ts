@@ -28,7 +28,7 @@ function eqFilter(
   return rows.filter((r) => r[column] === value)
 }
 
-function fromMock(table: string) {
+function fromMock() {
   const allRows = (state.participants as Array<Record<string, unknown>>) ?? []
   const rows = allRows.slice()
 
@@ -72,7 +72,7 @@ function fromMock(table: string) {
 }
 
 ;(globalThis as Record<string, unknown>).__MOCK_SUPABASE__ = {
-  from: (table: string) => fromMock(table),
+  from: () => fromMock(),
   auth: {
     getSession: async () => ({ data: { session: state.session } }),
     signOut: async () => {

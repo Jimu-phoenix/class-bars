@@ -54,137 +54,147 @@ export default function Home() {
   const { user, loading, signOut } = useAuth()
 
   return (
-    <div className="mx-auto min-h-screen max-w-5xl px-4 py-12 md:px-6 md:py-20">
-      <header className="mb-16 text-center">
-        <div className="mb-4 flex items-center justify-end gap-3">
-          {loading ? null : user ? (
-            <>
-              <span className="text-sm text-muted-foreground">
-                {user.email}
-              </span>
-              <Button variant="outline" size="sm" onClick={signOut}>
-                Sign out
-              </Button>
-            </>
-          ) : (
-            <>
-              <Link to="/login">
-                <Button variant="outline" size="sm">Sign in</Button>
-              </Link>
-              <Link to="/signup">
-                <Button size="sm">Sign up</Button>
-              </Link>
-            </>
-          )}
-        </div>
-        <Badge variant="outline" className="mb-4 text-xs font-normal tracking-wide uppercase">
-          Biometric Attendance Recording System
-        </Badge>
-        <h1 className="text-4xl font-bold tracking-tight text-foreground md:text-5xl">
-          Class-BARS
-        </h1>
-        <p className="mt-3 text-base text-muted-foreground md:text-lg">
-          Automated face recognition attendance for classrooms.
-          Fast, secure, and contactless.
-        </p>
-        <div className="mt-8 flex items-center justify-center gap-3 flex-wrap">
-          {user ? (
-            <>
+    <div className="min-h-screen">
+      <header className="section-padding border-b border-border">
+        <div className="container-default">
+          <div className="mb-8 flex items-center justify-end gap-3">
+            {loading ? null : user ? (
+              <>
+                <span className="text-sm text-muted-foreground">
+                  {user.email}
+                </span>
+                <Button variant="outline" size="sm" onClick={signOut}>
+                  Sign out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="outline" size="sm">Sign in</Button>
+                </Link>
+                <Link to="/signup">
+                  <Button size="sm">Sign up</Button>
+                </Link>
+              </>
+            )}
+          </div>
+
+          <div className="text-center max-w-3xl mx-auto">
+            <Badge variant="outline" className="mb-6 text-xs font-normal tracking-wide uppercase">
+              Biometric Attendance Recording System
+            </Badge>
+            <h1 className="heading-1 text-foreground">
+              Class-BARS
+            </h1>
+            <p className="mt-6 body-lg muted-text">
+              Automated face recognition attendance for classrooms. Fast, secure, and contactless.
+            </p>
+            <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
+              {user ? (
+                <>
+                  <Link
+                    to="/face-test"
+                    className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.25 4.75 19.25 9.75M14.25 4.75H9.75C7.54086 4.75 5.75 6.54086 5.75 8.75V15.25C5.75 17.4591 7.54086 19.25 9.75 19.25H14.25C16.4591 19.25 18.25 17.4591 18.25 15.25V9.75M14.25 4.75L18.25 8.75" />
+                    </svg>
+                    Open Face Detection Test
+                  </Link>
+                  <Link
+                    to="/face-verify"
+                    className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    Open Face Verification
+                  </Link>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Sign in to access face detection and verification tools.
+                </p>
+              )}
               <Link
                 to="/face-test"
-                className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow-xs transition-colors hover:bg-primary/80"
+                className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-background px-6 text-sm font-medium text-foreground transition-colors hover:bg-muted"
               >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.25 4.75 19.25 9.75M14.25 4.75H9.75C7.54086 4.75 5.75 6.54086 5.75 8.75V15.25C5.75 17.4591 7.54086 19.25 9.75 19.25H14.25C16.4591 19.25 18.25 17.4591 18.25 15.25V9.75M14.25 4.75L18.25 8.75" />
-                </svg>
-                Open Face Detection Test
+                Learn more
               </Link>
               <Link
-                to="/face-verify"
-                className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow-xs transition-colors hover:bg-primary/80"
+                to="/sandbox"
+                className="inline-flex h-11 items-center gap-2 rounded-md px-4 text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
               >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-                Open Face Verification
+                Try the demo
               </Link>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Sign in to access face detection and verification tools.
-            </p>
-          )}
-          <Link
-            to="/face-test"
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-5 text-sm font-medium text-foreground shadow-xs transition-colors hover:bg-muted"
-          >
-            Learn more
-          </Link>
-          <Link
-            to="/sandbox"
-            className="inline-flex h-10 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
-          >
-            Try the demo
-          </Link>
+            </div>
+          </div>
         </div>
       </header>
 
-      <section className="mb-16">
-        <div className="mb-8 text-center">
-          <h2 className="text-xl font-semibold text-foreground">How it works</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            From enrollment to attendance in four steps
-          </p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {steps.map((step) => (
-            <Card key={step.number} size="sm" className="text-center">
-              <CardContent className="py-5">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-xs font-bold text-primary">
-                  {step.number}
-                </span>
-                <h3 className="mt-3 text-sm font-medium text-foreground">
-                  {step.label}
-                </h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {step.description}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      <section className="mb-16">
-        <div className="mb-8 text-center">
-          <h2 className="text-xl font-semibold text-foreground">Features</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Everything you need for biometric attendance
-          </p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {features.map((feature) => (
-            <Card key={feature.title} size="sm">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
-                    {feature.icon}
+      <section className="section-padding border-b border-border">
+        <div className="container-default">
+          <div className="mb-12 text-center max-w-2xl mx-auto">
+            <h2 className="heading-2 text-foreground">How it works</h2>
+            <p className="mt-4 body-lg muted-text">
+              From enrollment to attendance in four steps
+            </p>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {steps.map((step) => (
+              <Card key={step.number} className="text-center hairline-border">
+                <CardContent className="py-8 px-6">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
+                    {step.number}
                   </span>
-                  <CardTitle>{feature.title}</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {feature.description}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
+                  <h3 className="mt-4 text-base font-medium text-foreground">
+                    {step.label}
+                  </h3>
+                  <p className="mt-2 text-sm muted-text">
+                    {step.description}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       </section>
 
-      <footer className="border-t border-border pt-6 text-center text-xs text-muted-foreground">
-        <p>Class-BARS &mdash; Biometric Attendance Recording System</p>
+      <section className="section-padding">
+        <div className="container-default">
+          <div className="mb-12 text-center max-w-2xl mx-auto">
+            <h2 className="heading-2 text-foreground">Features</h2>
+            <p className="mt-4 body-lg muted-text">
+              Everything you need for biometric attendance
+            </p>
+          </div>
+          <div className="grid gap-6 md:grid-cols-2">
+            {features.map((feature) => (
+              <Card key={feature.title} className="hairline-border">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      {feature.icon}
+                    </span>
+                    <CardTitle className="text-lg">{feature.title}</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <p className="body-sm muted-text">
+                    {feature.description}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-border py-10">
+        <div className="container-default text-center">
+          <p className="text-xs muted-text">Class-BARS &mdash; Biometric Attendance Recording System</p>
+        </div>
       </footer>
     </div>
   )

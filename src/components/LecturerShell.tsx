@@ -14,7 +14,7 @@ type LecturerShellProps = {
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   cn(
-    "rounded-md px-2 py-1 text-sm transition-colors",
+    "rounded-md px-2 py-1 text-sm font-medium transition-colors",
     isActive
       ? "bg-muted font-semibold text-foreground"
       : "text-muted-foreground hover:text-foreground",
@@ -33,8 +33,8 @@ export default function LecturerShell({ title, description, children }: Lecturer
   }
 
   return (
-    <div className="min-h-screen bg-muted/40">
-      <header className="border-b bg-background">
+    <div className="min-h-screen bg-muted/30">
+      <header className="border-b border-border bg-background">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4">
           <div className="flex items-center gap-2">
             <span className="font-heading text-base font-semibold">Class-BARS</span>
@@ -49,16 +49,16 @@ export default function LecturerShell({ title, description, children }: Lecturer
             </NavLink>
           </nav>
           <Button variant="outline" size="sm" onClick={handleSignOut}>
-            <LogOut data-icon="inline-start" />
+            <LogOut data-icon="inline-start" aria-hidden="true" />
             Sign out
           </Button>
         </div>
       </header>
-      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
+      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-10 lg:px-8 lg:py-12">
         {(title || description) && (
-          <div>
-            {title && <h1 className="font-heading text-2xl font-semibold">{title}</h1>}
-            {description && <p className="text-sm text-muted-foreground">{description}</p>}
+          <div className="space-y-1">
+            {title && <h1 className="heading-2">{title}</h1>}
+            {description && <p className="body-lg muted-text">{description}</p>}
           </div>
         )}
         {children}

@@ -16,7 +16,6 @@ import {
   Save,
   CheckCircle2,
   Loader2,
-  Palette,
 } from "lucide-react"
 
 const navItems = [
@@ -151,10 +150,9 @@ export default function Profile() {
   return (
     <div className="flex min-h-screen">
       {/* ── Sidebar ── */}
-      <aside className="hidden w-64 flex-col border-r border-border bg-sidebar p-4 lg:flex">
-        <div className="mb-8 flex items-center gap-2 px-2">
-          <Palette className="h-5 w-5 text-primary" />
-          <span className="text-sm font-semibold">Class-BARS</span>
+      <aside className="hidden w-64 flex-col border-r border-border bg-background p-6 lg:flex">
+        <div className="mb-10 flex items-center gap-2 px-2">
+          <span className="font-heading text-base font-semibold">Class-BARS</span>
         </div>
 
         <nav className="flex flex-1 flex-col gap-1">
@@ -166,9 +164,9 @@ export default function Profile() {
                 key={item.href}
                 to={item.href}
                 data-active={isActive || undefined}
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active]:bg-sidebar-accent data-[active]:text-sidebar-accent-foreground"
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[active]:bg-muted data-[active]:text-foreground"
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-4 w-4" aria-hidden="true" />
                 {item.label}
               </Link>
             )
@@ -177,9 +175,9 @@ export default function Profile() {
 
         <button
           onClick={signOut}
-          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-4 w-4" aria-hidden="true" />
           Sign out
         </button>
       </aside>
@@ -189,228 +187,229 @@ export default function Profile() {
         {/* ── Top bar (mobile) ── */}
         <header className="flex items-center justify-between border-b border-border px-4 py-3 lg:px-8">
           <div className="flex items-center gap-3 lg:hidden">
-            <Palette className="h-5 w-5 text-primary" />
-            <span className="text-sm font-semibold">Class-BARS</span>
+            <span className="font-heading text-base font-semibold">Class-BARS</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-muted-foreground sm:inline">
+            <span className="hidden text-sm muted-text sm:inline">
               {user?.email}
             </span>
             <Button variant="outline" size="sm" onClick={signOut} className="lg:hidden">
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-4 w-4" aria-hidden="true" />
               Sign out
             </Button>
           </div>
         </header>
 
         {/* ── Content ── */}
-        <div className="flex-1 space-y-8 overflow-y-auto px-4 py-8 lg:px-8">
+        <div className="flex-1 overflow-y-auto px-4 py-10 lg:px-10 lg:py-14">
+          <div className="mx-auto max-w-4xl space-y-10">
           {/* Greeting */}
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              {profile?.full_name
-                ? `Good to see you, ${profile.full_name.split(" ")[0]}`
-                : "Dashboard"}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Manage your profile and account settings.
-            </p>
-          </div>
+            <div>
+              <h1 className="heading-2">
+                {profile?.full_name
+                  ? `Good to see you, ${profile.full_name.split(" ")[0]}`
+                  : "Dashboard"}
+              </h1>
+              <p className="mt-2 body-lg muted-text">
+                Manage your profile and account settings.
+              </p>
+            </div>
 
           {/* ── Stats row ── */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Card>
-              <CardContent className="flex items-center gap-4 py-5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <User className="h-5 w-5 text-primary" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">Email</p>
-                  <p className="truncate text-sm font-medium">{user?.email}</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex items-center gap-4 py-5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <ShieldCheck className="h-5 w-5 text-primary" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">Role</p>
-                  <Badge variant="outline" className="mt-0.5">
-                    {roleLabel}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="sm:col-span-2 lg:col-span-1">
-              <CardContent className="flex items-center gap-4 py-5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <Hash className="h-5 w-5 text-primary" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">
-                    {profile?.role === "lecturer" ? "Staff number" : "Student number"}
-                  </p>
-                  <p className="truncate text-sm font-medium">
-                    {profile?.role === "lecturer"
-                      ? profile?.staff_number || "—"
-                      : profile?.student_number || "—"}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <Card className="hairline-border">
+                <CardContent className="flex items-center gap-4 py-6">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                    <User className="h-5 w-5 text-primary" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs muted-text">Email</p>
+                    <p className="truncate text-sm font-medium">{user?.email}</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="hairline-border">
+                <CardContent className="flex items-center gap-4 py-6">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                    <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs muted-text">Role</p>
+                    <Badge variant="outline" className="mt-0.5">
+                      {roleLabel}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="hairline-border">
+                <CardContent className="flex items-center gap-4 py-6">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                    <Hash className="h-5 w-5 text-primary" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs muted-text">
+                      {profile?.role === "lecturer" ? "Staff number" : "Student number"}
+                    </p>
+                    <p className="truncate text-sm font-medium">
+                      {profile?.role === "lecturer"
+                        ? profile?.staff_number || "—"
+                        : profile?.student_number || "—"}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
-          {/* ── Profile settings ── */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Profile settings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-5">
-                {error && (
-                  <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                    <span>{error}</span>
-                  </div>
-                )}
-                {success && (
-                  <div className="flex items-center gap-2 rounded-lg bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-300">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>Profile updated successfully</span>
-                  </div>
-                )}
-
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium">Full name</label>
-                    <div className="rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground">
-                      {profile?.full_name || "—"}
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium">Email</label>
-                    <div className="rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground">
-                      {user?.email}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-5 sm:grid-cols-2">
-                  {profile?.role === "student" ? (
-                    <div className="flex flex-col gap-1.5">
-                      <label htmlFor="studentNumber" className="text-sm font-medium">
-                        Student number
-                      </label>
-                      <div className="relative">
-                        <Hash className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <input
-                          id="studentNumber"
-                          type="text"
-                          value={studentNumber}
-                          onChange={(e) => setStudentNumber(e.target.value)}
-                          placeholder="e.g. STU-2024-001"
-                          className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-1.5">
-                      <label htmlFor="staffNumber" className="text-sm font-medium">
-                        Staff number
-                      </label>
-                      <div className="relative">
-                        <Hash className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <input
-                          id="staffNumber"
-                          type="text"
-                          value={staffNumber}
-                          onChange={(e) => setStaffNumber(e.target.value)}
-                          placeholder="e.g. LEC-2024-001"
-                          className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                        />
-                      </div>
+{/* ── Profile settings ── */}
+            <Card className="hairline-border">
+              <CardHeader>
+                <CardTitle>Profile settings</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {error && (
+                    <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      <span>{error}</span>
                     </div>
                   )}
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="phoneNumber" className="text-sm font-medium">
-                      Phone number
-                    </label>
-                    <div className="relative">
-                      <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <input
-                        id="phoneNumber"
-                        type="tel"
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                        placeholder="+1 (555) 000-0000"
-                        className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 border-t border-border pt-5">
-                  <Button type="submit" disabled={saving}>
-                    {saving ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Saving…
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4" />
-                        Save changes
-                      </>
-                    )}
-                  </Button>
                   {success && (
-                    <span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Saved
-                    </span>
+                    <div className="flex items-center gap-2 rounded-lg bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-300">
+                      <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                      <span>Profile updated successfully</span>
+                    </div>
                   )}
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Full name</label>
+                      <div className="input-radius border border-input bg-muted px-3 py-2.5 text-sm muted-text">
+                        {profile?.full_name || "—"}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Email</label>
+                      <div className="input-radius border border-input bg-muted px-3 py-2.5 text-sm muted-text">
+                        {user?.email}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    {profile?.role === "student" ? (
+                      <div className="space-y-1.5">
+                        <label htmlFor="studentNumber" className="text-sm font-medium">
+                          Student number
+                        </label>
+                        <div className="relative">
+                          <Hash className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 muted-text" aria-hidden="true" />
+                          <input
+                            id="studentNumber"
+                            type="text"
+                            value={studentNumber}
+                            onChange={(e) => setStudentNumber(e.target.value)}
+                            placeholder="e.g. STU-2024-001"
+                            className="w-full input-radius border border-input bg-background py-2.5 pl-9 pr-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 transition-colors"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <label htmlFor="staffNumber" className="text-sm font-medium">
+                          Staff number
+                        </label>
+                        <div className="relative">
+                          <Hash className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 muted-text" aria-hidden="true" />
+                          <input
+                            id="staffNumber"
+                            type="text"
+                            value={staffNumber}
+                            onChange={(e) => setStaffNumber(e.target.value)}
+                            placeholder="e.g. LEC-2024-001"
+                            className="w-full input-radius border border-input bg-background py-2.5 pl-9 pr-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 transition-colors"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      <label htmlFor="phoneNumber" className="text-sm font-medium">
+                        Phone number
+                      </label>
+                      <div className="relative">
+                        <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 muted-text" aria-hidden="true" />
+                        <input
+                          id="phoneNumber"
+                          type="tel"
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value)}
+                          placeholder="+1 (555) 000-0000"
+                          className="w-full input-radius border border-input bg-background py-2.5 pl-9 pr-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 border-t border-border pt-6">
+                    <Button type="submit" disabled={saving}>
+                      {saving ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                          Saving…
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4" aria-hidden="true" />
+                          Save changes
+                        </>
+                      )}
+                    </Button>
+                    {success && (
+                      <span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
+                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                        Saved
+                      </span>
+                    )}
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
 
           {/* ── Quick links ── */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick access</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Link
-                  to="/face-test"
-                  className="flex items-center gap-3 rounded-lg border border-border p-4 transition-colors hover:bg-muted"
-                >
-                  <Camera className="h-5 w-5 text-primary" />
-                  <div>
-                    <p className="text-sm font-medium">Face Detection</p>
-                    <p className="text-xs text-muted-foreground">
-                      Test live face detection
-                    </p>
-                  </div>
-                </Link>
-                <Link
-                  to="/face-verify"
-                  className="flex items-center gap-3 rounded-lg border border-border p-4 transition-colors hover:bg-muted"
-                >
-                  <ShieldCheck className="h-5 w-5 text-primary" />
-                  <div>
-                    <p className="text-sm font-medium">Face Verification</p>
-                    <p className="text-xs text-muted-foreground">
-                      Register and verify faces
-                    </p>
-                  </div>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            <Card className="hairline-border">
+              <CardHeader>
+                <CardTitle>Quick access</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Link
+                    to="/face-test"
+                    className="flex items-center gap-3 rounded-lg border border-border p-4 transition-colors hover:bg-muted"
+                  >
+                    <Camera className="h-5 w-5 text-primary" aria-hidden="true" />
+                    <div>
+                      <p className="text-sm font-medium">Face Detection</p>
+                      <p className="text-xs muted-text">
+                        Test live face detection
+                      </p>
+                    </div>
+                  </Link>
+                  <Link
+                    to="/face-verify"
+                    className="flex items-center gap-3 rounded-lg border border-border p-4 transition-colors hover:bg-muted"
+                  >
+                    <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" />
+                    <div>
+                      <p className="text-sm font-medium">Face Verification</p>
+                      <p className="text-xs muted-text">
+                        Register and verify faces
+                      </p>
+                    </div>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
       </div>
     </div>
+  </div>
+</div>
   )
 }

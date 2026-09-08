@@ -48,19 +48,19 @@ export default function Login() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-sm items-center px-4">
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="text-center">Sign in</CardTitle>
+    <div className="min-h-screen flex items-center justify-center px-4 section-padding">
+      <Card className="w-full max-w-sm hairline-border">
+        <CardHeader className="text-center pb-6">
+          <CardTitle className="heading-3">Sign in</CardTitle>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <CardContent className="pt-0">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
               <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {error}
               </p>
             )}
-            <div className="flex flex-col gap-1.5">
+            <div className="space-y-1.5">
               <label htmlFor="email" className="text-sm font-medium">
                 Email
               </label>
@@ -70,10 +70,11 @@ export default function Login() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="w-full input-radius border border-input bg-background px-3 py-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 transition-colors"
+                placeholder="you@example.com"
               />
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="space-y-1.5">
               <label htmlFor="password" className="text-sm font-medium">
                 Password
               </label>
@@ -83,7 +84,8 @@ export default function Login() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="w-full input-radius border border-input bg-background px-3 py-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 transition-colors"
+                placeholder="••••••••"
               />
             </div>
             <HcaptchaGate
@@ -92,12 +94,12 @@ export default function Login() {
               onExpire={() => setCaptchaToken(null)}
               onError={() => setCaptchaToken(null)}
             />
-            <Button type="submit" disabled={submitting || !captchaToken}>
+            <Button type="submit" className="w-full" disabled={submitting || !captchaToken}>
               {submitting ? "Signing in…" : "Sign in"}
             </Button>
-            <p className="text-center text-sm text-muted-foreground">
+            <p className="text-center text-sm muted-text">
               Don&apos;t have an account?{" "}
-              <Link to="/signup" className="text-primary hover:underline">
+              <Link to="/signup" className="text-primary hover:underline font-medium">
                 Sign up
               </Link>
             </p>
