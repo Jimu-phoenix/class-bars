@@ -14,6 +14,7 @@ import SessionLive from './pages/SessionLive'
 import StudentHome from './pages/StudentHome'
 import StudentCourses from './pages/StudentCourses'
 import StudentProfile from './pages/StudentProfile'
+import NotFound from './pages/NotFound'
 import SandboxLanding from './pages/SandboxLanding'
 import SandboxLecturer from './pages/SandboxLecturer'
 import SandboxStudent from './pages/SandboxStudent'
@@ -127,6 +128,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   )
