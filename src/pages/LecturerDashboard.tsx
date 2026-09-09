@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import {
   Ban,
   BookOpen,
@@ -9,12 +9,14 @@ import {
   MapPin,
   Play,
   Plus,
+  Radio,
   Square,
 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
 import { useLecturerSessions, type SessionListItem } from "@/hooks/useLecturerSessions"
-import LecturerShell from "@/components/LecturerShell"
+import DashboardShell from "@/components/DashboardShell"
+import StatCard from "@/components/dashboard/StatCard"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -116,6 +118,7 @@ export default function LecturerDashboard() {
 
   const now = new Date().toISOString()
   const totalSessions = sessions.length
+  const liveSessions = sessions.filter((s) => s.status === "ongoing").length
   const upcomingSessions = sessions.filter(
     (s) => s.status === "scheduled" && s.scheduled_start > now,
   ).length
@@ -123,7 +126,7 @@ export default function LecturerDashboard() {
   const recentSessions = sessions.slice(0, 5)
 
   return (
-    <LecturerShell>
+    <DashboardShell>
       <div className="space-y-8">
         <div>
           <h1 className="heading-2">
@@ -134,43 +137,37 @@ export default function LecturerDashboard() {
           </p>
         </div>
 
-        <div className="grid gap-5 sm:grid-cols-3">
-          <Card className="hairline-border">
-            <CardHeader>
-              <CardDescription className="text-xs muted-text">Total sessions</CardDescription>
-              <CardTitle className="text-3xl font-medium">{loading ? "—" : totalSessions}</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="flex items-center gap-1.5 text-xs muted-text">
-                <CalendarDays className="size-3.5" aria-hidden="true" />
-                All time
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="hairline-border">
-            <CardHeader>
-              <CardDescription className="text-xs muted-text">Upcoming sessions</CardDescription>
-              <CardTitle className="text-3xl font-medium">{loading ? "—" : upcomingSessions}</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="flex items-center gap-1.5 text-xs muted-text">
-                <Clock className="size-3.5" aria-hidden="true" />
-                Scheduled ahead of now
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="hairline-border">
-            <CardHeader>
-              <CardDescription className="text-xs muted-text">Courses taught</CardDescription>
-              <CardTitle className="text-3xl font-medium">{loading ? "—" : totalCourses}</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="flex items-center gap-1.5 text-xs muted-text">
-                <BookOpen className="size-3.5" aria-hidden="true" />
-                Distinct courses
-              </p>
-            </CardContent>
-          </Card>
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Total sessions"
+            hint="All time"
+            value={totalSessions}
+            icon={CalendarDays}
+            loading={loading}
+          />
+          <StatCard
+            label="Live now"
+            hint="Currently running"
+            value={liveSessions}
+            icon={Radio}
+            loading={loading}
+            accent="bg-emerald-500/10 text-emerald-600"
+            pulse
+          />
+          <StatCard
+            label="Upcoming"
+            hint="Scheduled ahead of now"
+            value={upcomingSessions}
+            icon={Clock}
+            loading={loading}
+          />
+          <StatCard
+            label="Courses taught"
+            hint="Distinct courses"
+            value={totalCourses}
+            icon={BookOpen}
+            loading={loading}
+          />
         </div>
 
         <Card className="hairline-border">
@@ -208,7 +205,12 @@ export default function LecturerDashboard() {
                   <li key={s.id} className="flex items-center justify-between gap-4 py-4">
                     <div className="min-w-0">
                       <p className="truncate font-medium">
-                        {s.courses?.course_code} — {s.courses?.course_name}
+                        <Link
+                          to={`/dashboard/sessions/${s.id}`}
+                          className="transition-colors hover:text-primary hover:underline"
+                        >
+                          {s.courses?.course_code} — {s.courses?.course_name}
+                        </Link>
                       </p>
                       <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs muted-text">
                         <span className="inline-flex items-center gap-1">
@@ -265,7 +267,15 @@ export default function LecturerDashboard() {
                           End
                         </Button>
                       )}
-                      <Badge variant={statusVariant[s.status] ?? "outline"}>{s.status}</Badge>
+                      <Badge variant={statusVariant[s.status] ?? "outline"} className="gap-1.5">
+                        {s.status === "ongoing" && (
+                          <span className="relative flex size-1.5">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+                          </span>
+                        )}
+                        {s.status}
+                      </Badge>
                     </div>
                   </li>
                 ))}
@@ -274,6 +284,6 @@ export default function LecturerDashboard() {
           </CardContent>
         </Card>
       </div>
-    </LecturerShell>
+    </DashboardShell>
   )
 }

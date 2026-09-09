@@ -10,11 +10,17 @@ export async function resolve(specifier, context, nextResolve) {
   }
   if (specifier.startsWith("@/")) {
     const rel = specifier.slice(2)
-    let target = new URL(rel, SRC_URL)
-    if (!existsSync(target)) {
-      target = new URL(`${rel}.ts`, SRC_URL)
+    let url = new URL(rel, SRC_URL)
+    let filePath = url.pathname
+    if (process.platform === "win32") {
+      filePath = decodeURIComponent(filePath.replace(/^\//, ""))
+    } else {
+      filePath = decodeURIComponent(filePath)
     }
-    return { url: pathToFileURL(target.href).href, shortCircuit: true }
+    if (!existsSync(filePath)) {
+      filePath += ".ts"
+    }
+    return { url: pathToFileURL(filePath).href, shortCircuit: true }
   }
   return nextResolve(specifier, context)
 }

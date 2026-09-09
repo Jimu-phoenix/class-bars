@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react"
 import { Check, Loader2, Pencil, Plus, X } from "lucide-react"
+import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
-import LecturerShell from "@/components/LecturerShell"
+import DashboardShell from "@/components/DashboardShell"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -23,6 +24,7 @@ function friendlyError(message: string) {
 }
 
 export default function LecturerCourses() {
+  const { user } = useAuth()
   const [courses, setCourses] = useState<CourseRow[]>([])
   const [loading, setLoading] = useState(true)
   const [listError, setListError] = useState("")
@@ -39,9 +41,11 @@ export default function LecturerCourses() {
   const [savingId, setSavingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    if (!user) return
     const { data, error: fetchError } = await supabase
       .from("courses")
-      .select("id, course_code, course_name, department")
+      .select("id, course_code, course_name, department, lecturer_id")
+      .eq("lecturer_id", user.id)
       .order("course_code", { ascending: true })
 
     if (fetchError) {
@@ -49,15 +53,17 @@ export default function LecturerCourses() {
     } else {
       setCourses((data as unknown as CourseRow[]) ?? [])
     }
-  }, [])
+  }, [user])
 
   useEffect(() => {
+    if (!user) return
     let cancelled = false
 
     const fetchInitial = async () => {
       const { data, error: fetchError } = await supabase
         .from("courses")
-        .select("id, course_code, course_name, department")
+        .select("id, course_code, course_name, department, lecturer_id")
+        .eq("lecturer_id", user.id)
         .order("course_code", { ascending: true })
 
       if (cancelled) return
@@ -73,10 +79,11 @@ export default function LecturerCourses() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [user])
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault()
+    if (!user) return
     setCreateError("")
     setCreating(true)
     try {
@@ -84,6 +91,7 @@ export default function LecturerCourses() {
         course_code: code.trim().toUpperCase(),
         course_name: name.trim(),
         department: department.trim() || null,
+        lecturer_id: user.id,
       })
       if (insertError) throw insertError
       setCode("")
@@ -133,7 +141,7 @@ export default function LecturerCourses() {
   }
 
   return (
-    <LecturerShell
+    <DashboardShell
       title="Courses"
       description="Courses you can schedule sessions for."
     >
@@ -199,7 +207,7 @@ export default function LecturerCourses() {
 
       <Card>
         <CardHeader>
-          <CardTitle>All courses</CardTitle>
+          <CardTitle>My courses</CardTitle>
           <CardDescription>{courses.length} registered</CardDescription>
         </CardHeader>
         <CardContent>
@@ -294,6 +302,6 @@ export default function LecturerCourses() {
           )}
         </CardContent>
       </Card>
-    </LecturerShell>
+    </DashboardShell>
   )
 }

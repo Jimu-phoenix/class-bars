@@ -32,6 +32,14 @@
 --   4. migrations/04_sandbox_profile_exclusion.sql
 --      (installs the hardened handle_new_user signup trigger; on a
 --       fresh build sections C/D simply find nothing to sweep)
+--   5. migrations/05_sandbox_participants.sql
+--   6. migrations/06_real_attendance_flow.sql
+--   7. migrations/07_real_table_grants.sql
+--      (explicit GRANTs on real tables -- required to avoid
+--       "permission denied" once default privileges don't cover
+--       pre-existing tables)
+--   8. migrations/08_course_lecturer.sql
+--      (courses.lecturer_id + owner-scoped course policies)
 --   Do NOT run migrations/03_table_details.sql as part of the chain --
 --   it is a read-only report, useful afterwards for verification.
 --

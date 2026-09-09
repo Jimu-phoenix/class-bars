@@ -1,4 +1,7 @@
 import * as faceapi from "face-api.js"
+import { FACE_MODEL_VERSION } from "@/lib/faceCompare"
+
+export { FACE_MODEL_VERSION }
 
 export const FACE_MODELS_BASE = "/models"
 
@@ -6,6 +9,10 @@ export const DETECTION_OPTIONS = new faceapi.TinyFaceDetectorOptions({
   inputSize: 320,
   scoreThreshold: 0.4,
 })
+
+export function isModelError(message: string | null): boolean {
+  return message?.startsWith("Face models failed to load") ?? false
+}
 
 export type FaceModelsStatus = {
   detector: boolean

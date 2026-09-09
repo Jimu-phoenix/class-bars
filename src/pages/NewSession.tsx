@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { CalendarPlus, Loader2 } from "lucide-react"
+import { CalendarClock, Loader2, Play, Timer } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
-import LecturerShell from "@/components/LecturerShell"
+import DashboardShell from "@/components/DashboardShell"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -12,12 +12,25 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
 import type { CourseRow, VenueRow } from "@/types/db"
 
 const inputClass =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
 
 const NEW_VENUE = "__new"
+
+const DURATIONS = [5, 15, 30, 60]
+
+type SessionMode = "now" | "schedule"
+
+function addMinutes(date: Date, minutes: number) {
+  return new Date(date.getTime() + minutes * 60_000)
+}
+
+function minutesLabel(minutes: number) {
+  return `${minutes} min`
+}
 
 export default function NewSession() {
   const { user } = useAuth()
@@ -32,9 +45,12 @@ export default function NewSession() {
   const [venueChoice, setVenueChoice] = useState("")
   const [newVenueName, setNewVenueName] = useState("")
   const [newVenueBuilding, setNewVenueBuilding] = useState("")
+
+  const [mode, setMode] = useState<SessionMode>("now")
+  const [durationMinutes, setDurationMinutes] = useState(30)
   const [date, setDate] = useState("")
   const [startTime, setStartTime] = useState("")
-  const [endTime, setEndTime] = useState("")
+
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState("")
 
@@ -46,7 +62,8 @@ export default function NewSession() {
         await Promise.all([
           supabase
             .from("courses")
-            .select("id, course_code, course_name, department")
+            .select("id, course_code, course_name, department, lecturer_id")
+            .eq("lecturer_id", user?.id ?? "")
             .order("course_code", { ascending: true }),
           supabase
             .from("venues")
@@ -68,7 +85,11 @@ export default function NewSession() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [user?.id])
+
+  const now = new Date()
+  const scheduledStart = mode === "now" ? now : date && startTime ? new Date(`${date}T${startTime}`) : null
+  const scheduledEnd = scheduledStart ? addMinutes(scheduledStart, durationMinutes) : null
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -88,15 +109,15 @@ export default function NewSession() {
       return
     }
 
-    const startAt = date && startTime ? new Date(`${date}T${startTime}`) : null
-    const endAt = date && endTime ? new Date(`${date}T${endTime}`) : null
-    if (!startAt || !endAt || isNaN(startAt.getTime()) || isNaN(endAt.getTime())) {
-      setFormError("Provide a valid date with start and end times.")
-      return
-    }
-    if (endAt <= startAt) {
-      setFormError("End time must be after the start time.")
-      return
+    if (mode === "schedule") {
+      if (!scheduledStart || isNaN(scheduledStart.getTime())) {
+        setFormError("Provide a valid date and start time.")
+        return
+      }
+      if (scheduledStart.getTime() <= new Date().getTime()) {
+        setFormError("Start time must be in the future.")
+        return
+      }
     }
 
     setSubmitting(true)
@@ -115,16 +136,30 @@ export default function NewSession() {
         venueId = (venue as { id: string }).id
       }
 
-      const { error: sessionError } = await supabase.from("class_sessions").insert({
-        course_id: courseId,
-        lecturer_id: user.id,
-        venue_id: venueId,
-        scheduled_start: startAt.toISOString(),
-        scheduled_end: endAt.toISOString(),
-      })
+      const startAt = mode === "now" ? now : scheduledStart!
+      const endAt = addMinutes(startAt, durationMinutes)
+
+      const { data: session, error: sessionError } = await supabase
+        .from("class_sessions")
+        .insert({
+          course_id: courseId,
+          lecturer_id: user.id,
+          venue_id: venueId,
+          scheduled_start: startAt.toISOString(),
+          scheduled_end: endAt.toISOString(),
+          ...(mode === "now"
+            ? { status: "ongoing", actual_start: startAt.toISOString() }
+            : {}),
+        })
+        .select("id")
+        .single()
       if (sessionError) throw sessionError
 
-      navigate("/dashboard")
+      if (mode === "now") {
+        navigate(`/dashboard/sessions/${(session as { id: string }).id}`)
+      } else {
+        navigate("/dashboard")
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to create session")
       setSubmitting(false)
@@ -132,7 +167,7 @@ export default function NewSession() {
   }
 
   return (
-    <LecturerShell title="New session" description="Schedule a class session for attendance.">
+    <DashboardShell title="New session" description="Schedule a class session for attendance.">
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -148,7 +183,7 @@ export default function NewSession() {
               You need at least one course before scheduling a session.
             </p>
             <Button onClick={() => navigate("/dashboard/courses")}>
-              <CalendarPlus data-icon="inline-start" />
+              <CalendarClock data-icon="inline-start" />
               Go to courses
             </Button>
           </CardContent>
@@ -158,7 +193,7 @@ export default function NewSession() {
           <CardHeader>
             <CardTitle>Session details</CardTitle>
             <CardDescription>
-              Students can only check in while the session is ongoing.
+              Choose whether the class starts immediately or is booked ahead of time.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -169,26 +204,88 @@ export default function NewSession() {
                 </p>
               )}
 
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="course" className="text-sm font-medium">
-                  Course
-                </label>
-                <select
-                  id="course"
-                  required
-                  value={courseId}
-                  onChange={(e) => setCourseId(e.target.value)}
-                  className={inputClass}
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-pressed={mode === "now"}
+                  onClick={() => {
+                    setMode("now")
+                    setFormError("")
+                  }}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    mode === "now"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
                 >
-                  <option value="" disabled>
-                    Select a course…
-                  </option>
-                  {courses.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.course_code} — {c.course_name}
+                  <Play className="size-4" aria-hidden="true" />
+                  Start now
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-pressed={mode === "schedule"}
+                  onClick={() => {
+                    setMode("schedule")
+                    setFormError("")
+                  }}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    mode === "schedule"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <CalendarClock className="size-4" aria-hidden="true" />
+                  Schedule for later
+                </button>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="course" className="text-sm font-medium">
+                    Course
+                  </label>
+                  <select
+                    id="course"
+                    required
+                    value={courseId}
+                    onChange={(e) => setCourseId(e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="" disabled>
+                      Select a course…
                     </option>
-                  ))}
-                </select>
+                    {courses.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.course_code} — {c.course_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="duration" className="text-sm font-medium">
+                    Registration duration
+                  </label>
+                  <select
+                    id="duration"
+                    value={durationMinutes}
+                    onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                    className={inputClass}
+                  >
+                    {DURATIONS.map((d) => (
+                      <option key={d} value={d}>
+                        {minutesLabel(d)}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs muted-text">
+                    Attendance closes when the window lapses.
+                  </p>
+                </div>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -246,47 +343,77 @@ export default function NewSession() {
                 </div>
               )}
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="date" className="text-sm font-medium">
-                    Date
-                  </label>
-                  <input
-                    id="date"
-                    type="date"
-                    required
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className={inputClass}
-                  />
+              {mode === "schedule" && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="date" className="text-sm font-medium">
+                      Date
+                    </label>
+                    <input
+                      id="date"
+                      type="date"
+                      required
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="start_time" className="text-sm font-medium">
+                      Starts
+                    </label>
+                    <input
+                      id="start_time"
+                      type="time"
+                      required
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="start_time" className="text-sm font-medium">
-                    Starts
-                  </label>
-                  <input
-                    id="start_time"
-                    type="time"
-                    required
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className={inputClass}
-                  />
+              )}
+
+              {scheduledStart && scheduledEnd && !isNaN(scheduledStart.getTime()) && (
+                <div className="flex items-center gap-3 rounded-lg bg-muted/50 px-4 py-3 text-sm">
+                  <Timer className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                  <p className="text-muted-foreground">
+                    {mode === "now" ? (
+                      <>
+                        Starts now · ends at{" "}
+                        <span className="font-medium text-foreground">
+                          {scheduledEnd.toLocaleTimeString(undefined, {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        {` · registration open for ${minutesLabel(durationMinutes)}`}
+                      </>
+                    ) : (
+                      <>
+                        Runs{" "}
+                        <span className="font-medium text-foreground">
+                          {scheduledStart.toLocaleString(undefined, {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        {" – "}
+                        <span className="font-medium text-foreground">
+                          {scheduledEnd.toLocaleTimeString(undefined, {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        {` · registration open for ${minutesLabel(durationMinutes)}`}
+                      </>
+                    )}
+                  </p>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="end_time" className="text-sm font-medium">
-                    Ends
-                  </label>
-                  <input
-                    id="end_time"
-                    type="time"
-                    required
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
+              )}
 
               <div className="flex items-center justify-end gap-3">
                 <Link to="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
@@ -294,13 +421,17 @@ export default function NewSession() {
                 </Link>
                 <Button type="submit" disabled={submitting}>
                   {submitting && <Loader2 data-icon="inline-start" className="animate-spin" />}
-                  {submitting ? "Creating…" : "Create session"}
+                  {submitting
+                    ? "Creating…"
+                    : mode === "now"
+                      ? "Start session"
+                      : "Schedule session"}
                 </Button>
               </div>
             </form>
           </CardContent>
         </Card>
       )}
-    </LecturerShell>
+    </DashboardShell>
   )
 }

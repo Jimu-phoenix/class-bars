@@ -1,10 +1,16 @@
-import { useState, useEffect, type FormEvent } from "react"
+import { useState, useEffect, useCallback, type FormEvent } from "react"
 import { Link, useLocation } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
+import {
+  clearFaceEmbedding,
+  getActiveFaceEmbedding,
+  upsertFaceEmbedding,
+} from "@/lib/realAttendance"
+import FaceEnrollCard from "@/components/face/FaceEnrollCard"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
   Home,
   User,
@@ -16,14 +22,11 @@ import {
   Save,
   CheckCircle2,
   Loader2,
+  Presentation,
+  ScanFace,
+  Trash2,
 } from "lucide-react"
-
-const navItems = [
-  { label: "Home", href: "/", icon: Home },
-  { label: "Profile", href: "/profile", icon: User },
-  { label: "Face Detection", href: "/face-test", icon: Camera },
-  { label: "Face Verification", href: "/face-verify", icon: ShieldCheck },
-]
+import type { FaceEmbeddingRow } from "@/types/db"
 
 type ProfileData = {
   full_name: string
@@ -45,6 +48,32 @@ export default function Profile() {
   const [studentNumber, setStudentNumber] = useState("")
   const [staffNumber, setStaffNumber] = useState("")
   const [phoneNumber, setPhoneNumber] = useState("")
+
+  const [embedding, setEmbedding] = useState<FaceEmbeddingRow | null>(null)
+  const [embeddingLoading, setEmbeddingLoading] = useState(false)
+  const [embeddingError, setEmbeddingError] = useState("")
+  const [embeddingNotice, setEmbeddingNotice] = useState("")
+  const [showEnroll, setShowEnroll] = useState(false)
+
+  const loadEmbedding = useCallback(async () => {
+    if (!user) return
+    setEmbeddingLoading(true)
+    setEmbeddingError("")
+    try {
+      const row = await getActiveFaceEmbedding(user.id)
+      setEmbedding(row)
+    } catch (err) {
+      setEmbeddingError(err instanceof Error ? err.message : "Failed to load face status")
+    } finally {
+      setEmbeddingLoading(false)
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (!user || profile?.role !== "student") return
+    const timer = window.setTimeout(() => void loadEmbedding(), 0)
+    return () => window.clearTimeout(timer)
+  }, [user, profile?.role, loadEmbedding])
 
   useEffect(() => {
     const currentUser = user
@@ -136,6 +165,35 @@ export default function Profile() {
     }
   }
 
+  const handleFaceSaved = async (descriptor: Float32Array) => {
+    await upsertFaceEmbedding(descriptor)
+    setShowEnroll(false)
+    setEmbeddingNotice("Face template saved.")
+    try {
+      await loadEmbedding()
+    } catch {
+      // translated notice above already communicates success
+    }
+  }
+
+  const handleClearFace = async () => {
+    if (!window.confirm("Remove your enrolled face template?")) return
+    setEmbeddingNotice("")
+    setEmbeddingError("")
+    setEmbeddingLoading(true)
+    try {
+      await clearFaceEmbedding()
+      setEmbedding(null)
+      setEmbeddingNotice("Face template removed.")
+    } catch (err) {
+      setEmbeddingError(
+        err instanceof Error ? err.message : "Failed to remove face template",
+      )
+    } finally {
+      setEmbeddingLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -147,6 +205,16 @@ export default function Profile() {
   const roleLabel =
     profile?.role === "lecturer" ? "Lecturer" : profile?.role === "admin" ? "Admin" : "Student"
 
+  const sidebarItems = [
+    { label: "Home", href: "/", icon: Home },
+    ...(profile?.role === "student"
+      ? [{ label: "Live Classes", href: "/student", icon: Presentation }]
+      : []),
+    { label: "Profile", href: "/profile", icon: User },
+    { label: "Face Detection", href: "/face-test", icon: Camera },
+    { label: "Face Verification", href: "/face-verify", icon: ShieldCheck },
+  ]
+
   return (
     <div className="flex min-h-screen">
       {/* ── Sidebar ── */}
@@ -156,7 +224,7 @@ export default function Profile() {
         </div>
 
         <nav className="flex flex-1 flex-col gap-1">
-          {navItems.map((item) => {
+          {sidebarItems.map((item) => {
             const Icon = item.icon
             const isActive = location.pathname === item.href
             return (
@@ -373,6 +441,90 @@ export default function Profile() {
               </CardContent>
             </Card>
 
+          {/* ── Face biometrics ── */}
+          {profile?.role === "student" && (
+            <Card className="hairline-border">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ScanFace className="size-4 text-primary" aria-hidden="true" />
+                  Face biometrics
+                </CardTitle>
+                <CardDescription>
+                  Your face template is used to verify you when joining live classes.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {embeddingLoading ? (
+                  <p className="flex items-center gap-2 text-sm muted-text">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    Checking…
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {embedding ? (
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <Badge>Enrolled</Badge>
+                        <span className="muted-text">
+                          {embedding.model_version} · saved{" "}
+                          {new Date(embedding.updated_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-sm muted-text">
+                        No face template yet — add one to check into live classes.
+                      </p>
+                    )}
+                    {embeddingError && (
+                      <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                        {embeddingError}
+                      </p>
+                    )}
+                    {embeddingNotice && (
+                      <p className="flex items-center gap-2 rounded-md bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-300">
+                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                        {embeddingNotice}
+                      </p>
+                    )}
+                    {!showEnroll && (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setShowEnroll(true)
+                            setEmbeddingNotice("")
+                          }}
+                        >
+                          <ScanFace data-icon="inline-start" aria-hidden="true" />
+                          {embedding ? "Update face" : "Add face"}
+                        </Button>
+                        {embedding && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => void handleClearFace()}
+                            disabled={embeddingLoading}
+                          >
+                            <Trash2 data-icon="inline-start" aria-hidden="true" />
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    {showEnroll && (
+                      <div className="rounded-xl border border-border p-4">
+                        <FaceEnrollCard
+                          actionLabel="Save face template"
+                          onSave={handleFaceSaved}
+                          onCancel={() => setShowEnroll(false)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* ── Quick links ── */}
             <Card className="hairline-border">
               <CardHeader>
@@ -380,7 +532,21 @@ export default function Profile() {
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4 sm:grid-cols-2">
+                {profile?.role === "student" && (
                   <Link
+                    to="/student"
+                    className="flex items-center gap-3 rounded-lg border border-border p-4 transition-colors hover:bg-muted"
+                  >
+                    <Presentation className="h-5 w-5 text-primary" aria-hidden="true" />
+                    <div>
+                      <p className="text-sm font-medium">Live Classes</p>
+                      <p className="text-xs muted-text">
+                        See live sessions and check in
+                      </p>
+                    </div>
+                  </Link>
+                )}
+                <Link
                     to="/face-test"
                     className="flex items-center gap-3 rounded-lg border border-border p-4 transition-colors hover:bg-muted"
                   >

@@ -8,12 +8,18 @@ import Profile from './pages/Profile'
 import Onboarding from './pages/Onboarding'
 import LecturerDashboard from './pages/LecturerDashboard'
 import LecturerCourses from './pages/LecturerCourses'
+import LecturerProfile from './pages/LecturerProfile'
 import NewSession from './pages/NewSession'
+import SessionLive from './pages/SessionLive'
+import StudentHome from './pages/StudentHome'
+import StudentCourses from './pages/StudentCourses'
+import StudentProfile from './pages/StudentProfile'
 import SandboxLanding from './pages/SandboxLanding'
 import SandboxLecturer from './pages/SandboxLecturer'
 import SandboxStudent from './pages/SandboxStudent'
 import ProtectedRoute from './components/ProtectedRoute'
 import LecturerRoute from './components/LecturerRoute'
+import StudentRoute from './components/StudentRoute'
 
 function App() {
   return (
@@ -42,6 +48,30 @@ function App() {
           }
         />
         <Route
+          path="/student"
+          element={
+            <StudentRoute>
+              <StudentHome />
+            </StudentRoute>
+          }
+        />
+        <Route
+          path="/student/courses"
+          element={
+            <StudentRoute>
+              <StudentCourses />
+            </StudentRoute>
+          }
+        />
+        <Route
+          path="/student/profile"
+          element={
+            <StudentRoute>
+              <StudentProfile />
+            </StudentRoute>
+          }
+        />
+        <Route
           path="/dashboard"
           element={
             <LecturerRoute>
@@ -58,10 +88,26 @@ function App() {
           }
         />
         <Route
+          path="/dashboard/profile"
+          element={
+            <LecturerRoute>
+              <LecturerProfile />
+            </LecturerRoute>
+          }
+        />
+        <Route
           path="/dashboard/sessions/new"
           element={
             <LecturerRoute>
               <NewSession />
+            </LecturerRoute>
+          }
+        />
+        <Route
+          path="/dashboard/sessions/:id"
+          element={
+            <LecturerRoute>
+              <SessionLive />
             </LecturerRoute>
           }
         />

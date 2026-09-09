@@ -2,11 +2,54 @@ export type UserRole = "student" | "lecturer" | "admin"
 
 export type SessionStatus = "scheduled" | "ongoing" | "completed" | "cancelled"
 
+export type AttendanceMethod = "face" | "otp" | "manual"
+
+export type AttendanceStatus = "present" | "late" | "absent" | "flagged"
+
+export type ProfileRow = {
+  id: string
+  full_name: string
+  role: UserRole
+  student_number: string | null
+  staff_number: string | null
+  phone_number: string | null
+}
+
+export type EnrollmentRow = {
+  id: string
+  student_id: string
+  course_id: string
+  academic_year: string
+  semester: string
+}
+
+export type FaceEmbeddingRow = {
+  id: string
+  user_id: string
+  embedding_json: string
+  model_version: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type AttendanceRecordRow = {
+  id: string
+  session_id: string
+  student_id: string
+  device_id: string | null
+  method: AttendanceMethod
+  status: AttendanceStatus
+  check_in_time: string
+  confidence_score: number | null
+}
+
 export type CourseRow = {
   id: string
   course_code: string
   course_name: string
   department: string | null
+  lecturer_id: string | null
 }
 
 export type VenueRow = {

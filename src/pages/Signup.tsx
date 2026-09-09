@@ -1,68 +1,68 @@
-import { useState, type FormEvent } from "react"
+import { useRef, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { GraduationCap } from "lucide-react"
-import { useAuth } from "@/contexts/AuthContext"
+import { GraduationCap, School } from "lucide-react"
+import { useAuth, type SignUpRole } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import HcaptchaGate, {
+  type HcaptchaGateHandle,
+} from "@/components/HcaptchaGate"
+import { cn } from "@/lib/utils"
 
 export default function Signup() {
   const { signUp } = useAuth()
   const navigate = useNavigate()
+  const [role, setRole] = useState<SignUpRole>("student")
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [lecturerSubmitting, setLecturerSubmitting] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [emailSent, setEmailSent] = useState(false)
+  const captchaRef = useRef<HcaptchaGateHandle>(null)
 
-  const busy = submitting || lecturerSubmitting
+  const switchRole = (next: SignUpRole) => {
+    if (next === role) return
+    setRole(next)
+    setError("")
+    setCaptchaToken(null)
+    captchaRef.current?.reset()
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError("")
     setSubmitting(true)
     try {
-      const { needsConfirmation } = await signUp(email, password, fullName)
-      if (needsConfirmation) {
-        setEmailSent(true)
-        return
-      }
-      navigate("/onboarding")
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Signup failed")
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const handleLecturerSignup = async () => {
-    setError("")
-    setLecturerSubmitting(true)
-    try {
       const { needsConfirmation } = await signUp(
         email,
         password,
         fullName,
-        "lecturer"
+        role,
+        captchaToken ?? undefined
       )
       if (needsConfirmation) {
         setEmailSent(true)
         return
       }
-      navigate("/dashboard")
+      navigate(role === "lecturer" ? "/dashboard" : "/onboarding")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed")
+      setCaptchaToken(null)
+      captchaRef.current?.reset()
     } finally {
-      setLecturerSubmitting(false)
+      setSubmitting(false)
     }
   }
+
+  const roleLabel = role === "lecturer" ? "lecturer" : "student"
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 section-padding">
       <Card className="w-full max-w-sm hairline-border">
         <CardHeader className="text-center pb-6">
-          <CardTitle className="heading-3">Create account</CardTitle>
+          <CardTitle className="heading-3">Create {roleLabel} account</CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
           {emailSent ? (
@@ -81,6 +81,36 @@ export default function Signup() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+                <button
+                  type="button"
+                  onClick={() => switchRole("student")}
+                  aria-pressed={role === "student"}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    role === "student"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <GraduationCap className="size-4" aria-hidden="true" />
+                  Student
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchRole("lecturer")}
+                  aria-pressed={role === "lecturer"}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    role === "lecturer"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <School className="size-4" aria-hidden="true" />
+                  Lecturer
+                </button>
+              </div>
               {error && (
                 <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {error}
@@ -97,7 +127,7 @@ export default function Signup() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   className="w-full input-radius border border-input bg-background px-3 py-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 transition-colors"
-                  placeholder="John Doe"
+                  placeholder={role === "lecturer" ? "Jane Smith" : "John Doe"}
                 />
               </div>
               <div className="space-y-1.5">
@@ -128,29 +158,20 @@ export default function Signup() {
                   placeholder="••••••••"
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={busy}>
-                {submitting ? "Creating account…" : "Create account"}
-              </Button>
-              <div className="flex items-center gap-3">
-                <span className="h-px flex-1 bg-border" />
-                <span className="text-xs muted-text">or</span>
-                <span className="h-px flex-1 bg-border" />
-              </div>
+              <HcaptchaGate
+                ref={captchaRef}
+                onVerify={setCaptchaToken}
+                onExpire={() => setCaptchaToken(null)}
+                onError={() => setCaptchaToken(null)}
+              />
               <Button
-                type="button"
-                variant="outline"
+                type="submit"
                 className="w-full"
-                disabled={busy}
-                onClick={handleLecturerSignup}
+                disabled={submitting || !captchaToken}
               >
-                {lecturerSubmitting ? (
-                  "Creating lecturer account…"
-                ) : (
-                  <>
-                    <GraduationCap data-icon="inline-start" />
-                    Sign up as lecturer
-                  </>
-                )}
+                {submitting
+                  ? `Creating ${roleLabel} account…`
+                  : `Create ${roleLabel} account`}
               </Button>
               <p className="text-center text-sm muted-text">
                 Already have an account?{" "}
