@@ -2,11 +2,12 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: var(--font-sans);
+    --font-heading: 'Lustra Black', 'Space Grotesk', system-ui, sans-serif;
     --font-sans: 'Inter Variable', system-ui, -apple-system, sans-serif;
     --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
 
@@ -196,4 +197,63 @@
   .muted-text {
     @apply text-muted-foreground;
   }
+}
+
+@font-face {
+  font-family: 'Lustra Black';
+  src: url('/fonts/Lustra-Black.woff2') format('woff2');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+.grid-bg-primary {
+  background-image:
+    linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+.dark .grid-bg-primary {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+}
+
+.grid-bg-secondary {
+  background-image:
+    linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.02) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.dark .grid-bg-secondary {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+}
+
+@keyframes gridMove {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(20px, 20px); }
+}
+
+.animate-grid-move {
+  animation: gridMove 20s linear infinite;
+}
+
+.hero-gradient {
+  background: linear-gradient(135deg, #000 0%, #fff 100%);
+}
+
+.dark .hero-gradient {
+  background: linear-gradient(135deg, #fff 0%, #000 100%);
+}
+
+.hero-gradient-bottom {
+  background: linear-gradient(180deg, transparent 50%, #000 100%);
+}
+
+.dark .hero-gradient-bottom {
+  background: linear-gradient(180deg, transparent 50%, #fff 100%);
 }

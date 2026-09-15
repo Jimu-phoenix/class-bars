@@ -1,218 +1,235 @@
 import { Link } from "react-router-dom"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
+import Navbar from "@/components/Navbar"
+import Footer from "@/components/Footer"
 
 const features = [
   {
     title: "Face Detection",
     description: "Real-time face detection using SSD MobileNet v1. Identifies and tracks faces in the camera feed with bounding boxes and landmarks.",
-    icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
-      </svg>
-    ),
   },
   {
     title: "Face Recognition",
-    description: "Generates a 128-d face descriptor vector for each detected face, enabling accurate face matching and identification against a known database.",
-    icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
-      </svg>
-    ),
+    description: "Generates a 128-d face descriptor vector for each detected face, enabling accurate face matching against enrolled templates.",
   },
   {
     title: "Attendance Recording",
-    description: "Automated attendance logging by matching detected faces against registered student profiles. Eliminates manual roll calls and proxy attendance.",
-    icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-      </svg>
-    ),
+    description: "Automated attendance logging by matching detected faces against registered student profiles. Eliminates manual roll calls.",
   },
   {
     title: "Biometric Security",
     description: "Uses unique facial features for verification, providing a secure and contactless alternative to PINs, cards, or signatures.",
-    icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-      </svg>
-    ),
   },
 ]
 
 const steps = [
   { number: "01", label: "Register", description: "Enroll student face data into the system" },
   { number: "02", label: "Detect", description: "Live camera captures faces in the classroom" },
-  { number: "03", label: "Match", description: "Face descriptors are compared against enrolled data" },
-  { number: "04", label: "Record", description: "Attendance is logged automatically" },
+  { number: "03", label: "Match", description: "Face descriptors compared against enrolled data" },
+  { number: "04", label: "Record", description: "Attendance logged automatically" },
+]
+
+const stats = [
+  { value: "128-d", label: "Face Descriptors" },
+  { value: "< 100ms", label: "Match Latency" },
+  { value: "AES-256", label: "Encryption" },
+  { value: "Local", label: "Processing" },
 ]
 
 export default function Home() {
-  const { user, loading, signOut } = useAuth()
+  const { user } = useAuth()
 
   return (
-    <div className="min-h-screen">
-      <header className="section-padding border-b border-border">
-        <div className="container-default">
-          <div className="mb-8 flex items-center justify-end gap-3">
-            {loading ? null : user ? (
-              <>
-                <span className="text-sm text-muted-foreground">
-                  {user.email}
-                </span>
-                <Button variant="outline" size="sm" onClick={signOut}>
-                  Sign out
-                </Button>
-              </>
-            ) : (
-              <>
-                <Link to="/login">
-                  <Button variant="outline" size="sm">Sign in</Button>
-                </Link>
-                <Link to="/signup">
-                  <Button size="sm">Sign up</Button>
-                </Link>
-              </>
-            )}
-          </div>
+    <div className="min-h-screen flex flex-col relative overflow-hidden bg-background">
+      <Navbar />
 
-          <div className="text-center max-w-3xl mx-auto">
-            <Badge variant="outline" className="mb-6 text-xs font-normal tracking-wide uppercase">
-              Biometric Attendance Recording System
-            </Badge>
-            <h1 className="heading-1 text-foreground">
-              Class-BARS
-            </h1>
-            <p className="mt-6 body-lg muted-text">
-              Automated face recognition attendance for classrooms. Fast, secure, and contactless.
-            </p>
-            <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4">
-              {user ? (
-                user.user_metadata?.role === "lecturer" ? (
-                  <>
-                    <Link
-                      to="/dashboard"
-                      className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z" />
-                      </svg>
-                      Lecturer dashboard
-                    </Link>
-                    <Link
-                      to="/dashboard/sessions/new"
-                      className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-background px-6 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-                    >
-                      New session
-                    </Link>
-                  </>
+      <main className="flex-1 relative z-10">
+        <div className="fixed inset-0 -z-10 pointer-events-none" aria-hidden="true">
+          <div className="absolute inset-0 hero-gradient opacity-5" />
+          <div className="absolute inset-0 hero-gradient-bottom opacity-10" />
+          <div
+            className="absolute inset-0 opacity-20 grid-bg-primary"
+          />
+          <div
+            className="absolute inset-0 opacity-10 grid-bg-secondary animate-grid-move"
+          />
+        </div>
+
+        <section className="relative pt-28 pb-16 md:pt-36 md:pb-24 lg:pt-44 lg:pb-32 px-4 md:px-6 lg:px-8">
+          <div className="container-narrow">
+            <div className="max-w-3xl mx-auto text-center">
+              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+                <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
+                </span>
+                v0.1.0 — Technical Preview
+              </span>
+
+              <h1 className="mt-8 heading-1 font-heading tracking-tighter text-balance lg:text-7xl">
+                Class-BARS
+                <br />
+                <span className="text-muted-foreground/60 font-normal">Biometric Attendance</span>
+              </h1>
+
+              <p className="mt-6 body-lg muted-text max-w-2xl mx-auto text-pretty">
+                Automated face recognition attendance for classrooms. Fast, secure, and contactless.
+                All processing happens locally — no face images ever leave your device.
+              </p>
+
+              <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+                {user ? (
+                  user.user_metadata?.role === "lecturer" ? (
+                    <>
+                      <Link
+                        to="/dashboard"
+                        className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
+                      >
+                        Lecturer Dashboard
+                      </Link>
+                      <Link
+                        to="/dashboard/sessions/new"
+                        className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-background px-6 text-sm font-medium transition-colors hover:bg-muted"
+                      >
+                        New Session
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        to="/student"
+                        className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
+                      >
+                        Open Live Classes
+                      </Link>
+                      <Link
+                        to="/profile"
+                        className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-background px-6 text-sm font-medium transition-colors hover:bg-muted"
+                      >
+                        My Profile
+                      </Link>
+                    </>
+                  )
                 ) : (
                   <>
                     <Link
-                      to="/student"
+                      to="/signup"
                       className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
                     >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-                      </svg>
-                      Open live classes
+                      Get Started
                     </Link>
                     <Link
-                      to="/profile"
-                      className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-background px-6 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                      to="/sandbox"
+                      className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-background px-6 text-sm font-medium transition-colors hover:bg-muted"
                     >
-                      My profile
+                      Try Demo
                     </Link>
                   </>
-                )
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Sign in to access face detection and verification tools.
-                </p>
-              )}
-              <Link
-                to="/face-test"
-                className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-background px-6 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-              >
-                Learn more
-              </Link>
-              <Link
-                to="/sandbox"
-                className="inline-flex h-11 items-center gap-2 rounded-md px-4 text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
-              >
-                Try the demo
-              </Link>
+                )}
+                <Link
+                  to="/face-test"
+                  className="inline-flex h-11 items-center gap-2 rounded-md px-4 text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                >
+                  Technical Docs
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </section>
 
-      <section className="section-padding border-b border-border">
-        <div className="container-default">
-          <div className="mb-12 text-center max-w-2xl mx-auto">
-            <h2 className="heading-2 text-foreground">How it works</h2>
-            <p className="mt-4 body-lg muted-text">
-              From enrollment to attendance in four steps
-            </p>
-          </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {steps.map((step) => (
-              <Card key={step.number} className="text-center hairline-border">
-                <CardContent className="py-8 px-6">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
-                    {step.number}
-                  </span>
-                  <h3 className="mt-4 text-base font-medium text-foreground">
-                    {step.label}
-                  </h3>
-                  <p className="mt-2 text-sm muted-text">
-                    {step.description}
+        <section className="relative py-16 md:py-24 lg:py-32 px-4 md:px-6 lg:px-8 border-t border-border/50">
+          <div className="container-default">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-16">
+              {stats.map((stat) => (
+                <div
+                  key={stat.label}
+                  className="p-4 md:p-6 rounded-xl border border-border bg-card/50 backdrop-blur-sm transition-all hover:border-primary/50 hover:shadow-lg"
+                >
+                  <p className="font-heading text-2xl md:text-3xl lg:text-4xl font-semibold tracking-tight text-foreground">
+                    {stat.value}
                   </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
+                  <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
+                </div>
+              ))}
+            </div>
 
-      <section className="section-padding">
-        <div className="container-default">
-          <div className="mb-12 text-center max-w-2xl mx-auto">
-            <h2 className="heading-2 text-foreground">Features</h2>
-            <p className="mt-4 body-lg muted-text">
-              Everything you need for biometric attendance
-            </p>
-          </div>
-          <div className="grid gap-6 md:grid-cols-2">
-            {features.map((feature) => (
-              <Card key={feature.title} className="hairline-border">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      {feature.icon}
+            <div className="mb-16 text-center max-w-2xl mx-auto">
+              <h2 className="heading-2 font-heading tracking-tight">How It Works</h2>
+              <p className="mt-4 body-lg muted-text">From enrollment to attendance in four steps</p>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+              {steps.map((step) => (
+                <article
+                  key={step.number}
+                  className="group relative p-6 md:p-8 rounded-xl border border-border bg-card/50 backdrop-blur-sm transition-all hover:border-primary/50 hover:shadow-lg"
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary font-mono">
+                      {step.number}
                     </span>
-                    <CardTitle className="text-lg">{feature.title}</CardTitle>
+                    <h3 className="font-medium text-foreground">{step.label}</h3>
                   </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="body-sm muted-text">
-                    {feature.description}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
+                  <p className="text-sm muted-text">{step.description}</p>
+                  <div className="absolute inset-0 bg-gradient-to-t from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-xl" />
+                </article>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <footer className="border-t border-border py-10">
-        <div className="container-default text-center">
-          <p className="text-xs muted-text">Class-BARS &mdash; Biometric Attendance Recording System</p>
-        </div>
-      </footer>
+        <section className="relative py-16 md:py-24 lg:py-32 px-4 md:px-6 lg:px-8 border-t border-border/50">
+          <div className="container-default">
+            <div className="mb-12 md:mb-16 text-center max-w-2xl mx-auto">
+              <h2 className="heading-2 font-heading tracking-tight">Technical Features</h2>
+              <p className="mt-4 body-lg muted-text">Built for performance, security, and privacy</p>
+            </div>
+            <div className="grid gap-6 md:grid-cols-2">
+              {features.map((feature) => (
+                <article
+                  key={feature.title}
+                  className="group p-6 md:p-8 rounded-xl border border-border bg-card/50 backdrop-blur-sm transition-all hover:border-primary/50 hover:shadow-lg"
+                >
+                  <h3 className="font-heading text-lg font-semibold tracking-tight text-foreground">{feature.title}</h3>
+                  <p className="mt-3 body-sm muted-text">{feature.description}</p>
+                  <div className="mt-4 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="relative py-16 md:py-24 lg:py-32 px-4 md:px-6 lg:px-8 border-t border-border/50">
+          <div className="container-default">
+            <div className="relative rounded-2xl border border-border bg-gradient-to-br from-primary/5 via-background to-muted/30 p-8 md:p-12 lg:p-16 text-center overflow-hidden">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--primary)_0%,transparent_70%)] opacity-10" aria-hidden="true" />
+              <div className="relative z-10 max-w-2xl mx-auto">
+                <h2 className="heading-2 font-heading tracking-tight">Ready to Get Started?</h2>
+                <p className="mt-4 body-lg muted-text">
+                  Join lecturers and students using Class-BARS for secure, automated attendance.
+                  Try the sandbox demo or create your account.
+                </p>
+                <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+                  <Link
+                    to="/signup"
+                    className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
+                  >
+                    Create Account
+                  </Link>
+                  <Link
+                    to="/sandbox"
+                    className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-background px-6 text-sm font-medium transition-colors hover:bg-muted"
+                  >
+                    Try Sandbox Demo
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <Footer />
     </div>
   )
 }

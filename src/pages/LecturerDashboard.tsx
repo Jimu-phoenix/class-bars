@@ -126,15 +126,15 @@ export default function LecturerDashboard() {
   const recentSessions = sessions.slice(0, 5)
 
   return (
-    <DashboardShell>
+    <DashboardShell
+      title="Dashboard"
+      description="Here&apos;s an overview of your classes and sessions."
+    >
       <div className="space-y-8">
         <div>
           <h1 className="heading-2">
             Welcome back{fullName ? `, ${fullName}` : ""}
           </h1>
-          <p className="mt-2 body-lg muted-text">
-            Here&apos;s an overview of your classes and sessions.
-          </p>
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">

@@ -3,7 +3,6 @@ import { NavLink, useNavigate } from "react-router-dom"
 import {
   ChevronsLeft,
   ChevronsRight,
-  GraduationCap,
   LogOut,
   Menu,
 } from "lucide-react"
@@ -31,6 +30,33 @@ const navItemClass = ({ isActive }: { isActive: boolean }, collapsed: boolean) =
       ? "bg-primary/10 font-semibold text-primary"
       : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
   )
+
+const SidebarLogo = ({ collapsed, roleLabel }: { collapsed: boolean; roleLabel: string }) => (
+  <div className="flex items-center gap-3">
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+      <img
+        src="/favicon.svg"
+        alt=""
+        className="h-5 w-5 dark:hidden"
+        aria-hidden="true"
+      />
+      <img
+        src="/bars_white.svg"
+        alt=""
+        className="hidden h-5 w-5 dark:block mix-blend-screen"
+        aria-hidden="true"
+      />
+    </span>
+    {!collapsed && (
+      <div className="min-w-0 space-y-0.5">
+        <p className="font-heading truncate text-sm leading-none font-semibold">Class-BARS</p>
+        <Badge variant="secondary" className="mt-1.5">
+          {roleLabel}
+        </Badge>
+      </div>
+    )}
+  </div>
+)
 
 export default function DashboardShell({
   roleLabel = "Lecturer dashboard",
@@ -101,17 +127,7 @@ export default function DashboardShell({
       )}
     >
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <GraduationCap className="size-5" aria-hidden="true" />
-        </span>
-        {!collapsed && (
-          <div className="min-w-0 space-y-0.5">
-            <p className="font-heading truncate text-sm leading-none font-semibold">Class-BARS</p>
-            <Badge variant="secondary" className="mt-1.5">
-              {roleLabel}
-            </Badge>
-          </div>
-        )}
+        <SidebarLogo collapsed={collapsed} roleLabel={roleLabel} />
       </div>
 
       <nav className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-3 py-4">
@@ -153,15 +169,7 @@ export default function DashboardShell({
       />
       <aside className="relative flex h-full w-72 flex-col border-r border-border bg-background shadow-2xl">
         <div className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <GraduationCap className="size-5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0 space-y-0.5">
-            <p className="font-heading truncate text-sm leading-none font-semibold">Class-BARS</p>
-            <Badge variant="secondary" className="mt-1.5">
-              {roleLabel}
-            </Badge>
-          </div>
+          <SidebarLogo collapsed={false} roleLabel={roleLabel} />
         </div>
         <nav className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-3 py-4">{navLinks(true)}</nav>
         <div className="space-y-1 border-t border-border px-3 py-3">

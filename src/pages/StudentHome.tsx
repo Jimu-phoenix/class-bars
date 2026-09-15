@@ -25,7 +25,13 @@ import StatCard from "@/components/dashboard/StatCard"
 import FaceVerifyCard, { type VerifyVerdict } from "@/components/face/FaceVerifyCard"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import type { AttendanceRecordRow, SessionStatus } from "@/types/db"
 
@@ -283,18 +289,26 @@ export default function StudentHome() {
         : { value: "Re-enroll", accent: "bg-amber-500/10 text-amber-600" as const }
 
   return (
-    <DashboardShell roleLabel="Student dashboard" navItems={STUDENT_NAV}>
+    <DashboardShell
+      roleLabel="Student dashboard"
+      navItems={STUDENT_NAV}
+      title="Dashboard"
+      description="Here&apos;s what&apos;s live right now."
+    >
       <div>
-        <h1 className="heading-2">Welcome back{fullName ? `, ${fullName.split(" ")[0]}` : ""}</h1>
-        <p className="mt-2 body-lg muted-text">Here&apos;s what&apos;s live right now.</p>
+        <h1 className="heading-2">
+          Welcome back{fullName ? `, ${fullName.split(" ")[0]}` : ""}
+        </h1>
       </div>
 
       {error && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
       )}
 
       {(embedding.status === "missing" || embedding.status === "stale") && (
-        <Card>
+        <Card className="mb-8">
           <CardContent className="flex items-center justify-between gap-4 py-5">
             <div className="flex items-center gap-3">
               <UserRound className="size-5 shrink-0 text-primary" aria-hidden="true" />
@@ -321,7 +335,7 @@ export default function StudentHome() {
         </Card>
       )}
 
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4 mb-8">
         <StatCard
           label="Live now"
           hint="Classes running"
@@ -361,7 +375,7 @@ export default function StudentHome() {
       </div>
 
       {stage === "verifying" && selectedSession && storedDescriptor && (
-        <Card>
+        <Card className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Presentation className="size-4" />
@@ -387,7 +401,7 @@ export default function StudentHome() {
       )}
 
       {stage === "confirmed" && confirmedCheckin && (
-        <Card className="border-green-500/30 bg-green-500/5">
+        <Card className="mb-8 border-green-500/30 bg-green-500/5">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <CircleCheck className="size-10 text-green-600" />
             <p className="text-xl font-semibold">You&apos;re checked in</p>

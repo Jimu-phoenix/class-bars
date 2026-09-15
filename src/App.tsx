@@ -15,6 +15,7 @@ import StudentHome from './pages/StudentHome'
 import StudentCourses from './pages/StudentCourses'
 import StudentProfile from './pages/StudentProfile'
 import NotFound from './pages/NotFound'
+import PrivacyPolicy from './pages/PrivacyPolicy'
 import SandboxLanding from './pages/SandboxLanding'
 import SandboxLecturer from './pages/SandboxLecturer'
 import SandboxStudent from './pages/SandboxStudent'
@@ -29,6 +30,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/sandbox" element={<SandboxLanding />} />
         <Route path="/sandbox/lecturer" element={<SandboxLecturer />} />
         <Route path="/sandbox/student" element={<SandboxStudent />} />

@@ -8,6 +8,7 @@ import {
   RefreshCw,
   ScanFace,
   UserRound,
+  X,
 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
@@ -20,9 +21,6 @@ import { usePoll } from "@/hooks/usePoll"
 import { useFaceDetection } from "@/hooks/useFaceDetection"
 import { euclideanDistance, isMatch } from "@/lib/faceCompare"
 import { cn } from "@/lib/utils"
-import SandboxShell from "@/components/SandboxShell"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -30,6 +28,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import Navbar from "@/components/Navbar"
+import Footer from "@/components/Footer"
 import type {
   SandboxCheckinRow,
   SandboxParticipantRow,
@@ -488,11 +490,13 @@ export default function SandboxStudent() {
 
   if (authLoading || !user || getSandboxRole(user) !== "sandbox_student") {
     return (
-      <SandboxShell>
-        <div className="flex items-center justify-center py-16">
+      <div className="min-h-screen flex flex-col relative overflow-hidden bg-background">
+        <Navbar />
+        <main className="flex-1 relative z-10 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </SandboxShell>
+        </main>
+        <Footer />
+      </div>
     )
   }
 
@@ -502,160 +506,195 @@ export default function SandboxStudent() {
       : undefined
 
   return (
-    <SandboxShell
-      title="Student check-in"
-      description="Pick a live class, then verify your face to register attendance."
-    >
-      {error && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
-      )}
+    <div className="min-h-screen flex flex-col relative overflow-hidden bg-background">
+      <Navbar />
 
-      {stage === "boarding" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <UserRound className="size-4" />
-              Onboard yourself
-            </CardTitle>
-            <CardDescription>
-              Enter your display name and record your face once. We&apos;ll use this template to verify you at check-in.
-            </CardDescription>
-          </CardHeader>
-          <OnboardingStep
-            submitting={submitting}
-            error={error}
-            onSubmit={saveOnboarding}
-          />
-        </Card>
-      )}
+      <main className="flex-1 relative z-10">
+        <div className="fixed inset-0 -z-10 pointer-events-none" aria-hidden="true">
+          <div className="absolute inset-0 hero-gradient opacity-5" />
+          <div className="absolute inset-0 hero-gradient-bottom opacity-10" />
+          <div className="absolute inset-0 opacity-20 grid-bg-primary" />
+          <div className="absolute inset-0 opacity-10 grid-bg-secondary animate-grid-move" />
+        </div>
 
-      {stage === "select" &&
-        (liveSessions.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-              <span className="relative flex size-3">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-muted-foreground opacity-40" />
-                <span className="relative inline-flex size-3 rounded-full bg-muted-foreground" />
-              </span>
-              {participant && (
-                <p className="text-sm font-medium text-muted-foreground">
-                  Enrolled as {participant.display_name}
+        <div className="relative py-8 md:py-12 lg:py-16 px-4 md:px-6 lg:px-8">
+          <div className="container-default">
+            <div className="max-w-4xl mx-auto">
+              <header className="mb-8">
+                <h1 className="heading-2 font-heading">Student Check-in</h1>
+                <p className="mt-2 body-lg muted-text">
+                  Pick a live class, then verify your face to register attendance.
+                </p>
+              </header>
+
+              {error && (
+                <p className="mb-6 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {error}
                 </p>
               )}
-              <p className="text-lg font-medium">No class is live right now</p>
-              <p className="text-sm text-muted-foreground">
-                Ask your lecturer to start one. This page updates automatically.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {liveSessions.map((s) => {
-              const done = checkedInBySession[s.id]
-              return (
-                <Card
-                  key={s.id}
-                  className={cn(
-                    done && "border-green-500/30 bg-green-500/5",
-                  )}
-                >
+
+              {stage === "boarding" && (
+                <Card>
                   <CardHeader>
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="flex items-center gap-2">
-                        <Presentation className="size-4 shrink-0 text-muted-foreground" />
-                        <span className="truncate">{s.class_label}</span>
-                      </CardTitle>
-                      {done ? (
-                        <Badge>Checked in</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-green-700 dark:text-green-400">
-                          Live
-                        </Badge>
-                      )}
-                    </div>
+                    <CardTitle className="flex items-center gap-2">
+                      <UserRound className="size-4" />
+                      Onboard yourself
+                    </CardTitle>
                     <CardDescription>
-                      {s.course_label} · {s.venue_label}
+                      Enter your display name and record your face once. We&apos;ll use this template to verify you at check-in.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <CalendarClock className="size-3.5" aria-hidden="true" />
-                        Started {formatStartedAt(s.started_at)}
-                      </p>
-                      {done ? (
-                        <p className="flex items-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-400">
-                          <CircleCheck className="size-4" />
-                          Registered
+                  <OnboardingStep
+                    submitting={submitting}
+                    error={error}
+                    onSubmit={saveOnboarding}
+                  />
+                </Card>
+              )}
+
+              {stage === "select" &&
+                (liveSessions.length === 0 ? (
+                  <Card>
+                    <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+                      <span className="relative flex size-3">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-muted-foreground opacity-40" />
+                        <span className="relative inline-flex size-3 rounded-full bg-muted-foreground" />
+                      </span>
+                      {participant && (
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Enrolled as {participant.display_name}
                         </p>
-                      ) : (
-                        <Button size="sm" onClick={() => selectClass(s)} disabled={submitting}>
-                          <ScanFace data-icon="inline-start" />
-                          Join class
-                        </Button>
                       )}
-                    </div>
+                      <p className="text-lg font-medium">No class is live right now</p>
+                      <p className="text-sm text-muted-foreground">
+                        Ask your lecturer to start one. This page updates automatically.
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {liveSessions.map((s) => {
+                      const done = checkedInBySession[s.id]
+                      return (
+                        <Card
+                          key={s.id}
+                          className={cn(
+                            done && "border-green-500/30 bg-green-500/5",
+                          )}
+                        >
+                          <CardHeader>
+                            <div className="flex items-start justify-between gap-2">
+                              <CardTitle className="flex items-center gap-2">
+                                <Presentation className="size-4 shrink-0 text-muted-foreground" />
+                                <span className="truncate">{s.class_label}</span>
+                              </CardTitle>
+                              {done ? (
+                                <Badge>Checked in</Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-green-700 dark:text-green-400">
+                                  Live
+                                </Badge>
+                              )}
+                            </div>
+                            <CardDescription>
+                              {s.course_label} · {s.venue_label}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <CalendarClock className="size-3.5" aria-hidden="true" />
+                                Started {formatStartedAt(s.started_at)}
+                              </p>
+                              {done ? (
+                                <p className="flex items-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-400">
+                                  <CircleCheck className="size-4" />
+                                  Registered
+                                </p>
+                              ) : (
+                                <Button size="sm" onClick={() => selectClass(s)} disabled={submitting}>
+                                  <ScanFace data-icon="inline-start" />
+                                  Join class
+                                </Button>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  </div>
+                ))}
+
+              {stage === "verifying" && selectedSession && participant && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{selectedSession.class_label} — verify</CardTitle>
+                    <CardDescription>
+                      Look at the camera. Your attendance is recorded automatically on a match.
+                    </CardDescription>
+                  </CardHeader>
+                  <VerifyStep
+                    classNameLabel={selectedSession.class_label}
+                    participant={participant}
+                    submitting={submitting}
+                    error={error}
+                    verdict={verifyResult}
+                    onMatch={(d) => void checkIn(d)}
+                    onNoMatch={(distance) => setVerifyResult({ status: "no-match", distance })}
+                    onRetry={() => setVerifyResult(null)}
+                    onCancel={cancelVerify}
+                  />
+                </Card>
+              )}
+
+              {stage === "confirmed" && confirmedCheckin && (
+                <Card className="border-green-500/30 bg-green-500/5">
+                  <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                    <CircleCheck className="size-10 text-green-600" />
+                    <p className="text-xl font-semibold">
+                      You&apos;re checked in as {confirmedCheckin.display_name}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {confirmedClassName ?? "Your class"} — your name now appears on the lecturer&apos;s live list.
+                    </p>
+                    <Button onClick={doneConfirming} className="mt-2">
+                      Back to classes
+                    </Button>
                   </CardContent>
                 </Card>
-              )
-            })}
+              )}
+
+              {stage !== "boarding" && participant && (
+                <div className="mt-6 flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void redoOnboarding()}
+                    disabled={submitting}
+                  >
+                    <RefreshCw data-icon="inline-start" />
+                    Re-do onboarding
+                  </Button>
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate("/sandbox")}
+                  disabled={submitting}
+                >
+                  <X className="size-4" aria-hidden="true" />
+                  Leave Sandbox
+                </Button>
+              </div>
+            </div>
           </div>
-        ))}
-
-      {stage === "verifying" && selectedSession && participant && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{selectedSession.class_label} — verify</CardTitle>
-            <CardDescription>
-              Look at the camera. Your attendance is recorded automatically on a match.
-            </CardDescription>
-          </CardHeader>
-          <VerifyStep
-            classNameLabel={selectedSession.class_label}
-            participant={participant}
-            submitting={submitting}
-            error={error}
-            verdict={verifyResult}
-            onMatch={(d) => void checkIn(d)}
-            onNoMatch={(distance) => setVerifyResult({ status: "no-match", distance })}
-            onRetry={() => setVerifyResult(null)}
-            onCancel={cancelVerify}
-          />
-        </Card>
-      )}
-
-      {stage === "confirmed" && confirmedCheckin && (
-        <Card className="border-green-500/30 bg-green-500/5">
-          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <CircleCheck className="size-10 text-green-600" />
-            <p className="text-xl font-semibold">
-              You&apos;re checked in as {confirmedCheckin.display_name}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {confirmedClassName ?? "Your class"} — your name now appears on the lecturer&apos;s live list.
-            </p>
-            <Button onClick={doneConfirming} className="mt-2">
-              Back to classes
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {stage !== "boarding" && participant && (
-        <div className="flex items-center justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void redoOnboarding()}
-            disabled={submitting}
-          >
-            <RefreshCw data-icon="inline-start" />
-            Re-do onboarding
-          </Button>
         </div>
-      )}
-    </SandboxShell>
+      </main>
+
+      <Footer />
+    </div>
   )
 }
