@@ -1,96 +1,70 @@
-/* eslint-disable react-hooks/set-state-in-effect */
-/* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-
-type Theme = "light" | "dark" | "system"
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
+import {
+  THEME_STORAGE_KEY,
+  isTheme,
+  nextTheme,
+  prefersDark,
+  readStoredTheme,
+  resolveTheme,
+  type Theme,
+} from "@/lib/themeUtils"
 
 interface ThemeContextType {
   theme: Theme
   resolvedTheme: "light" | "dark"
   setTheme: (theme: Theme) => void
+  cycleTheme: () => void
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
-function getInitialTheme(): Theme {
-  if (typeof window !== "undefined") {
-    return (localStorage.getItem("theme") as Theme) || "system"
-  }
-  return "system"
-}
-
-function getResolvedTheme(theme: Theme): "light" | "dark" {
-  if (theme === "system") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-  }
-  return theme
-}
+const DARK_MEDIA_QUERY = "(prefers-color-scheme: dark)"
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(getInitialTheme)
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() =>
-    getResolvedTheme(getInitialTheme())
-  )
-  const [mounted, setMounted] = useState(false)
+  const [theme, setThemeState] = useState<Theme>(readStoredTheme)
+  const [systemDark, setSystemDark] = useState<boolean>(prefersDark)
+
+  const resolvedTheme = resolveTheme(theme, systemDark)
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (!mounted) return
-    const root = window.document.documentElement
-    root.classList.remove("light", "dark")
-    root.classList.add(resolvedTheme)
-  }, [resolvedTheme, mounted])
-
-  useEffect(() => {
-    if (!mounted) return
-    const root = window.document.documentElement
-    root.classList.remove("light", "dark")
-
-    let resolved: "light" | "dark"
-    if (theme === "system") {
-      resolved = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-    } else {
-      resolved = theme
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+    } catch {
+      // Storage unavailable (private mode / sandboxed frame) — theme still applies for this session.
     }
-
-    setResolvedTheme(resolved)
-    localStorage.setItem("theme", theme)
-  }, [theme, mounted])
+  }, [theme])
 
   useEffect(() => {
-    if (!mounted || theme !== "system") return
+    const root = document.documentElement
+    root.classList.toggle("dark", resolvedTheme === "dark")
+    root.classList.toggle("light", resolvedTheme === "light")
+  }, [resolvedTheme])
 
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
-    const handleChange = () => {
-      const resolved = mediaQuery.matches ? "dark" : "light"
-      setResolvedTheme(resolved)
-      const root = window.document.documentElement
-      root.classList.remove("light", "dark")
-      root.classList.add(resolved)
-    }
+  useEffect(() => {
+    if (theme !== "system") return
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return
 
+    const mediaQuery = window.matchMedia(DARK_MEDIA_QUERY)
+    const handleChange = (event: MediaQueryListEvent) => setSystemDark(event.matches)
     mediaQuery.addEventListener("change", handleChange)
     return () => mediaQuery.removeEventListener("change", handleChange)
-  }, [theme, mounted])
+  }, [theme])
 
-  if (!mounted) {
-    return (
-      <ThemeContext.Provider value={{ theme: "system", resolvedTheme: "light", setTheme: () => {} }}>
-        {children}
-      </ThemeContext.Provider>
-    )
-  }
-
-  return (
-    <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme }}>
-      {children}
-    </ThemeContext.Provider>
+  const setTheme = useMemo(
+    () => (next: Theme) => setThemeState(isTheme(next) ? next : "system"),
+    [],
   )
+  const cycleTheme = useMemo(() => () => setThemeState((current) => nextTheme(current)), [])
+
+  const value = useMemo(
+    () => ({ theme, resolvedTheme, setTheme, cycleTheme }),
+    [theme, resolvedTheme, setTheme, cycleTheme],
+  )
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme() {
   const context = useContext(ThemeContext)
   if (!context) {

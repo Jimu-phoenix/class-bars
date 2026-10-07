@@ -4,13 +4,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import type { ProfileRow } from "@/types/db"
 
 type ProfileFields = Pick<
@@ -18,8 +12,24 @@ type ProfileFields = Pick<
   "full_name" | "role" | "student_number" | "staff_number" | "phone_number"
 >
 
-const inputClass =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+function Field({
+  id,
+  label,
+  children,
+}: {
+  id: string
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm font-medium">
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
 
 export default function ProfileSettings() {
   const { user } = useAuth()
@@ -39,44 +49,25 @@ export default function ProfileSettings() {
     if (!currentUser) return
 
     const userId = currentUser.id
-    const fallbackName =
-      currentUser.user_metadata?.full_name ?? "User"
-    const metadataRole =
-      currentUser.user_metadata?.role === "lecturer" ? "lecturer" : "student"
 
     async function loadProfile() {
       const { data, error: fetchError } = await supabase
         .from("profiles")
         .select("full_name, role, student_number, staff_number, phone_number")
         .eq("id", userId)
-        .single()
-
-      if (fetchError?.code === "PGRST116") {
-        const { error: insertError } = await supabase
-          .from("profiles")
-          .upsert({ id: userId, full_name: fallbackName, role: metadataRole })
-
-        if (insertError) {
-          setError("Failed to load profile")
-          setLoading(false)
-          return
-        }
-
-        const { data: retryData } = await supabase
-          .from("profiles")
-          .select("full_name, role, student_number, staff_number, phone_number")
-          .eq("id", userId)
-          .single()
-
-        if (retryData) applyProfile(retryData)
-        setLoading(false)
-        return
-      }
+        .maybeSingle()
 
       if (fetchError) {
         setError("Failed to load profile")
       } else if (data) {
         applyProfile(data)
+      } else {
+        // No profile row. The row is created server-side by the signup
+        // trigger; the client must NOT insert its own — doing so used to let
+        // a user authorise themselves into a role they had not been granted.
+        setError(
+          "Your profile has not been created yet. Please sign out and back in, or contact support.",
+        )
       }
       setLoading(false)
     }
@@ -125,128 +116,103 @@ export default function ProfileSettings() {
   const isStudent = role === "student"
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)] lg:items-start">
-      <Card>
-        <CardHeader>
-          <CardTitle>Personal details</CardTitle>
-          <CardDescription>Shown on your attendance records.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {error && (
-            <p className="mb-5 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          {success && (
-            <p className="mb-5 rounded-md bg-primary/10 px-3 py-2 text-sm text-primary">
-              Profile updated.
-            </p>
-          )}
+    <section aria-labelledby="details-heading" className="rounded-xl border border-border bg-card">
+      <div className="flex items-center gap-3 border-b border-border p-4 sm:p-5">
+        <span
+          aria-hidden="true"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-base font-semibold text-primary"
+        >
+          {(fullName || "?").slice(0, 1).toUpperCase()}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium">{fullName || "—"}</p>
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Mail className="size-3 shrink-0" aria-hidden="true" />
+            <span className="truncate">{user?.email}</span>
+          </p>
+        </div>
+        {role && (
+          <Badge variant="secondary" className="shrink-0 capitalize">
+            {role}
+          </Badge>
+        )}
+      </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center py-10">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="grid gap-5">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <label htmlFor="full_name" className="text-sm font-medium">
-                    Full name
-                  </label>
-                  <input
-                    id="full_name"
-                    required
-                    placeholder="Jane Doe"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
+      <div className="p-4 sm:p-5">
+        <h2 id="details-heading" className="text-base font-semibold">
+          Personal details
+        </h2>
+        <p className="mb-4 text-sm text-muted-foreground">Shown on your attendance records.</p>
 
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="id_number" className="text-sm font-medium">
-                    {isStudent ? "Student number" : "Staff number"}
-                  </label>
-                  <input
-                    id="id_number"
-                    placeholder={isStudent ? "STU-2025-0001" : "LEC-0001"}
-                    value={isStudent ? studentNumber : staffNumber}
-                    onChange={(e) =>
-                      isStudent
-                        ? setStudentNumber(e.target.value)
-                        : setStaffNumber(e.target.value)
-                    }
-                    className={inputClass}
-                  />
-                </div>
+        {error && (
+          <p role="alert" className="mb-4 rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        {success && (
+          <p role="status" className="mb-4 rounded-lg bg-primary/10 px-3 py-2.5 text-sm text-primary">
+            Profile updated.
+          </p>
+        )}
 
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="phone_number" className="text-sm font-medium">
-                    Phone number
-                  </label>
-                  <input
-                    id="phone_number"
-                    type="tel"
-                    placeholder="+1 555 000 1234"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs muted-text">Fields left empty are stored as null.</p>
-                <Button type="submit" disabled={saving}>
-                  {saving ? (
-                    <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Save data-icon="inline-start" aria-hidden="true" />
-                  )}
-                  Save changes
-                </Button>
-              </div>
-            </form>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card size="sm" className="hairline-border">
-        <CardHeader>
-          <CardTitle>Account</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-3">
-            <span className="flex size-10 shrink-0 items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-              {(fullName || "?").slice(0, 1).toUpperCase()}
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{fullName || "—"}</p>
-              <p className="flex items-center gap-1 text-xs muted-text">
-                <Mail className="size-3" aria-hidden="true" />
-                <span className="truncate">{user?.email}</span>
-              </p>
-            </div>
+        {loading ? (
+          <div className="space-y-4" aria-hidden="true">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-11 animate-pulse rounded-md bg-muted" />
+            ))}
           </div>
-          <div className="flex flex-col gap-2 rounded-lg bg-muted/50 p-3 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wide muted-text">Role</span>
-              <Badge variant="secondary">{role ?? (isStudent ? "student" : "lecturer")}</Badge>
+        ) : (
+          <form onSubmit={handleSubmit} className="grid gap-4">
+            <Field id="full_name" label="Full name">
+              <Input
+                id="full_name"
+                required
+                autoComplete="name"
+                placeholder="Jane Doe"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="h-11"
+              />
+            </Field>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="id_number" label={isStudent ? "Student number" : "Staff number"}>
+                <Input
+                  id="id_number"
+                  placeholder={isStudent ? "STU-2025-0001" : "LEC-0001"}
+                  value={isStudent ? studentNumber : staffNumber}
+                  onChange={(e) =>
+                    isStudent ? setStudentNumber(e.target.value) : setStaffNumber(e.target.value)
+                  }
+                  className="h-11"
+                />
+              </Field>
+
+              <Field id="phone_number" label="Phone number">
+                <Input
+                  id="phone_number"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="+265 999 000 000"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  className="h-11"
+                />
+              </Field>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wide muted-text">
-                {isStudent ? "Student number" : "Staff number"}
-              </span>
-              <span className="font-medium">{(isStudent ? studentNumber : staffNumber) || "—"}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wide muted-text">Phone</span>
-              <span className="font-medium">{phoneNumber || "—"}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+
+            <Button type="submit" disabled={saving} className="h-11 w-full sm:ml-auto sm:w-auto">
+              {saving ? (
+                <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Save data-icon="inline-start" aria-hidden="true" />
+              )}
+              Save changes
+            </Button>
+          </form>
+        )}
+      </div>
+    </section>
   )
 }

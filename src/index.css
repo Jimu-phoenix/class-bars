@@ -61,6 +61,7 @@
 }
 
 :root {
+    color-scheme: light;
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0.005 250);
     --card: oklch(1 0 0);
@@ -97,6 +98,7 @@
 }
 
 .dark {
+    color-scheme: dark;
     --background: oklch(0.12 0.005 250);
     --foreground: oklch(0.98 0.002 250);
     --card: oklch(0.15 0.005 250);
@@ -142,9 +144,31 @@
   html {
     @apply font-sans;
     text-wrap: balance;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
   }
   :focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+  /* Stops the iOS rubber-band bounce from dragging the fixed tab bar around */
+  body {
+    overscroll-behavior-y: none;
+  }
+  /* Faster taps on touch devices (no double-tap-to-zoom delay) */
+  button,
+  a,
+  [role="tab"] {
+    touch-action: manipulation;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

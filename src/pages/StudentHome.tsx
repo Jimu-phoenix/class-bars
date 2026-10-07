@@ -18,20 +18,20 @@ import {
 } from "@/lib/realAttendance"
 import { FACE_MODEL_VERSION } from "@/lib/faceModels"
 import { euclideanDistance } from "@/lib/faceCompare"
+import { fullScreenOnMobile } from "@/lib/dialogClasses"
 import { usePoll } from "@/hooks/usePoll"
 import DashboardShell from "@/components/DashboardShell"
-import { STUDENT_NAV } from "@/lib/nav"
 import StatCard from "@/components/dashboard/StatCard"
 import FaceVerifyCard, { type VerifyVerdict } from "@/components/face/FaceVerifyCard"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import type { AttendanceRecordRow, SessionStatus } from "@/types/db"
 
@@ -67,6 +67,7 @@ export default function StudentHome() {
 
   const [fullName, setFullName] = useState("")
   const [liveSessions, setLiveSessions] = useState<LiveSessionListItem[]>([])
+  const [sessionsLoaded, setSessionsLoaded] = useState(false)
   const [checkedInBySession, setCheckedInBySession] = useState<
     Record<string, AttendanceRecordRow>
   >({})
@@ -151,9 +152,13 @@ export default function StudentHome() {
       .eq("status", "ongoing")
       .order("scheduled_start", { ascending: true })
 
-    if (sessionsError) return
+    if (sessionsError) {
+      setSessionsLoaded(true)
+      return
+    }
     const sessionRows = (sessionsData as unknown as LiveSessionListItem[]) ?? []
     setLiveSessions(sessionRows)
+    setSessionsLoaded(true)
 
     if (sessionRows.length === 0) {
       setCheckedInBySession({})
@@ -269,9 +274,9 @@ export default function StudentHome() {
 
   if (authLoading || !user) {
     return (
-      <DashboardShell roleLabel="Student dashboard" navItems={STUDENT_NAV}>
+      <DashboardShell>
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <Loader2 className="size-8 animate-spin text-primary" aria-label="Loading" />
         </div>
       </DashboardShell>
     )
@@ -281,92 +286,70 @@ export default function StudentHome() {
     ? liveSessions.find((s) => s.id === confirmedCheckin.session_id)?.courses?.course_name
     : undefined
 
+  const selectedName =
+    selectedSession?.courses?.course_name ?? selectedSession?.courses?.course_code ?? "class"
+
   const faceStat =
     embedding.status === "ok"
-      ? { value: "Ready", accent: "bg-emerald-500/10 text-emerald-600" as const }
+      ? { value: "Ready", accent: "bg-emerald-500/10 text-emerald-600" }
       : embedding.status === "missing"
-        ? { value: "Not ready", accent: "bg-destructive/10 text-destructive" as const }
-        : { value: "Re-enroll", accent: "bg-amber-500/10 text-amber-600" as const }
+        ? { value: "Not set", accent: "bg-destructive/10 text-destructive" }
+        : { value: "Update", accent: "bg-amber-500/10 text-amber-600" }
+
+  const firstName = fullName.trim().split(" ")[0]
 
   return (
     <DashboardShell
-      roleLabel="Student dashboard"
-      navItems={STUDENT_NAV}
-      title="Dashboard"
-      description="Here&apos;s what&apos;s live right now."
+      title={firstName ? `Welcome back, ${firstName}` : "Welcome back"}
+      description="Here's what's live right now."
     >
-      <div>
-        <h1 className="heading-2">
-          Welcome back{fullName ? `, ${fullName.split(" ")[0]}` : ""}
-        </h1>
-      </div>
-
-      {error && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      {error && stage !== "verifying" && (
+        <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
           {error}
         </p>
       )}
 
       {(embedding.status === "missing" || embedding.status === "stale") && (
-        <Card className="mb-8">
-          <CardContent className="flex items-center justify-between gap-4 py-5">
-            <div className="flex items-center gap-3">
-              <UserRound className="size-5 shrink-0 text-primary" aria-hidden="true" />
-              <div>
-                <p className="text-sm font-medium">
-                  {embedding.status === "missing"
-                    ? "Enroll your face to check in"
-                    : "Your face template is out of date"}
-                </p>
-                <p className="text-xs muted-text">
-                  {embedding.status === "missing"
-                    ? "Add your face once from your profile, then join live classes instantly."
-                    : "Re-enroll your face from your profile to keep checking in."}
-                </p>
-              </div>
-            </div>
-            <Link to="/profile" className="shrink-0">
-              <Button size="sm">
-                <ScanFace data-icon="inline-start" aria-hidden="true" />
-                Go to profile
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 sm:p-4">
+          <UserRound className="size-5 shrink-0 text-amber-600" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">
+              {embedding.status === "missing"
+                ? "Enroll your face to check in"
+                : "Your face template is out of date"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {embedding.status === "missing"
+                ? "Add it once from your profile."
+                : "Re-enroll it from your profile."}
+            </p>
+          </div>
+          <Link to="/student/profile" className="shrink-0">
+            <Button size="sm" variant="outline">
+              Fix
+            </Button>
+          </Link>
+        </div>
       )}
 
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4 mb-8">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <StatCard
-          label="Live now"
-          hint="Classes running"
-          value={liveSessions.length}
-          icon={Presentation}
-          accent="bg-emerald-500/10 text-emerald-600"
-          pulse
-        />
-        <StatCard
-          label="Checked in today"
-          hint="Starting midnight"
+          label="Today"
+          hint="Check-ins since midnight"
           value={checkedToday}
           icon={Clock}
           loading={statsLoading}
         />
         <StatCard
-          label="Total check-ins"
-          hint="All time"
+          label="Total"
+          hint="All-time check-ins"
           value={totalCheckins}
           icon={CalendarClock}
           loading={statsLoading}
         />
         <StatCard
-          label="Face ready"
-          hint={
-            embedding.status === "missing"
-              ? "Enroll from your profile"
-              : embedding.status === "stale"
-                ? "Model changed — re-enroll"
-                : "Template verified"
-          }
+          label="Face"
+          hint="Template status"
           value={faceStat.value}
           icon={ScanFace}
           loading={embedding.status === "loading"}
@@ -374,127 +357,135 @@ export default function StudentHome() {
         />
       </div>
 
-      {stage === "verifying" && selectedSession && storedDescriptor && (
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Presentation className="size-4" />
-              {selectedSession.courses?.course_name ?? selectedSession.courses?.course_code}
-              {" · verify"}
-            </CardTitle>
-            <CardDescription>
-              Look at the camera. Your attendance is recorded automatically on a match.
-            </CardDescription>
-          </CardHeader>
-          <FaceVerifyCard
-            verifyLabel={`Matching your face against your enrolled template. This registers you in ${selectedSession.courses?.course_name ?? selectedSession.courses?.course_code}.`}
-            stored={storedDescriptor}
-            submitting={submitting}
-            error={error}
-            verdict={verifyResult}
-            onMatch={(d) => void checkIn(d)}
-            onNoMatch={(distance) => setVerifyResult({ status: "no-match", distance })}
-            onRetry={() => setVerifyResult(null)}
-            onCancel={cancelVerify}
-          />
-        </Card>
-      )}
-
-      {stage === "confirmed" && confirmedCheckin && (
-        <Card className="mb-8 border-green-500/30 bg-green-500/5">
-          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <CircleCheck className="size-10 text-green-600" />
-            <p className="text-xl font-semibold">You&apos;re checked in</p>
-            <p className="text-sm text-muted-foreground">
-              {confirmedClassName ?? "Your class"} — your name now appears on the
-              lecturer&apos;s live list.
-            </p>
-            <Button onClick={doneConfirming} className="mt-2">
-              Back to classes
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {stage !== "verifying" && stage !== "confirmed" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Presentation className="size-4 text-muted-foreground" aria-hidden="true" />
+      {stage === "confirmed" && confirmedCheckin ? (
+        <div
+          role="status"
+          className="flex flex-col items-center gap-3 rounded-xl border border-green-500/30 bg-green-500/5 px-4 py-10 text-center"
+        >
+          <CircleCheck className="size-10 text-green-600" aria-hidden="true" />
+          <p className="text-xl font-semibold">You&apos;re checked in</p>
+          <p className="text-sm text-muted-foreground">
+            {confirmedClassName ?? "Your class"} — you now appear on the lecturer&apos;s live list.
+          </p>
+          <Button onClick={doneConfirming} className="mt-2 h-11 w-full sm:w-auto">
+            Back to classes
+          </Button>
+        </div>
+      ) : (
+        <section aria-labelledby="live-heading" className="space-y-3">
+          <div className="flex items-center gap-2">
+            <h2 id="live-heading" className="text-base font-semibold">
               Live classes
-            </CardTitle>
-            <CardDescription>
-              Join any class that is currently running to register your attendance.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {liveSessions.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 py-12 text-center">
-                <span className="relative flex size-3">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-muted-foreground opacity-40" />
-                  <span className="relative inline-flex size-3 rounded-full bg-muted-foreground" />
-                </span>
-                <p className="text-lg font-medium">No class is live right now</p>
-                <p className="text-sm text-muted-foreground">
-                  Ask your lecturer to start one. This page updates automatically.
-                </p>
-              </div>
-            ) : (
-              <ul className="grid gap-4 sm:grid-cols-2">
-                {liveSessions.map((s) => {
-                  const done = checkedInBySession[s.id]
-                  return (
-                    <li
-                      key={s.id}
-                      className={cn(
-                        "rounded-xl border border-border p-5",
-                        done && "border-green-500/30 bg-green-500/5",
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="min-w-0 truncate text-sm font-semibold">
+            </h2>
+            {sessionsLoaded && liveSessions.length > 0 && (
+              <Badge variant="secondary" className="tabular-nums">
+                {liveSessions.length}
+              </Badge>
+            )}
+          </div>
+
+          {!sessionsLoaded ? (
+            <div className="space-y-3" aria-hidden="true">
+              <div className="h-32 animate-pulse rounded-xl bg-muted" />
+              <div className="h-32 animate-pulse rounded-xl bg-muted" />
+            </div>
+          ) : liveSessions.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-4 py-12 text-center">
+              <Presentation className="size-6 text-muted-foreground" aria-hidden="true" />
+              <p className="font-medium">No class is live right now</p>
+              <p className="text-sm text-muted-foreground">
+                This page updates automatically when a lecturer starts one.
+              </p>
+            </div>
+          ) : (
+            <ul className="grid gap-3 md:grid-cols-2">
+              {liveSessions.map((s) => {
+                const done = checkedInBySession[s.id]
+                const meta = [s.courses?.course_code, s.venues?.name].filter(Boolean).join(" · ")
+                return (
+                  <li
+                    key={s.id}
+                    className={cn(
+                      "rounded-xl border border-border bg-card p-4",
+                      done && "border-green-500/30 bg-green-500/5",
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">
                           {s.courses?.course_name ?? s.courses?.course_code}
                         </p>
-                        {done ? (
-                          <Badge className="shrink-0">Checked in</Badge>
-                        ) : (
-                          <Badge variant="outline" className="gap-1.5 shrink-0 text-green-700 dark:text-green-400">
-                            <span className="relative flex size-1.5">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                              <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
-                            </span>
-                            Live
-                          </Badge>
-                        )}
+                        {meta && <p className="truncate text-sm text-muted-foreground">{meta}</p>}
                       </div>
-                      <p className="mt-1 text-xs muted-text">
-                        {s.courses?.course_code} · {s.venues?.name}
+                      {!done && (
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 gap-1.5 text-green-700 dark:text-green-400"
+                        >
+                          <span className="relative flex size-1.5">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+                          </span>
+                          Live
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <CalendarClock className="size-3.5" aria-hidden="true" />
+                      Started {formatStartedAt(s.scheduled_start)}
+                    </p>
+                    {done ? (
+                      <p className="mt-3 flex h-11 items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
+                        <CircleCheck className="size-4" aria-hidden="true" />
+                        You&apos;re registered
                       </p>
-                      <div className="mt-4 flex items-center justify-between gap-3">
-                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <CalendarClock className="size-3.5" aria-hidden="true" />
-                          Started {formatStartedAt(s.scheduled_start)}
-                        </p>
-                        {done ? (
-                          <p className="flex items-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-400">
-                            <CircleCheck className="size-4" aria-hidden="true" />
-                            Registered
-                          </p>
-                        ) : (
-                          <Button size="sm" onClick={() => void joinSession(s)} disabled={submitting}>
-                            <ScanFace data-icon="inline-start" aria-hidden="true" />
-                            Join class
-                          </Button>
-                        )}
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+                    ) : (
+                      <Button
+                        className="mt-3 h-11 w-full"
+                        onClick={() => void joinSession(s)}
+                        disabled={submitting}
+                      >
+                        <ScanFace data-icon="inline-start" aria-hidden="true" />
+                        Join class
+                      </Button>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
       )}
+
+      {/* Face verification: full-screen on phones, centered dialog on larger screens */}
+      <Dialog
+        open={stage === "verifying" && !!selectedSession && !!storedDescriptor}
+        onOpenChange={(open) => {
+          if (!open && !submitting) cancelVerify()
+        }}
+      >
+        <DialogContent className={fullScreenOnMobile}>
+          <DialogHeader>
+            <DialogTitle>{selectedName}</DialogTitle>
+            <DialogDescription>
+              Look at the camera. Your attendance is recorded automatically on a match.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedSession && storedDescriptor && (
+            <FaceVerifyCard
+              verifyLabel={`Matching your face against your enrolled template. This registers you in ${selectedName}.`}
+              stored={storedDescriptor}
+              submitting={submitting}
+              error={error}
+              verdict={verifyResult}
+              onMatch={(d) => void checkIn(d)}
+              onNoMatch={(distance) => setVerifyResult({ status: "no-match", distance })}
+              onRetry={() => setVerifyResult(null)}
+              onCancel={cancelVerify}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardShell>
   )
 }

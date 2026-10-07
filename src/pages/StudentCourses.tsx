@@ -1,18 +1,42 @@
-import { useCallback, useEffect, useState } from "react"
-import { BookOpen, Loader2, UserPlus } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { BookOpen, Loader2, Search, UserPlus } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
 import { enrollSelf } from "@/lib/realAttendance"
-import { STUDENT_NAV } from "@/lib/nav"
 import DashboardShell from "@/components/DashboardShell"
-import StatCard from "@/components/dashboard/StatCard"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { CourseRow, EnrollmentRow } from "@/types/db"
 
 type EnrolledCourseRow = EnrollmentRow & {
   courses: CourseRow | null
+}
+
+function ListSkeleton() {
+  return (
+    <div className="space-y-2" aria-hidden="true">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
+      ))}
+    </div>
+  )
+}
+
+function EmptyState({ children }: { children: string }) {
+  return (
+    <p className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+      {children}
+    </p>
+  )
 }
 
 export default function StudentCourses() {
@@ -20,8 +44,12 @@ export default function StudentCourses() {
   const [courses, setCourses] = useState<CourseRow[]>([])
   const [myCourses, setMyCourses] = useState<EnrolledCourseRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState("")
   const [busyCourseCode, setBusyCourseCode] = useState<string | null>(null)
   const [error, setError] = useState("")
+  const [tab, setTab] = useState("mine")
+  const [query, setQuery] = useState("")
+  const [pending, setPending] = useState<CourseRow | null>(null)
 
   const loadCourses = useCallback(async () => {
     if (!user) return
@@ -41,6 +69,11 @@ export default function StudentCourses() {
     if (!enrolledRes.error) {
       setMyCourses((enrolledRes.data as unknown as EnrolledCourseRow[]) ?? [])
     }
+    setLoadError(
+      catRes.error || enrolledRes.error
+        ? "We couldn't load your courses. Check your connection and try again."
+        : "",
+    )
   }, [user])
 
   useEffect(() => {
@@ -51,133 +84,182 @@ export default function StudentCourses() {
     return () => window.clearTimeout(timer)
   }, [user, loadCourses])
 
-  const enroll = async (courseCode: string) => {
+  const retry = () => {
+    setLoading(true)
+    void loadCourses().then(() => setLoading(false))
+  }
+
+  const enroll = async (course: CourseRow) => {
     if (!user) return
-    setBusyCourseCode(courseCode)
+    setBusyCourseCode(course.course_code)
     setError("")
     try {
-      await enrollSelf(courseCode)
+      await enrollSelf(course.course_code)
       await loadCourses()
+      setTab("mine")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Enrollment failed")
     } finally {
       setBusyCourseCode(null)
+      setPending(null)
     }
   }
 
-  const enrolledCodes = new Set(myCourses.map((c) => c.course_id))
-  const catalog = courses.filter((c) => !enrolledCodes.has(c.id))
+  const enrolledIds = useMemo(() => new Set(myCourses.map((c) => c.course_id)), [myCourses])
+  const catalog = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return courses
+      .filter((c) => !enrolledIds.has(c.id))
+      .filter(
+        (c) =>
+          !q ||
+          c.course_code.toLowerCase().includes(q) ||
+          c.course_name.toLowerCase().includes(q),
+      )
+  }, [courses, enrolledIds, query])
+  const availableCount = courses.length - enrolledIds.size
 
   return (
-    <DashboardShell
-      roleLabel="Student dashboard"
-      navItems={STUDENT_NAV}
-      title="Courses"
-      description="Your enrollments and the course catalog."
-    >
+    <DashboardShell title="Courses" description="Your enrollments and the course catalog.">
       {error && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+        <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+          {error}
+        </p>
       )}
 
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Enrolled"
-          hint="Courses you can join"
-          value={loading ? "—" : myCourses.length}
-          icon={BookOpen}
-          loading={loading}
-        />
-        <StatCard
-          label="Available"
-          hint="Open for enrollment"
-          value={loading ? "—" : catalog.length}
-          icon={UserPlus}
-          loading={loading}
-        />
-      </div>
+      {loadError && !loading && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+        >
+          <span>{loadError}</span>
+          <Button size="sm" variant="outline" onClick={retry} className="shrink-0">
+            Retry
+          </Button>
+        </div>
+      )}
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="size-4 text-muted-foreground" aria-hidden="true" />
-              My courses
-            </CardTitle>
-            <CardDescription>Courses you&apos;re enrolled in.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {myCourses.length === 0 ? (
-              <p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm muted-text">
-                You&apos;re not enrolled in any courses yet.
-              </p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {myCourses.map((c) => (
-                  <li key={c.id} className="flex items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">
-                        {c.courses?.course_code} — {c.courses?.course_name}
-                      </p>
-                      <p className="text-xs muted-text">
-                        {c.academic_year} · {c.semester}
-                      </p>
-                    </div>
-                    {c.courses?.department && (
-                      <Badge variant="outline" className="shrink-0">
-                        {c.courses.department}
-                      </Badge>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+      <Tabs value={tab} onValueChange={setTab} className="gap-4">
+        <TabsList className="grid h-11 w-full grid-cols-2">
+          <TabsTrigger value="mine" className="h-9">
+            <BookOpen aria-hidden="true" />
+            My courses{!loading && ` (${myCourses.length})`}
+          </TabsTrigger>
+          <TabsTrigger value="browse" className="h-9">
+            <UserPlus aria-hidden="true" />
+            Browse{!loading && ` (${availableCount})`}
+          </TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <UserPlus className="size-4 text-muted-foreground" aria-hidden="true" />
-              Enroll in a course
-            </CardTitle>
-            <CardDescription>
-              Browse the catalog and enroll yourself. Live sessions for enrolled courses appear on
-              your overview.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {catalog.length === 0 ? (
-              <p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm muted-text">
-                Nothing else to enroll in right now.
-              </p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {catalog.map((c) => (
-                  <li key={c.id} className="flex items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">
-                        {c.course_code} — {c.course_name}
-                      </p>
-                      <p className="text-xs muted-text">{c.department ?? "—"}</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busyCourseCode === c.course_code}
-                      onClick={() => void enroll(c.course_code)}
-                    >
-                      {busyCourseCode === c.course_code && (
-                        <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden="true" />
-                      )}
-                      Enroll
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+        <TabsContent value="mine">
+          {loading ? (
+            <ListSkeleton />
+          ) : myCourses.length === 0 ? (
+            <EmptyState>You&apos;re not enrolled in any courses yet. Open Browse to join one.</EmptyState>
+          ) : (
+            <ul className="space-y-2">
+              {myCourses.map((c) => (
+                <li key={c.id} className="rounded-xl border border-border bg-card p-4">
+                  <p className="truncate text-sm font-semibold">
+                    {c.courses?.course_code} — {c.courses?.course_name}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {[c.courses?.department, c.academic_year, c.semester]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </TabsContent>
+
+        <TabsContent value="browse" className="space-y-3">
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by code or name"
+              aria-label="Search courses"
+              className="h-11 pl-9"
+            />
+          </div>
+
+          {loading ? (
+            <ListSkeleton />
+          ) : catalog.length === 0 ? (
+            <EmptyState>
+              {query ? "No courses match your search." : "Nothing else to enroll in right now."}
+            </EmptyState>
+          ) : (
+            <ul className="space-y-2">
+              {catalog.map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-4"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">
+                      {c.course_code} — {c.course_name}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">{c.department ?? "—"}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="h-10 shrink-0"
+                    disabled={busyCourseCode !== null}
+                    onClick={() => setPending(c)}
+                  >
+                    Enroll
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <Dialog
+        open={!!pending}
+        onOpenChange={(open) => {
+          if (!open && busyCourseCode === null) setPending(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enroll in this course?</DialogTitle>
+            <DialogDescription>
+              {pending ? `${pending.course_code} — ${pending.course_name}` : ""}. Live sessions for
+              it will appear on your Home screen.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 max-sm:flex-col-reverse">
+            <Button
+              variant="outline"
+              className="h-11 sm:h-9"
+              disabled={busyCourseCode !== null}
+              onClick={() => setPending(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="h-11 sm:h-9"
+              disabled={busyCourseCode !== null || !pending}
+              onClick={() => pending && void enroll(pending)}
+            >
+              {busyCourseCode !== null && (
+                <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden="true" />
+              )}
+              Enroll
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardShell>
   )
 }

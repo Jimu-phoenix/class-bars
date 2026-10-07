@@ -1,16 +1,11 @@
-import { useState, useEffect, useCallback, type FormEvent } from "react"
-import { Link, useLocation } from "react-router-dom"
+import { useState, useEffect, type FormEvent } from "react"
+import { Link, Navigate, useLocation } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
+import { useRole } from "@/contexts/RoleContext"
 import { supabase } from "@/lib/supabase"
-import {
-  clearFaceEmbedding,
-  getActiveFaceEmbedding,
-  upsertFaceEmbedding,
-} from "@/lib/realAttendance"
-import FaceEnrollCard from "@/components/face/FaceEnrollCard"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Home,
   User,
@@ -23,10 +18,7 @@ import {
   CheckCircle2,
   Loader2,
   Presentation,
-  ScanFace,
-  Trash2,
 } from "lucide-react"
-import type { FaceEmbeddingRow } from "@/types/db"
 
 type ProfileData = {
   full_name: string
@@ -39,6 +31,7 @@ type ProfileData = {
 export default function Profile() {
   const { user, signOut } = useAuth()
   const location = useLocation()
+  const { role, status } = useRole()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -49,79 +42,18 @@ export default function Profile() {
   const [staffNumber, setStaffNumber] = useState("")
   const [phoneNumber, setPhoneNumber] = useState("")
 
-  const [embedding, setEmbedding] = useState<FaceEmbeddingRow | null>(null)
-  const [embeddingLoading, setEmbeddingLoading] = useState(false)
-  const [embeddingError, setEmbeddingError] = useState("")
-  const [embeddingNotice, setEmbeddingNotice] = useState("")
-  const [showEnroll, setShowEnroll] = useState(false)
-
-  const loadEmbedding = useCallback(async () => {
-    if (!user) return
-    setEmbeddingLoading(true)
-    setEmbeddingError("")
-    try {
-      const row = await getActiveFaceEmbedding(user.id)
-      setEmbedding(row)
-    } catch (err) {
-      setEmbeddingError(err instanceof Error ? err.message : "Failed to load face status")
-    } finally {
-      setEmbeddingLoading(false)
-    }
-  }, [user])
-
-  useEffect(() => {
-    if (!user || profile?.role !== "student") return
-    const timer = window.setTimeout(() => void loadEmbedding(), 0)
-    return () => window.clearTimeout(timer)
-  }, [user, profile?.role, loadEmbedding])
-
   useEffect(() => {
     const currentUser = user
     if (!currentUser) return
 
     const userId = currentUser.id
-    const fullName =
-      currentUser.user_metadata?.full_name ?? "User"
-    const metadataRole =
-      currentUser.user_metadata?.role === "lecturer" ? "lecturer" : "student"
 
     async function loadProfile() {
       const { data, error: fetchError } = await supabase
         .from("profiles")
         .select("full_name, role, student_number, staff_number, phone_number")
         .eq("id", userId)
-        .single()
-
-      if (fetchError?.code === "PGRST116") {
-        const { error: insertError } = await supabase
-          .from("profiles")
-          .upsert({
-            id: userId,
-            full_name: fullName,
-            role: metadataRole,
-          })
-
-        if (insertError) {
-          setError("Failed to load profile")
-          setLoading(false)
-          return
-        }
-
-        const { data: retryData } = await supabase
-          .from("profiles")
-          .select("full_name, role, student_number, staff_number, phone_number")
-          .eq("id", userId)
-          .single()
-
-        if (retryData) {
-          setProfile(retryData)
-          setStudentNumber(retryData.student_number ?? "")
-          setStaffNumber(retryData.staff_number ?? "")
-          setPhoneNumber(retryData.phone_number ?? "")
-        }
-        setLoading(false)
-        return
-      }
+        .maybeSingle()
 
       if (fetchError) {
         setError("Failed to load profile")
@@ -130,6 +62,13 @@ export default function Profile() {
         setStudentNumber(data.student_number ?? "")
         setStaffNumber(data.staff_number ?? "")
         setPhoneNumber(data.phone_number ?? "")
+      } else {
+        // No profile row. The row is created server-side by the signup
+        // trigger; the client must NOT insert its own — doing so used to let
+        // a user authorise themselves into a role they had not been granted.
+        setError(
+          "Your profile has not been created yet. Please sign out and back in, or contact support.",
+        )
       }
       setLoading(false)
     }
@@ -165,41 +104,22 @@ export default function Profile() {
     }
   }
 
-  const handleFaceSaved = async (descriptor: Float32Array) => {
-    await upsertFaceEmbedding(descriptor)
-    setShowEnroll(false)
-    setEmbeddingNotice("Face template saved.")
-    try {
-      await loadEmbedding()
-    } catch {
-      // translated notice above already communicates success
-    }
-  }
-
-  const handleClearFace = async () => {
-    if (!window.confirm("Remove your enrolled face template?")) return
-    setEmbeddingNotice("")
-    setEmbeddingError("")
-    setEmbeddingLoading(true)
-    try {
-      await clearFaceEmbedding()
-      setEmbedding(null)
-      setEmbeddingNotice("Face template removed.")
-    } catch (err) {
-      setEmbeddingError(
-        err instanceof Error ? err.message : "Failed to remove face template",
-      )
-    } finally {
-      setEmbeddingLoading(false)
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
+  }
+
+  // The profile UI lives inside each role's dashboard. This standalone page
+  // is only a fallback for admins and for roles that could not be read, so a
+  // known student or lecturer is sent back into their own dashboard.
+  if (status === "ready" && role === "student") {
+    return <Navigate to="/student/profile" replace />
+  }
+  if (status === "ready" && role === "lecturer") {
+    return <Navigate to="/dashboard/profile" replace />
   }
 
   const roleLabel =
@@ -440,90 +360,6 @@ export default function Profile() {
                 </form>
               </CardContent>
             </Card>
-
-          {/* ── Face biometrics ── */}
-          {profile?.role === "student" && (
-            <Card className="hairline-border">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ScanFace className="size-4 text-primary" aria-hidden="true" />
-                  Face biometrics
-                </CardTitle>
-                <CardDescription>
-                  Your face template is used to verify you when joining live classes.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {embeddingLoading ? (
-                  <p className="flex items-center gap-2 text-sm muted-text">
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    Checking…
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-4">
-                    {embedding ? (
-                      <div className="flex flex-wrap items-center gap-2 text-sm">
-                        <Badge>Enrolled</Badge>
-                        <span className="muted-text">
-                          {embedding.model_version} · saved{" "}
-                          {new Date(embedding.updated_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                    ) : (
-                      <p className="text-sm muted-text">
-                        No face template yet — add one to check into live classes.
-                      </p>
-                    )}
-                    {embeddingError && (
-                      <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                        {embeddingError}
-                      </p>
-                    )}
-                    {embeddingNotice && (
-                      <p className="flex items-center gap-2 rounded-md bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-300">
-                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                        {embeddingNotice}
-                      </p>
-                    )}
-                    {!showEnroll && (
-                      <div className="flex flex-wrap items-center gap-3">
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setShowEnroll(true)
-                            setEmbeddingNotice("")
-                          }}
-                        >
-                          <ScanFace data-icon="inline-start" aria-hidden="true" />
-                          {embedding ? "Update face" : "Add face"}
-                        </Button>
-                        {embedding && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => void handleClearFace()}
-                            disabled={embeddingLoading}
-                          >
-                            <Trash2 data-icon="inline-start" aria-hidden="true" />
-                            Remove
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                    {showEnroll && (
-                      <div className="rounded-xl border border-border p-4">
-                        <FaceEnrollCard
-                          actionLabel="Save face template"
-                          onSave={handleFaceSaved}
-                          onCancel={() => setShowEnroll(false)}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
 
           {/* ── Quick links ── */}
             <Card className="hairline-border">

@@ -5,6 +5,25 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>class-bars</title>
+    <script>
+      // Apply the persisted colour scheme before first paint so the theme
+      // never flashes. Keep in sync with src/contexts/ThemeContext.tsx.
+      ;(function () {
+        try {
+          var stored = localStorage.getItem("theme")
+          if (stored !== "light" && stored !== "dark") stored = "system"
+          var dark =
+            stored === "dark" ||
+            (stored === "system" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches)
+          var root = document.documentElement
+          root.classList.toggle("dark", dark)
+          root.classList.toggle("light", !dark)
+        } catch (_) {
+          /* storage unavailable — the light default stands */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

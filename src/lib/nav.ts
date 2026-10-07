@@ -8,14 +8,15 @@ export type NavItem = {
   end?: boolean
 }
 
+// Labels are kept short so they fit under the icons in the mobile tab bar.
 export const LECTURER_NAV: NavItem[] = [
-  { to: "/dashboard", label: "Overview", icon: LayoutDashboard, end: true },
+  { to: "/dashboard", label: "Home", icon: LayoutDashboard, end: true },
   { to: "/dashboard/courses", label: "Courses", icon: BookOpen },
-  { to: "/dashboard/profile", label: "Update profile", icon: UserRound },
+  { to: "/dashboard/profile", label: "Profile", icon: UserRound },
 ]
 
 export const STUDENT_NAV: NavItem[] = [
-  { to: "/student", label: "Overview", icon: LayoutDashboard, end: true },
+  { to: "/student", label: "Home", icon: LayoutDashboard, end: true },
   { to: "/student/courses", label: "Courses", icon: BookOpen },
-  { to: "/student/profile", label: "Update profile", icon: UserRound },
+  { to: "/student/profile", label: "Profile", icon: UserRound },
 ]

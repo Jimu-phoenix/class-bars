@@ -40,6 +40,9 @@
 --       pre-existing tables)
 --   8. migrations/08_course_lecturer.sql
 --      (courses.lecturer_id + owner-scoped course policies)
+--   9. migrations/09_role_server_side.sql
+--      (staff_email_domains allowlist + lecturer gated in handle_new_user
+--       + profiles INSERT closed to role='student')
 --   Do NOT run migrations/03_table_details.sql as part of the chain --
 --   it is a read-only report, useful afterwards for verification.
 --

@@ -1,121 +1,56 @@
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
-import { supabase } from "@/lib/supabase"
+import { useRole } from "@/contexts/RoleContext"
 
+/**
+ * Landing page for freshly signed-up users.
+ *
+ * The role is decided server-side by the `handle_new_user()` signup trigger,
+ * so there is nothing for this page to choose and nothing for it to write —
+ * it only waits for `RoleProvider` to resolve and forwards to the right
+ * dashboard. The student/staff picker shown by earlier versions has been
+ * removed because it let a client author its own `profiles.role` row.
+ */
 export default function Onboarding() {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
+  const { role, status } = useRole()
   const navigate = useNavigate()
-  const [checking, setChecking] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState("")
 
   useEffect(() => {
-    if (!user) return
-    let cancelled = false
+    if (loading) return
+    if (!user) {
+      navigate("/signup", { replace: true })
+      return
+    }
+    if (status === "loading") return
 
-    const routeByRole = async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single()
-
-      if (cancelled) return
-
-      // A profile row (or the signup metadata) already decides the role,
-      // so there is nothing to pick here — send the user to the right place.
-      if (data?.role === "lecturer" || (!data && user.user_metadata?.role === "lecturer")) {
-        if (!data) {
-          await supabase.from("profiles").upsert({
-            id: user.id,
-            full_name: user.user_metadata?.full_name ?? "User",
-            role: "lecturer",
-          })
-        }
-        navigate("/dashboard", { replace: true })
-        return
-      }
-
-      if (data?.role === "student") {
-        navigate("/profile", { replace: true })
-        return
-      }
-
-      setChecking(false)
+    if (status !== "ready") {
+      // Role could not be read: land on the role-agnostic profile page rather
+      // than guessing. /profile surfaces the account so the user can report it.
+      navigate("/profile", { replace: true })
+      return
     }
 
-    routeByRole()
-    return () => {
-      cancelled = true
+    if (role === "lecturer") {
+      navigate("/dashboard", { replace: true })
+      return
     }
-  }, [user, navigate])
 
-  const chooseRole = async (role: "student" | "lecturer") => {
-    setSubmitting(true)
-    setError("")
-    try {
-      const { error: upsertError } = await supabase
-        .from("profiles")
-        .upsert({
-          id: user!.id,
-          role,
-          full_name: user!.user_metadata?.full_name ?? "User",
-        })
-
-      if (upsertError) throw upsertError
-      navigate(role === "lecturer" ? "/dashboard" : "/profile")
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to set role")
-    } finally {
-      setSubmitting(false)
+    if (role === "student") {
+      navigate("/student/profile", { replace: true })
+      return
     }
-  }
 
-  if (checking || !user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    )
-  }
+    // `admin` and any other role have no onboarding path.
+    navigate("/profile", { replace: true })
+  }, [user, loading, status, role, navigate])
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md items-center px-4">
-      <div className="w-full">
-        <h1 className="mb-2 text-center text-2xl font-bold">Welcome!</h1>
-        <p className="mb-8 text-center text-sm text-muted-foreground">
-          Are you a student or a staff member?
-        </p>
-        {error && (
-          <p className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
-          </p>
-        )}
-        <div className="flex flex-col gap-4">
-          <button
-            onClick={() => chooseRole("student")}
-            disabled={submitting}
-            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-6 text-center shadow-xs transition-colors hover:bg-muted disabled:opacity-50"
-          >
-            <span className="text-lg font-semibold">Student</span>
-            <span className="text-sm text-muted-foreground">
-              I attend classes and need attendance recorded
-            </span>
-          </button>
-          <button
-            onClick={() => chooseRole("lecturer")}
-            disabled={submitting}
-            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-6 text-center shadow-xs transition-colors hover:bg-muted disabled:opacity-50"
-          >
-            <span className="text-lg font-semibold">Lecturer / Staff</span>
-            <span className="text-sm text-muted-foreground">
-              I teach classes and manage attendance
-            </span>
-          </button>
-        </div>
-      </div>
+    <div className="flex min-h-screen items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+      <span className="sr-only">Setting up your account…</span>
     </div>
   )
 }

@@ -201,7 +201,10 @@ create policy "Users view own profile"
 
 create policy "Users insert own profile"
   on profiles for insert
-  with check (auth.uid() = id);
+  with check (
+    auth.uid() = id
+    and coalesce(role, 'student') = 'student'
+  );
 
 create policy "Users update own profile"
   on profiles for update
