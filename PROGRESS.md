@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-09
 **Repo:** `D:\classBars\class-bars`
-**Overall status:** Real (DB-backed) attendance flow is built end-to-end and verified by lint/build/tests. Both lecturer and student sides now share one dashboard (collapsible sidebar + stat cards). Sandbox remains untouched. Migrations 06–08 and the reset script are written and re-runnable; 06/07 have been applied to the live project, **08 is pending manual execution**.
+**Overall status:** Real (DB-backed) attendance flow is built end-to-end and verified by lint/build/tests. Both lecturer and student sides now share one dashboard (collapsible sidebar + stat cards). Sandbox remains untouched. Attendance can now be exported to CSV (single session + whole course). Migrations 06–10 and the reset script are written and re-runnable; 06/07 have been applied to the live project, **08, 09 and 10 are pending manual execution**.
 
 ---
 
@@ -15,12 +15,14 @@
 | Real attendance flow (`migrations/06`) | Applied | `face_embeddings` renamed/self-own policy; SECURITY DEFINER RPCs: `upsert_face_embedding`, `clear_face_embedding`, `enroll_self`, `get_session_attendance`; hardening; grants |
 | Real-table GRANTs (`migrations/07`) | **Applied — fixes "permission denied"** | Explicit DML grants to `authenticated`, SELECT to `anon` on real tables + EXECUTE on client RPCs |
 | Course ownership (`migrations/08`) | **Scripted — NOT yet executed** | `courses.lecturer_id` FK + owner-scoped create/update policies |
+| Server-side roles (`migrations/09`) | **Scripted — NOT yet executed** | Server-authoritative role checks replacing client-side role reads |
+| Course export (`migrations/10`) | **Scripted — NOT yet executed** | `get_course_attendance` RPC (roster × sessions, `absent` when no record) for CSV export |
 | Signup | Done | Student/Lecturer toggle + hCaptcha; `AuthContext.signUp` accepts `captchaToken` |
 | Lecturer dashboard | Done | Collapsible sidebar (Overview, Courses, Update profile, Sign out), stat cards, session live page |
 | Student dashboard | Done | Same shell/sidebar, Overview + Courses + Update profile pages, live face check-in |
 | New session form | Done | "Start now" vs "Schedule for later" + registration duration (5/15/30/60 min) that auto-computes session end |
 | Face pipeline | Done | face-api 0.22.2 (tiny detector/landmarks/recognition, models in `public/models/`), pure math + model-version helpers in `src/lib/faceCompare.ts` |
-| Automated tests | 43/44 pass | 1 known pre-existing failure: `tests/schema.test.ts` reads stale `table_state.json` snapshot (row format + column rename); regenerating the snapshot fixes it |
+| Automated tests | 49/50 pass | 1 known pre-existing failure: `tests/schema.test.ts` reads stale `table_state.json` snapshot (row format + column rename); regenerating the snapshot fixes it |
 | Sandbox module | Untouched | Intentionally left as-is per user decision |
 
 ---
@@ -67,6 +69,14 @@
 - face-api 0.22.2; detection options `TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 })`; hook must call `withFaceLandmarks(true)` for the tiny-landmark net; `public/models/` complete.
 - Model version pins template compat: stale templates (version mismatch) are rejected client-side and prompted for re-enrollment.
 
+### 2.8 Attendance CSV export
+- `migrations/10_course_attendance_export.sql` (pending execution): `SECURITY DEFINER` RPC `get_course_attendance(p_course_id)` returns the enrolled roster crossed with every session of the course, left-joined to `attendance_records` so a student who never checked in appears with `status = 'absent'`. Ownership is the course lecturer (via `courses.lecturer_id` post-08 or by owning ≥1 session in the course, so it works before 08 is applied). Explicit `grant execute` to `anon, authenticated`.
+- `src/lib/csv.ts` (NEW): pure `escapeCsv`/`toCsv`, `buildAttendanceCsv` (wide format — `Student Name`, `Reg. #`, one column per session labelled `yyyy-mm-dd hh:mm`; each cell a single combined value `Present (97%)` / `Late (85%)` / `Absent`), `downloadCsv` (UTF-8 BOM Blob + object-URL anchor), `sanitizeFilename`.
+- `src/lib/realAttendance.ts`: added `CourseAttendanceRow` type + `getCourseAttendance(courseId)` wrapper.
+- `SessionLive` (`/dashboard/sessions/:id`): "Export CSV" button in the roster card header exports that single session's roster (absent included).
+- `LecturerDashboard`: "Export records" button opens an inline course-select form (courses derived from the lecturer's own sessions — no dependency on 08) and exports the whole course.
+- Captcha decision: **keep hCaptcha** — the token passed to `supabase.auth.*` is already verified server-side by Supabase Auth (which calls `hcaptcha.com/siteverify` with the dashboard secret). Google reCAPTCHA is not a supported provider of Supabase's native captcha integration (only hCaptcha and Cloudflare Turnstile), so no code change.
+
 ---
 
 ## 3. Earlier phase — sandbox / demo + auth (history)
@@ -90,13 +100,17 @@
 | Start-now sessions insert as `ongoing` directly (no RPC) | `start_session` RPC is unnecessary when the insert policy already binds to `auth.uid()` |
 | Single "registration duration" select drives end time | Simpler UX than free-form end pickers; matches 5/15/30/60-minute class windows |
 | Sandbox module left untouched throughout | Explicit user instruction; all new work is on the real tables |
+| CSV attendance export uses one combined cell per session (`Present (97%)`) | User choice; keeps the sheet one column per session without a separate confidence column |
+| Roster-based export needs a new SECURITY DEFINER RPC (migration 10) | `get_session_attendance` only returns recorded rows; `enrollments` RLS is student-only, so lecturers need a server-scoped roster join to mark `absent` |
+| Keep hCaptcha rather than reCAPTCHA | Token is already server-verified by Supabase Auth; reCAPTCHA is not supported by the native integration |
+| Course export list derived from the lecturer's own sessions | Avoids depending on `courses.lecturer_id` (migration 08 still pending on the live DB) |
 
 ---
 
 ## 5. Known issues / follow-ups
 
-1. **Execute `migrations/08_course_lecturer.sql`** in the Supabase SQL Editor (06/07 already applied). Legacy courses keep `lecturer_id NULL` until an admin reassigns them.
-2. **`tests/schema.test.ts` fails (pre-existing, 1 of 44):** it compares against `tests/table_state.json`, whose row format no longer matches (also stale after the column rename). Regenerate the snapshot.
+1. **Execute `migrations/08_course_lecturer.sql`, `09_role_server_side.sql` and `10_course_attendance_export.sql`** in the Supabase SQL Editor (06/07 already applied), in numeric order. Legacy courses keep `lecturer_id NULL` until an admin reassigns them. Until 10 is applied, the two new Export buttons will surface the RPC-not-found error.
+2. **`tests/schema.test.ts` fails (pre-existing):** it compares against `tests/table_state.json`, whose row format no longer matches (also stale after the column rename). Regenerate the snapshot.
 3. **Camera/DB verification is manual:** nothing here runs a live camera or hits the live project — validated via lint + build + tests only.
 4. **Bundle size:** production chunk >500 kB from `face-api.js`; consider dynamic import / code-splitting.
 5. **Face threshold:** `isMatch` uses strict `<` vs 0.6; exactly-at-threshold pairs reject. Revisit when tuning FAR/FRR.
@@ -137,4 +151,16 @@ src/App.tsx                                 # UPDATED — /student/courses, /stu
 tests/realAttendance.test.ts                # NEW
 tests/faceCompare.test.ts                   # NEW
 tests/loader.mjs                            # FIXED — nested @/ alias file:// double-prefix bug
+```
+
+### 2.8 iteration files (attendance CSV export)
+```
+migrations/10_course_attendance_export.sql   # NEW — get_course_attendance roster RPC + grant (PENDING)
+scripts/reset_supabase_project.sql           # UPDATED — chain comment now lists 09 + 10
+src/lib/csv.ts                               # NEW — escape/toCsv/buildAttendanceCsv/downloadCsv/sanitizeFilename
+src/lib/realAttendance.ts                    # UPDATED — CourseAttendanceRow + getCourseAttendance
+src/pages/SessionLive.tsx                    # UPDATED — "Export CSV" button (single session)
+src/pages/LecturerDashboard.tsx              # UPDATED — "Export records" course-select form
+tests/csv.test.ts                            # NEW — CSV helper unit tests
+CHANGELOG.md                                 # NEW — iteration changelog
 ```

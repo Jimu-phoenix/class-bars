@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import {
   Ban,
   BookOpen,
   CalendarDays,
+  ChevronDown,
   Clock,
+  Download,
   Loader2,
   MapPin,
   Play,
@@ -15,6 +17,8 @@ import {
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
 import { useLecturerSessions, type SessionListItem } from "@/hooks/useLecturerSessions"
+import { getCourseAttendance } from "@/lib/realAttendance"
+import { buildAttendanceCsv, downloadCsv, sanitizeFilename, toCsv } from "@/lib/csv"
 import DashboardShell from "@/components/DashboardShell"
 import StatCard from "@/components/dashboard/StatCard"
 import { Badge } from "@/components/ui/badge"
@@ -59,6 +63,10 @@ export default function LecturerDashboard() {
   const [fullName, setFullName] = useState("")
   const [actionError, setActionError] = useState("")
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exportCourseId, setExportCourseId] = useState("")
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState("")
 
   const { sessions, loading, error, refetch } = useLecturerSessions(user?.id)
 
@@ -82,6 +90,43 @@ export default function LecturerDashboard() {
       cancelled = true
     }
   }, [user])
+
+  const courses = useMemo(() => {
+    const seen = new Map<string, { id: string; code: string; name: string }>()
+    for (const s of sessions) {
+      if (!s.courses?.course_code) continue
+      seen.set(s.course_id, {
+        id: s.course_id,
+        code: s.courses.course_code,
+        name: s.courses.course_name,
+      })
+    }
+    return [...seen.values()].sort((a, b) => a.code.localeCompare(b.code))
+  }, [sessions])
+
+  const runCourseExport = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!exportCourseId) {
+      setExportError("Select a course to export.")
+      return
+    }
+    setExportError("")
+    setExporting(true)
+    try {
+      const rows = await getCourseAttendance(exportCourseId)
+      const { headers, body } = buildAttendanceCsv(rows)
+      const csv = toCsv(headers, body)
+      const course = courses.find((c) => c.id === exportCourseId)
+      const filename = sanitizeFilename(
+        `attendance_${course?.code ?? "course"}_${new Date().toISOString().slice(0, 10)}.csv`
+      )
+      downloadCsv(filename, csv)
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Export failed")
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const runSessionAction = async (
     session: SessionListItem,
@@ -175,12 +220,61 @@ export default function LecturerDashboard() {
             <CardTitle>Recent sessions</CardTitle>
             <CardDescription>Your latest class sessions, newest first.</CardDescription>
             <CardAction>
-              <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/sessions/new")}>
-                <Plus data-icon="inline-start" aria-hidden="true" />
-                New session
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setExportOpen((o) => !o)}
+                  aria-expanded={exportOpen}
+                >
+                  <Download data-icon="inline-start" aria-hidden="true" />
+                  Export records
+                  <ChevronDown data-icon="inline-end" aria-hidden="true" />
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/sessions/new")}>
+                  <Plus data-icon="inline-start" aria-hidden="true" />
+                  New session
+                </Button>
+              </div>
             </CardAction>
           </CardHeader>
+          {exportOpen && (
+            <form
+              onSubmit={(e) => void runCourseExport(e)}
+              className="mx-(--card-spacing) mb-2 rounded-lg border border-border bg-muted/40 p-4"
+            >
+              <label htmlFor="export-course" className="mb-2 block text-sm font-medium">
+                Export attendance CSV for a course
+              </label>
+              <select
+                id="export-course"
+                value={exportCourseId}
+                onChange={(e) => setExportCourseId(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="">Select a course…</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code} — {c.name}
+                  </option>
+                ))}
+              </select>
+              {exportError && (
+                <p className="mt-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {exportError}
+                </p>
+              )}
+              <div className="mt-3 flex items-center gap-2">
+                <Button type="submit" size="sm" disabled={exporting}>
+                  {exporting && <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden="true" />}
+                  {exporting ? "Exporting…" : "Export"}
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setExportOpen(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          )}
           <CardContent>
             {(error || actionError) && (
               <p className="mb-5 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">

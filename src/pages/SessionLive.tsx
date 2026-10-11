@@ -5,6 +5,7 @@ import {
   CalendarDays,
   CircleCheck,
   Clock,
+  Download,
   Fingerprint,
   Loader2,
   MapPin,
@@ -13,13 +14,19 @@ import {
   UserRound,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { getSessionAttendance, type SessionAttendanceRow } from "@/lib/realAttendance"
+import {
+  getCourseAttendance,
+  getSessionAttendance,
+  type SessionAttendanceRow,
+} from "@/lib/realAttendance"
+import { buildAttendanceCsv, downloadCsv, sanitizeFilename, toCsv } from "@/lib/csv"
 import { usePoll } from "@/hooks/usePoll"
 import DashboardShell from "@/components/DashboardShell"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -94,6 +101,8 @@ export default function SessionLive() {
   const [attendance, setAttendance] = useState<SessionAttendanceRow[]>([])
   const [actionError, setActionError] = useState("")
   const [busy, setBusy] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState("")
 
   const refetchSession = useCallback(async () => {
     if (!id) return
@@ -184,6 +193,26 @@ export default function SessionLive() {
       setActionError(err instanceof Error ? err.message : "Action failed")
     } finally {
       setBusy(false)
+    }
+  }
+
+  const runExport = async () => {
+    if (!session) return
+    setExportError("")
+    setExporting(true)
+    try {
+      const rows = await getCourseAttendance(session.course_id)
+      const sessionRows = rows.filter((r) => r.session_id === session.id)
+      const { headers, body } = buildAttendanceCsv(sessionRows)
+      const csv = toCsv(headers, body)
+      const code = sanitizeFilename(session.courses?.course_code ?? "session")
+      const date = new Date(session.scheduled_start)
+      const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`
+      downloadCsv(`attendance_${code}_${stamp}.csv`, csv)
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Export failed")
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -308,6 +337,24 @@ export default function SessionLive() {
             {presentCount} {presentCount === 1 ? "student has" : "students have"} checked in.
             Updates automatically while the session is live.
           </CardDescription>
+          <CardAction>
+            {exportError && (
+              <p className="mr-2 text-right text-xs text-destructive">{exportError}</p>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={exporting}
+              onClick={() => void runExport()}
+            >
+              {exporting ? (
+                <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Download data-icon="inline-start" aria-hidden="true" />
+              )}
+              Export CSV
+            </Button>
+          </CardAction>
         </CardHeader>
         <CardContent>
           {attendance.length === 0 ? (

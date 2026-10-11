@@ -86,6 +86,28 @@ export async function getSessionAttendance(
   return (data as SessionAttendanceRow[]) ?? []
 }
 
+export type CourseAttendanceRow = {
+  session_id: string
+  session_start: string
+  student_id: string
+  student_name: string
+  student_number: string | null
+  method: AttendanceMethod | null
+  status: AttendanceStatus
+  check_in_time: string | null
+  confidence_score: number | null
+}
+
+export async function getCourseAttendance(
+  courseId: string,
+): Promise<CourseAttendanceRow[]> {
+  const { data, error } = await supabase.rpc("get_course_attendance", {
+    p_course_id: courseId,
+  })
+  if (error) throw error
+  return (data as CourseAttendanceRow[]) ?? []
+}
+
 export async function checkInFace(
   sessionId: string,
   studentId: string,
