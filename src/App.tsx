@@ -22,14 +22,29 @@ import SandboxStudent from './pages/SandboxStudent'
 import ProtectedRoute from './components/ProtectedRoute'
 import LecturerRoute from './components/LecturerRoute'
 import StudentRoute from './components/StudentRoute'
+import GuestRoute from './components/GuestRoute'
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+        <Route
+          path="/login"
+          element={
+            <GuestRoute>
+              <Login />
+            </GuestRoute>
+          }
+        />
+        <Route
+          path="/signup"
+          element={
+            <GuestRoute>
+              <Signup />
+            </GuestRoute>
+          }
+        />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/sandbox" element={<SandboxLanding />} />
         <Route path="/sandbox/lecturer" element={<SandboxLecturer />} />

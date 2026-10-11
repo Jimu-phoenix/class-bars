@@ -8,8 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import HcaptchaGate, {
   type HcaptchaGateHandle,
 } from "@/components/HcaptchaGate"
-import Navbar from "@/components/Navbar"
-import Footer from "@/components/Footer"
 
 export default function Login() {
   const { signIn } = useAuth()
@@ -38,9 +36,11 @@ export default function Login() {
           .from("profiles")
           .select("role")
           .eq("id", user.id)
-          .single()
-        const role = profile?.role ?? user.user_metadata?.role
-        if (role === "lecturer") target = "/dashboard"
+          .maybeSingle()
+        // Authoritative role comes from profiles.role. There is deliberately
+        // no `user_metadata` fallback: that value is client-writable.
+        if (profile?.role === "lecturer") target = "/dashboard"
+        else if (profile?.role === "student") target = "/student"
       }
       navigate(target)
     } catch (err) {
@@ -54,8 +54,6 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-background">
-      <Navbar />
-
       <main className="flex-1 relative z-10">
         <div className="fixed inset-0 -z-10 pointer-events-none" aria-hidden="true">
           <div className="absolute inset-0 hero-gradient opacity-5" />
@@ -137,8 +135,6 @@ export default function Login() {
           </div>
         </div>
       </main>
-
-      <Footer />
     </div>
   )
 }

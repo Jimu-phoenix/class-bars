@@ -7,6 +7,7 @@ import {
 } from "react"
 import type { User, Session } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
+import { assertRoleAllowed } from "@/lib/rolePolicy"
 
 export type SignUpRole = "student" | "lecturer"
 
@@ -60,6 +61,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role: SignUpRole = "student",
     captchaToken?: string
   ) => {
+    // Role is only declared here, and only after a policy check: a non-staff
+    // address can never send `lecturer` metadata downstream to
+    // handle_new_user() (which independently re-verifies against the
+    // staff_email_domains table before minting the role).
+    await assertRoleAllowed(email, role)
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
+import { useRole } from "@/contexts/RoleContext"
 import Navbar from "@/components/Navbar"
 import Footer from "@/components/Footer"
 
@@ -38,6 +39,7 @@ const stats = [
 
 export default function Home() {
   const { user } = useAuth()
+  const { role } = useRole()
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-background">
@@ -79,7 +81,7 @@ export default function Home() {
 
               <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
                 {user ? (
-                  user.user_metadata?.role === "lecturer" ? (
+                  role === "lecturer" ? (
                     <>
                       <Link
                         to="/dashboard"
@@ -103,7 +105,7 @@ export default function Home() {
                         Open Live Classes
                       </Link>
                       <Link
-                        to="/profile"
+                        to="/student/profile"
                         className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-background px-6 text-sm font-medium transition-colors hover:bg-muted"
                       >
                         My Profile

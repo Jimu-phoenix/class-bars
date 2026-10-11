@@ -41,9 +41,8 @@
 --   8. migrations/08_course_lecturer.sql
 --      (courses.lecturer_id + owner-scoped course policies)
 --   9. migrations/09_role_server_side.sql
---      (server-side role checks that replace client-side role reads)
---  10. migrations/10_course_attendance_export.sql
---      (get_course_attendance RPC for lecturer CSV exports)
+--      (staff_email_domains allowlist + lecturer gated in handle_new_user
+--       + profiles INSERT closed to role='student')
 --   Do NOT run migrations/03_table_details.sql as part of the chain --
 --   it is a read-only report, useful afterwards for verification.
 --

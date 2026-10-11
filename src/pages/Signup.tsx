@@ -2,14 +2,13 @@ import { useRef, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { ArrowLeft, GraduationCap, School } from "lucide-react"
 import { useAuth, type SignUpRole } from "@/contexts/AuthContext"
+import { postSignupPath } from "@/lib/rolePolicy"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import HcaptchaGate, {
   type HcaptchaGateHandle,
 } from "@/components/HcaptchaGate"
 import { cn } from "@/lib/utils"
-import Navbar from "@/components/Navbar"
-import Footer from "@/components/Footer"
 
 export default function Signup() {
   const { signUp } = useAuth()
@@ -50,7 +49,7 @@ export default function Signup() {
         setEmailSent(true)
         return
       }
-      navigate(role === "lecturer" ? "/dashboard" : "/onboarding")
+      navigate(postSignupPath(role))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed")
       setCaptchaToken(null)
@@ -64,8 +63,6 @@ export default function Signup() {
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-background">
-      <Navbar />
-
       <main className="flex-1 relative z-10">
         <div className="fixed inset-0 -z-10 pointer-events-none" aria-hidden="true">
           <div className="absolute inset-0 hero-gradient opacity-5" />
@@ -213,8 +210,6 @@ export default function Signup() {
           </div>
         </div>
       </main>
-
-      <Footer />
     </div>
   )
 }
