@@ -108,6 +108,32 @@ export async function getCourseAttendance(
   return (data as CourseAttendanceRow[]) ?? []
 }
 
+// ---------------------------------------------------------------------------
+// roster (enrolled students; see migrations/11_lecturer_roster.sql)
+// ---------------------------------------------------------------------------
+
+export type LecturerRosterRow = {
+  course_id: string
+  course_code: string
+  course_name: string
+  student_id: string
+  student_name: string
+  student_number: string | null
+  academic_year: string
+  semester: string
+  enrolled_at: string
+}
+
+export async function getLecturerRoster(
+  courseId?: string,
+): Promise<LecturerRosterRow[]> {
+  const { data, error } = await supabase.rpc("get_lecturer_roster", {
+    p_course_id: courseId ?? null,
+  })
+  if (error) throw error
+  return (data as LecturerRosterRow[]) ?? []
+}
+
 export async function checkInFace(
   sessionId: string,
   studentId: string,

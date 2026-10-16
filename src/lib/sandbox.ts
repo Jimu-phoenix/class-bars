@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase"
 import type { User } from "@supabase/supabase-js"
+import { mapAuthError } from "@/lib/authErrors"
 import type { SandboxParticipantRow } from "@/types/db"
 
 export type SandboxRole = "sandbox_lecturer" | "sandbox_student"
@@ -10,12 +11,6 @@ export const SANDBOX_DEFAULTS = {
   venueLabel: "Sandbox / Test Venue",
 } as const
 
-const ANON_DISABLED_HINT =
-  "Anonymous sign-ins are disabled on this Supabase project. Enable them in Supabase Dashboard → Authentication → Sign In / Providers → Anonymous, then retry."
-
-const CAPTCHA_HINT =
-  "hCaptcha verification failed or was not completed. Solve the captcha and retry — if it keeps failing, check that VITE_HCAPTCHA_SITEKEY is set in .env."
-
 export function getSandboxRole(user: User | null): SandboxRole | null {
   const role = user?.user_metadata?.role
   if (role === "sandbox_lecturer" || role === "sandbox_student") return role
@@ -24,10 +19,7 @@ export function getSandboxRole(user: User | null): SandboxRole | null {
 
 type JoinResult = { ok: true } | { ok: false; error: string }
 
-export async function joinSandbox(
-  role: SandboxRole,
-  captchaToken?: string,
-): Promise<JoinResult> {
+export async function joinSandbox(role: SandboxRole): Promise<JoinResult> {
   const {
     data: { session },
   } = await supabase.auth.getSession()
@@ -40,9 +32,10 @@ export async function joinSandbox(
     await supabase.auth.signOut()
   }
 
+  // The reCAPTCHA widget is a client-side speed bump only -- it is not
+  // verified server-side. Only the role and name travel in the metadata.
   const { error } = await supabase.auth.signInAnonymously({
     options: {
-      captchaToken,
       data: {
         role,
         full_name: role === "sandbox_lecturer" ? "Sandbox Lecturer" : "Sandbox Student",
@@ -51,13 +44,7 @@ export async function joinSandbox(
   })
 
   if (error) {
-    if (/captcha/i.test(error.message)) {
-      return { ok: false, error: CAPTCHA_HINT }
-    }
-    const message = /anonymous/i.test(error.message)
-      ? ANON_DISABLED_HINT
-      : error.message
-    return { ok: false, error: message }
+    return { ok: false, error: mapAuthError(error.message) }
   }
   return { ok: true }
 }

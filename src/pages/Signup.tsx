@@ -3,11 +3,12 @@ import { Link, useNavigate } from "react-router-dom"
 import { ArrowLeft, GraduationCap, School } from "lucide-react"
 import { useAuth, type SignUpRole } from "@/contexts/AuthContext"
 import { postSignupPath } from "@/lib/rolePolicy"
+import { mapAuthError } from "@/lib/authErrors"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import HcaptchaGate, {
-  type HcaptchaGateHandle,
-} from "@/components/HcaptchaGate"
+import RecaptchaGate, {
+  type RecaptchaGateHandle,
+} from "@/components/RecaptchaGate"
 import { cn } from "@/lib/utils"
 
 export default function Signup() {
@@ -21,7 +22,7 @@ export default function Signup() {
   const [submitting, setSubmitting] = useState(false)
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [emailSent, setEmailSent] = useState(false)
-  const captchaRef = useRef<HcaptchaGateHandle>(null)
+  const captchaRef = useRef<RecaptchaGateHandle>(null)
 
   const handleBack = () => navigate(-1)
 
@@ -38,20 +39,16 @@ export default function Signup() {
     setError("")
     setSubmitting(true)
     try {
-      const { needsConfirmation } = await signUp(
-        email,
-        password,
-        fullName,
-        role,
-        captchaToken ?? undefined
-      )
+      const { needsConfirmation } = await signUp(email, password, fullName, role)
       if (needsConfirmation) {
         setEmailSent(true)
         return
       }
       navigate(postSignupPath(role))
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Signup failed")
+      setError(
+        mapAuthError(err instanceof Error ? err.message : "Signup failed")
+      )
       setCaptchaToken(null)
       captchaRef.current?.reset()
     } finally {
@@ -181,7 +178,7 @@ export default function Signup() {
                           placeholder="••••••••"
                         />
                       </div>
-                      <HcaptchaGate
+                      <RecaptchaGate
                         ref={captchaRef}
                         onVerify={setCaptchaToken}
                         onExpire={() => setCaptchaToken(null)}

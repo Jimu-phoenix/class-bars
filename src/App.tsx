@@ -8,6 +8,7 @@ import Profile from './pages/Profile'
 import Onboarding from './pages/Onboarding'
 import LecturerDashboard from './pages/LecturerDashboard'
 import LecturerCourses from './pages/LecturerCourses'
+import LecturerRoster from './pages/LecturerRoster'
 import LecturerProfile from './pages/LecturerProfile'
 import NewSession from './pages/NewSession'
 import SessionLive from './pages/SessionLive'
@@ -102,6 +103,14 @@ function App() {
           element={
             <LecturerRoute>
               <LecturerCourses />
+            </LecturerRoute>
+          }
+        />
+        <Route
+          path="/dashboard/roster"
+          element={
+            <LecturerRoute>
+              <LecturerRoster />
             </LecturerRoute>
           }
         />

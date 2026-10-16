@@ -19,14 +19,9 @@ type AuthContextValue = {
     email: string,
     password: string,
     fullName: string,
-    role?: SignUpRole,
-    captchaToken?: string
+    role?: SignUpRole
   ) => Promise<{ needsConfirmation: boolean }>
-  signIn: (
-    email: string,
-    password: string,
-    captchaToken?: string
-  ) => Promise<void>
+  signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -58,8 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string,
     password: string,
     fullName: string,
-    role: SignUpRole = "student",
-    captchaToken?: string
+    role: SignUpRole = "student"
   ) => {
     // Role is only declared here, and only after a policy check: a non-staff
     // address can never send `lecturer` metadata downstream to
@@ -67,27 +61,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // staff_email_domains table before minting the role).
     await assertRoleAllowed(email, role)
 
+    // The reCAPTCHA widget is a client-side speed bump only -- it is not
+    // verified server-side (Supabase's native captcha is off and no auth hook
+    // is installed). Only the name and role travel in the metadata.
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName, role },
-        captchaToken,
+        data: {
+          full_name: fullName,
+          role,
+        },
       },
     })
     if (error) throw error
     return { needsConfirmation: !data.session }
   }
 
-  const signIn = async (
-    email: string,
-    password: string,
-    captchaToken?: string
-  ) => {
+  const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
-      options: captchaToken ? { captchaToken } : undefined,
     })
     if (error) throw error
   }

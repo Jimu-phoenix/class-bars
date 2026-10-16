@@ -32,7 +32,7 @@ const steps = [
 
 const stats = [
   { value: "128-d", label: "Face Descriptors" },
-  { value: "< 100ms", label: "Match Latency" },
+  { value: "~2s", label: "Match Latency" },
   { value: "AES-256", label: "Encryption" },
   { value: "Local", label: "Processing" },
 ]
@@ -69,14 +69,14 @@ export default function Home() {
               </span>
 
               <h1 className="mt-8 heading-1 font-heading tracking-tighter text-balance lg:text-7xl">
-                Class-BARS
+                Class.BARS
                 <br />
                 <span className="text-muted-foreground/60 font-normal">Biometric Attendance</span>
               </h1>
 
               <p className="mt-6 body-lg muted-text max-w-2xl mx-auto text-pretty">
                 Automated face recognition attendance for classrooms. Fast, secure, and contactless.
-                All processing happens locally — no face images ever leave your device.
+                All processing happens locally <br /> No face images ever leave your device.
               </p>
 
               <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">

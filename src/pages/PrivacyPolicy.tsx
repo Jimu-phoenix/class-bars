@@ -47,7 +47,7 @@ const sections = [
     content: `
       <ul className="list-disc list-inside space-y-2">
         <li><strong>Supabase:</strong> Hosted PostgreSQL database, authentication, and storage (EU/US regions). Supabase is SOC2 Type II certified.</li>
-        <li><strong>hCaptcha:</strong> Used for bot protection during signup and sandbox access. No personal data shared beyond IP address.</li>
+        <li><strong>Google reCAPTCHA:</strong> Used for bot protection during signup and sandbox access. No personal data shared beyond IP address.</li>
         <li><strong>Vercel:</strong> Hosting and CDN. Analytics are anonymized and opt-in.</li>
       </ul>
       <p className="mt-4">We do not sell, rent, or share your personal data with advertisers or data brokers.</p>
@@ -79,7 +79,7 @@ const sections = [
         <li>Data portability</li>
         <li>Object to processing</li>
       </ul>
-      <p className="mt-4">Exercise these rights via your profile settings or contact us at privacy@class-bars.example.com.</p>
+      <p className="mt-4">Exercise these rights via your profile settings or contact us at youngprimemystic@gmail.com</p>
     `,
   },
 ]
@@ -116,9 +116,8 @@ export default function PrivacyPolicy() {
             <h3 className="font-heading text-lg font-semibold">Questions?</h3>
             <p className="mt-2 text-sm text-muted-foreground">
               Contact our Data Protection Officer at
-              <a href="mailto:privacy@class-bars.example.com" className="underline hover:text-primary">
-                privacy@class-bars.example.com
-              </a>
+              <a href="mailto:at youngprimemystic@gmail.com" className="underline hover:text-primary">
+                 youngprimemystic@gmail.com</a>
             </p>
           </div>
         </div>

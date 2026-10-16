@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { GraduationCap, Loader2, Presentation } from "lucide-react"
 import { joinSandbox, SANDBOX_DEFAULTS } from "@/lib/sandbox"
 import { warmFaceModels } from "@/lib/faceModels"
-import HcaptchaGate, { type HcaptchaGateHandle } from "@/components/HcaptchaGate"
+import RecaptchaGate, { type RecaptchaGateHandle } from "@/components/RecaptchaGate"
 import {
   Card,
   CardContent,
@@ -16,14 +16,14 @@ import Footer from "@/components/Footer"
 
 type Role = "sandbox_lecturer" | "sandbox_student"
 
-const CAPTCHA_REQUIRED = Boolean(import.meta.env.VITE_HCAPTCHA_SITEKEY)
+const CAPTCHA_REQUIRED = Boolean(import.meta.env.VITE_RECAPTCHA_SITE_KEY)
 
 export default function SandboxLanding() {
   const navigate = useNavigate()
   const [joining, setJoining] = useState<Role | null>(null)
   const [error, setError] = useState("")
   const [captchaToken, setCaptchaToken] = useState("")
-  const captchaRef = useRef<HcaptchaGateHandle>(null)
+  const captchaRef = useRef<RecaptchaGateHandle>(null)
 
   const canJoin = !CAPTCHA_REQUIRED || captchaToken !== ""
 
@@ -35,7 +35,7 @@ export default function SandboxLanding() {
     setJoining(role)
     setError("")
     try {
-      const result = await joinSandbox(role, captchaToken || undefined)
+      const result = await joinSandbox(role)
       if (!result.ok) {
         setError(result.error)
         setJoining(null)
@@ -138,7 +138,7 @@ export default function SandboxLanding() {
               </div>
 
               <div className="mt-8 flex flex-col items-center gap-2">
-                <HcaptchaGate
+                <RecaptchaGate
                   ref={captchaRef}
                   onVerify={setCaptchaToken}
                   onExpire={() => setCaptchaToken("")}

@@ -59,7 +59,18 @@ test("table_state.json is a parseable schema snapshot", async () => {
   const rows = JSON.parse(raw) as Array<Record<string, unknown>>
   assert.ok(Array.isArray(rows))
   assert.ok(rows.length > 0)
-  for (const key of ["table_schema", "table_name", "column_name", "data_type"]) {
-    assert.ok(key in rows[0], `snapshot rows should include ${key}`)
+  for (const row of rows) {
+    assert.equal(typeof row.table_name, "string", "each row should have a table_name")
+    assert.equal(typeof row.details, "string", "each row should carry a details JSON string")
+    const details = JSON.parse(row.details as string) as {
+      schema?: unknown
+      columns?: Array<{ name?: unknown; type?: unknown }>
+    }
+    assert.equal(typeof details.schema, "string", `${row.table_name}: details.schema`)
+    assert.ok(Array.isArray(details.columns), `${row.table_name}: details.columns`)
+    for (const col of details.columns ?? []) {
+      assert.equal(typeof col.name, "string", `${row.table_name}: column name`)
+      assert.equal(typeof col.type, "string", `${row.table_name}: column type`)
+    }
   }
 })

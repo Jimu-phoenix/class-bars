@@ -15,7 +15,7 @@
 --   * all Storage buckets and their uploaded objects
 --
 -- NOT touched: project config kept outside the database -- Auth
--- providers (incl. hCaptcha secret), SMTP, API keys, Edge Function
+-- providers (incl. captcha settings), SMTP, API keys, Edge Function
 -- deployments, Realtime settings, backups.
 --
 -- BEFORE RUNNING:

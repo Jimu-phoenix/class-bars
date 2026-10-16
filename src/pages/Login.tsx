@@ -3,11 +3,12 @@ import { Link, useNavigate } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
+import { mapAuthError } from "@/lib/authErrors"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import HcaptchaGate, {
-  type HcaptchaGateHandle,
-} from "@/components/HcaptchaGate"
+import RecaptchaGate, {
+  type RecaptchaGateHandle,
+} from "@/components/RecaptchaGate"
 
 export default function Login() {
   const { signIn } = useAuth()
@@ -17,7 +18,7 @@ export default function Login() {
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  const captchaRef = useRef<HcaptchaGateHandle>(null)
+  const captchaRef = useRef<RecaptchaGateHandle>(null)
 
   const handleBack = () => navigate(-1)
 
@@ -26,7 +27,9 @@ export default function Login() {
     setError("")
     setSubmitting(true)
     try {
-      await signIn(email, password, captchaToken ?? undefined)
+      // The captcha here is a client-side speed bump only: it is not
+      // verified server-side (no auth hook, native captcha off).
+      await signIn(email, password)
       const {
         data: { user },
       } = await supabase.auth.getUser()
@@ -44,7 +47,7 @@ export default function Login() {
       }
       navigate(target)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed")
+      setError(mapAuthError(err instanceof Error ? err.message : "Login failed"))
       setCaptchaToken(null)
       captchaRef.current?.reset()
     } finally {
@@ -113,7 +116,7 @@ export default function Login() {
                         placeholder="••••••••"
                       />
                     </div>
-                    <HcaptchaGate
+                    <RecaptchaGate
                       ref={captchaRef}
                       onVerify={setCaptchaToken}
                       onExpire={() => setCaptchaToken(null)}

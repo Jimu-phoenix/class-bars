@@ -103,6 +103,10 @@ const {
   deleteSandboxParticipant,
 } = await import("../src/lib/sandbox.ts")
 
+const { NATIVE_CAPTCHA_HINT, CAPTCHA_HINT } = await import(
+  "../src/lib/authErrors.ts"
+)
+
 function makeUser(metadata: Record<string, unknown>): User {
   return { user_metadata: metadata } as unknown as User
 }
@@ -146,16 +150,20 @@ test("joinSandbox signs out and re-authenticates when switching roles", async ()
   assert.equal(state.signInCalls.length, 1)
 })
 
-test("joinSandbox sends role metadata and captcha token on sign-in", async () => {
+test("joinSandbox sends only role/name metadata (no captcha token)", async () => {
   state.session = null
   state.signInError = null
   state.signInCalls = []
-  await joinSandbox("sandbox_student", "captcha-token-123")
+  await joinSandbox("sandbox_student")
   assert.equal(state.signInCalls.length, 1)
   const call = state.signInCalls[0] as {
-    options: { captchaToken?: string; data?: { role?: string; full_name?: string } }
+    options: {
+      captchaToken?: string
+      data?: { role?: string; full_name?: string; recaptcha_token?: string }
+    }
   }
-  assert.equal(call.options.captchaToken, "captcha-token-123")
+  assert.equal(call.options.captchaToken, undefined)
+  assert.equal(call.options.data?.recaptcha_token, undefined)
   assert.equal(call.options.data?.role, "sandbox_student")
   assert.equal(call.options.data?.full_name, "Sandbox Student")
 })
@@ -163,12 +171,17 @@ test("joinSandbox sends role metadata and captcha token on sign-in", async () =>
 test("joinSandbox maps captcha failures to a helpful hint", async () => {
   state.session = null
   state.signInError = { message: "Captcha verification failed" }
-  const result = await joinSandbox("sandbox_student", "bad-token")
-  assert.deepEqual(result, {
-    ok: false,
-    error:
-      "hCaptcha verification failed or was not completed. Solve the captcha and retry — if it keeps failing, check that VITE_HCAPTCHA_SITEKEY is set in .env.",
-  })
+  const result = await joinSandbox("sandbox_student")
+  assert.deepEqual(result, { ok: false, error: CAPTCHA_HINT })
+})
+
+test("joinSandbox maps the native captcha rejection to a disable hint", async () => {
+  state.session = null
+  state.signInError = {
+    message: "captcha protection: request disallowed (no captcha_token found)",
+  }
+  const result = await joinSandbox("sandbox_student")
+  assert.deepEqual(result, { ok: false, error: NATIVE_CAPTCHA_HINT })
 })
 
 test("joinSandbox maps anonymous-disabled errors to setup instructions", async () => {
