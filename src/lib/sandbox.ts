@@ -14,7 +14,7 @@ const ANON_DISABLED_HINT =
   "Anonymous sign-ins are disabled on this Supabase project. Enable them in Supabase Dashboard → Authentication → Sign In / Providers → Anonymous, then retry."
 
 const CAPTCHA_HINT =
-  "hCaptcha verification failed or was not completed. Solve the captcha and retry — if it keeps failing, check that VITE_HCAPTCHA_SITEKEY is set in .env."
+  "Captcha verification failed. Supabase rejected the request because its own captcha protection is enabled — disable Authentication → Sign In / Providers → Captcha (or wire up server-side verification of the reCAPTCHA token) and retry."
 
 export function getSandboxRole(user: User | null): SandboxRole | null {
   const role = user?.user_metadata?.role
@@ -24,10 +24,7 @@ export function getSandboxRole(user: User | null): SandboxRole | null {
 
 type JoinResult = { ok: true } | { ok: false; error: string }
 
-export async function joinSandbox(
-  role: SandboxRole,
-  captchaToken?: string,
-): Promise<JoinResult> {
+export async function joinSandbox(role: SandboxRole): Promise<JoinResult> {
   const {
     data: { session },
   } = await supabase.auth.getSession()
@@ -42,7 +39,6 @@ export async function joinSandbox(
 
   const { error } = await supabase.auth.signInAnonymously({
     options: {
-      captchaToken,
       data: {
         role,
         full_name: role === "sandbox_lecturer" ? "Sandbox Lecturer" : "Sandbox Student",

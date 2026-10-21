@@ -5,9 +5,8 @@ import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import HcaptchaGate, {
-  type HcaptchaGateHandle,
-} from "@/components/HcaptchaGate"
+import CaptchaGate, { type CaptchaGateHandle } from "@/components/CaptchaGate"
+import { CAPTCHA_REQUIRED } from "@/lib/captcha"
 
 export default function Login() {
   const { signIn } = useAuth()
@@ -17,7 +16,7 @@ export default function Login() {
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  const captchaRef = useRef<HcaptchaGateHandle>(null)
+  const captchaRef = useRef<CaptchaGateHandle>(null)
 
   const handleBack = () => navigate(-1)
 
@@ -26,7 +25,7 @@ export default function Login() {
     setError("")
     setSubmitting(true)
     try {
-      await signIn(email, password, captchaToken ?? undefined)
+      await signIn(email, password)
       const {
         data: { user },
       } = await supabase.auth.getUser()
@@ -113,13 +112,17 @@ export default function Login() {
                         placeholder="••••••••"
                       />
                     </div>
-                    <HcaptchaGate
+                    <CaptchaGate
                       ref={captchaRef}
                       onVerify={setCaptchaToken}
                       onExpire={() => setCaptchaToken(null)}
                       onError={() => setCaptchaToken(null)}
                     />
-                    <Button type="submit" className="w-full" disabled={submitting || !captchaToken}>
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={submitting || (CAPTCHA_REQUIRED && !captchaToken)}
+                    >
                       {submitting ? "Signing in…" : "Sign in"}
                     </Button>
                     <p className="text-center text-sm muted-text">

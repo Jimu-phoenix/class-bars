@@ -47,7 +47,7 @@ const sections = [
     content: `
       <ul className="list-disc list-inside space-y-2">
         <li><strong>Supabase:</strong> Hosted PostgreSQL database, authentication, and storage (EU/US regions). Supabase is SOC2 Type II certified.</li>
-        <li><strong>hCaptcha:</strong> Used for bot protection during signup and sandbox access. No personal data shared beyond IP address.</li>
+        <li><strong>reCAPTCHA (Google):</strong> Used for bot protection on signup, login, and sandbox access. Google may collect IP address and browser data as part of the reCAPTCHA service.</li>
         <li><strong>Vercel:</strong> Hosting and CDN. Analytics are anonymized and opt-in.</li>
       </ul>
       <p className="mt-4">We do not sell, rent, or share your personal data with advertisers or data brokers.</p>
