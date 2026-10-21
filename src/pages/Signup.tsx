@@ -5,9 +5,8 @@ import { useAuth, type SignUpRole } from "@/contexts/AuthContext"
 import { postSignupPath } from "@/lib/rolePolicy"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import HcaptchaGate, {
-  type HcaptchaGateHandle,
-} from "@/components/HcaptchaGate"
+import CaptchaGate, { type CaptchaGateHandle } from "@/components/CaptchaGate"
+import { CAPTCHA_REQUIRED } from "@/lib/captcha"
 import { cn } from "@/lib/utils"
 
 export default function Signup() {
@@ -21,7 +20,7 @@ export default function Signup() {
   const [submitting, setSubmitting] = useState(false)
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [emailSent, setEmailSent] = useState(false)
-  const captchaRef = useRef<HcaptchaGateHandle>(null)
+  const captchaRef = useRef<CaptchaGateHandle>(null)
 
   const handleBack = () => navigate(-1)
 
@@ -42,8 +41,7 @@ export default function Signup() {
         email,
         password,
         fullName,
-        role,
-        captchaToken ?? undefined
+        role
       )
       if (needsConfirmation) {
         setEmailSent(true)
@@ -181,7 +179,7 @@ export default function Signup() {
                           placeholder="••••••••"
                         />
                       </div>
-                      <HcaptchaGate
+                      <CaptchaGate
                         ref={captchaRef}
                         onVerify={setCaptchaToken}
                         onExpire={() => setCaptchaToken(null)}
@@ -190,7 +188,7 @@ export default function Signup() {
                       <Button
                         type="submit"
                         className="w-full"
-                        disabled={submitting || !captchaToken}
+                        disabled={submitting || (CAPTCHA_REQUIRED && !captchaToken)}
                       >
                         {submitting
                           ? `Creating ${roleLabel} account…`

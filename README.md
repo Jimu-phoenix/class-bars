@@ -11,7 +11,8 @@ A built-in **sandbox mode** lets you demo the entire flow end-to-end with no rea
 | UI | React 19 + TypeScript, React Router 7 |
 | Build | Vite 8 |
 | Styling | Tailwind CSS v4 (`@tailwindcss/vite`), shadcn-style components on `@base-ui/react`, `class-variance-authority`, `lucide-react`, Inter variable font |
-| Backend | Supabase — Postgres with Row Level Security, Auth (email/password + Anonymous sign-ins), hCaptcha protection on anonymous auth |
+| Backend | Supabase — Postgres with Row Level Security, Auth (email/password + Anonymous sign-ins), reCAPTCHA v2 checkbox protection (client-side) |
+|---|---|
 | Face recognition | `face-api.js` — TinyFaceDetector + 128-d descriptors; only encrypted embeddings are stored, never images |
 | Tests | Node's built-in test runner (`node:test`) — zero test dependencies |
 
@@ -28,16 +29,9 @@ npm run dev
 ```ini
 VITE_SUPABASE_URL=              # Supabase project URL
 VITE_SUPABASE_PUBLISHABLE_KEY=  # anon/publishable key
-VITE_HCAPTCHA_SITEKEY=          # PUBLIC sitekey from dashboard.hcaptcha.com
-```
+VITE_RECAPTCHA_SITE_KEY=    # PUBLIC sitekey from Google reCAPTCHA (v2 checkbox) |
 
-The hCaptcha **secret key** never goes into `.env` (anything `VITE_` is bundled into public JS). It lives only in the Supabase dashboard under Authentication -> Sign In / Providers -> Captcha.
-
-### Supabase configuration checklist
-
-1. Database: run the migration chain below.
-2. Authentication -> Sign In / Providers -> **Anonymous**: enabled (required for sandbox mode).
-3. Authentication -> Sign In / Providers -> **Captcha**: enable hCaptcha, paste your secret key; put the sitekey in `.env`.
+The reCAPTCHA **secret key** is not bundled (anything `VITE_` is public). If you want server-side verification later, store it outside the client (e.g. Supabase Edge Functions / your backend). No backend verification is enforced in this build.
 
 ## Database setup
 
@@ -69,7 +63,7 @@ Supabase is mocked — the suite makes no network requests. See `test_result.md`
 
 ```
 src/
-  components/     Shell/route guards + HcaptchaGate + ui/ primitives
+  components/     Shell/route guards + CaptchaGate + ui/ primitives
   contexts/       AuthContext (session state, sign in/out/up)
   hooks/          useFaceDetection, usePoll, useLecturerSessions
   lib/            supabase client, sandbox logic, faceCompare, faceStorage

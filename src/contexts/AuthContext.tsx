@@ -19,14 +19,9 @@ type AuthContextValue = {
     email: string,
     password: string,
     fullName: string,
-    role?: SignUpRole,
-    captchaToken?: string
+    role?: SignUpRole
   ) => Promise<{ needsConfirmation: boolean }>
-  signIn: (
-    email: string,
-    password: string,
-    captchaToken?: string
-  ) => Promise<void>
+  signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -58,8 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string,
     password: string,
     fullName: string,
-    role: SignUpRole = "student",
-    captchaToken?: string
+    role: SignUpRole = "student"
   ) => {
     // Role is only declared here, and only after a policy check: a non-staff
     // address can never send `lecturer` metadata downstream to
@@ -72,22 +66,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         data: { full_name: fullName, role },
-        captchaToken,
       },
     })
     if (error) throw error
     return { needsConfirmation: !data.session }
   }
 
-  const signIn = async (
-    email: string,
-    password: string,
-    captchaToken?: string
-  ) => {
+  const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
-      options: captchaToken ? { captchaToken } : undefined,
     })
     if (error) throw error
   }

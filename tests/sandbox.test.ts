@@ -146,16 +146,16 @@ test("joinSandbox signs out and re-authenticates when switching roles", async ()
   assert.equal(state.signInCalls.length, 1)
 })
 
-test("joinSandbox sends role metadata and captcha token on sign-in", async () => {
+test("joinSandbox sends role metadata on sign-in", async () => {
   state.session = null
   state.signInError = null
   state.signInCalls = []
-  await joinSandbox("sandbox_student", "captcha-token-123")
+  await joinSandbox("sandbox_student")
   assert.equal(state.signInCalls.length, 1)
   const call = state.signInCalls[0] as {
     options: { captchaToken?: string; data?: { role?: string; full_name?: string } }
   }
-  assert.equal(call.options.captchaToken, "captcha-token-123")
+  assert.equal(call.options.captchaToken, undefined)
   assert.equal(call.options.data?.role, "sandbox_student")
   assert.equal(call.options.data?.full_name, "Sandbox Student")
 })
@@ -163,11 +163,11 @@ test("joinSandbox sends role metadata and captcha token on sign-in", async () =>
 test("joinSandbox maps captcha failures to a helpful hint", async () => {
   state.session = null
   state.signInError = { message: "Captcha verification failed" }
-  const result = await joinSandbox("sandbox_student", "bad-token")
+  const result = await joinSandbox("sandbox_student")
   assert.deepEqual(result, {
     ok: false,
     error:
-      "hCaptcha verification failed or was not completed. Solve the captcha and retry — if it keeps failing, check that VITE_HCAPTCHA_SITEKEY is set in .env.",
+      "Captcha verification failed. Supabase rejected the request because its own captcha protection is enabled — disable Authentication → Sign In / Providers → Captcha (or wire up server-side verification of the reCAPTCHA token) and retry.",
   })
 })
 
