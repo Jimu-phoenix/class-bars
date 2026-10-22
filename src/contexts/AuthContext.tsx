@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Role is only declared here, and only after a policy check: a non-staff
     // address can never send `lecturer` metadata downstream to
     // handle_new_user() (which independently re-verifies against the
-    // staff_email_domains table before minting the role).
+    // staff_emails table before minting the role).
     await assertRoleAllowed(email, role)
 
     const { data, error } = await supabase.auth.signUp({

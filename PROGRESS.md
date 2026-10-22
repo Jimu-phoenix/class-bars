@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-06
 **Repo:** `D:\classBars\class-bars`
-**Overall status:** Real (DB-backed) attendance flow is built end-to-end and verified by lint/build/tests. Role-based access is now hardened end-to-end (client guards + server-side `staff_email_domains` allowlist enforced in the signup trigger), the theme toggle was rewritten, the profile UI now lives inside each role's dashboard (no standalone page for students/lecturers), auth pages are guest-only (signed-in users bounce to their dashboard; no nav/footer), and the shared dashboard shell + student pages were rebuilt mobile-first (bottom tab bar on phones, full-screen dialogs for face enrollment/verify, collapsible sidebar on desktop). Sandbox remains untouched. Migrations 06/07/09: 06/07 applied to the live project, **08 and 09 are pending manual execution**.
+**Overall status:** Real (DB-backed) attendance flow is built end-to-end and verified by lint/build/tests. Role-based access is now hardened end-to-end (client guards + server-side `staff_emails` allowlist enforced in the signup trigger), the theme toggle was rewritten, the profile UI now lives inside each role's dashboard (no standalone page for students/lecturers), auth pages are guest-only (signed-in users bounce to their dashboard; no nav/footer), and the shared dashboard shell + student pages were rebuilt mobile-first (bottom tab bar on phones, full-screen dialogs for face enrollment/verify, collapsible sidebar on desktop). Sandbox remains untouched. Migrations 06/07/09: 06/07 applied to the live project, **08 and 09 are pending manual execution**; migration 10 (email-based lecturer allowlist) scripted and ready to run.
 
 ---
 
@@ -15,7 +15,8 @@
 | Real attendance flow (`migrations/06`) | Applied | `face_embeddings` renamed/self-own policy; SECURITY DEFINER RPCs: `upsert_face_embedding`, `clear_face_embedding`, `enroll_self`, `get_session_attendance`; hardening; grants |
 | Real-table GRANTs (`migrations/07`) | **Applied — fixes "permission denied"** | Explicit DML grants to `authenticated`, SELECT to `anon` on real tables + EXECUTE on client RPCs |
 | Course ownership (`migrations/08`) | **Scripted — NOT yet executed** | `courses.lecturer_id` FK + owner-scoped create/update policies |
-| Role enforcement (`migrations/09`) | **Scripted — NOT yet executed** | `staff_email_domains` allowlist table; `handle_new_user` demotes non-allowlisted lecturers; profiles INSERT closed to `role='student'` |
+| Role enforcement (`migrations/09`) | **Scripted — superseded by 10** | `staff_email_domains` domain allowlist replaced by `staff_emails` exact-email allowlist in migration 10; `handle_new_user` demotes non-allowlisted lecturers; profiles INSERT closed to `role='student'` |
+| Lecturer allowlist (`migrations/10`) | **Scripted — NOT yet executed** | `staff_emails` table (exact email match, replaces `staff_email_domains` domain match); `is_staff_email()` re-pointed; client `rolePolicy.ts` reads the same table |
 | Signup | Done | Student/Lecturer toggle + hCaptcha; `AuthContext.signUp` accepts `captchaToken` |
 | Lecturer dashboard | Done | Collapsible sidebar (Overview, Courses, Update profile, Sign out), stat cards, session live page |
 | Student dashboard | Done | Same shell/sidebar, Overview + Courses + Update profile pages, live face check-in |
@@ -80,14 +81,14 @@
 ### 3.2 Role access hardening (`current`)
 - **Root cause:** role was self-declared at signup (`signUp({ options: { data: { role } } })`), stored by `handle_new_user()`, then **trusted** from client-writable `auth.user_metadata` — and guards were fail-open (`/dashboard` only checked "has a lecturer-ish profile"). Clients also self-provisioned `profiles` rows on `PGRST116`, writing their own `role`.
 - **Fix (client-guard scope, per user decision):**
-  - `src/lib/rolePolicy.ts` — staff allowlist (DB-backed `staff_email_domains`, seeded with `mubas.ac.mw`); `assertRoleAllowed` rejects lecturer signup on non-staff addresses (`AuthContext.signUp` enforces it); `postSignupPath` routes lecturer→`/dashboard`, else→`/onboarding`.
+  - `src/lib/rolePolicy.ts` — staff allowlist (DB-backed `staff_emails`, exact email match seeded with `lecturer@mubas.ac.mw`); `assertRoleAllowed` rejects lecturer signup on non-allowlisted addresses (`AuthContext.signUp` enforces it); `postSignupPath` routes lecturer→`/dashboard`, else→`/onboarding`.
   - `src/contexts/RoleContext.tsx` — role read from `profiles.role` via `maybeSingle`, **never** from `user_metadata`; fail-closed `status: "loading" | "ready" | "unavailable"`.
-  - `src/lib/guardPolicy.ts` + `src/components/RoleRoute.tsx` — shared fail-closed guard (`authLoading`/`status` spinner → sign-out → login with `state.from` → non-ready → `/profile` → mismatch → own home). `LecturerRoute`/`StudentRoute` are thin wrappers.
+  - `src/lib/guardPolicy.ts` + `src/components/RoleRoute.tsx` — shared fail-closed guard (`authLoading`/`status` spinner → sign-out → login with `state.from` → non-ready → `/profile` → mismatch → own home). `LecturerRoute`/`StudentRoute` wrappers deleted; `<RoleRoute role="student">`/`<RoleRoute role="lecturer">` inline in `App.tsx`.
   - All hardcoded `user_metadata?.role` reads removed (Navbar/Home/Login/Signup/Profile/ProfileSettings); `PGRST116` self-upsert branches removed (missing profile → explicit error, no more self-authoring). Provider order: `ThemeProvider > AuthProvider > RoleProvider > App`.
 - **New tests:** `tests/rolePolicy.test.ts`, `tests/roleGuards.test.ts` (`decideGuard`), `tests/theme.test.ts` (`nextTheme`/`resolveTheme`/`readStoredTheme`). 23 added, all passing; lint + tsc + build clean.
 
 ### 3.3 Sanity note
-- **Server-side enforcement now in place (migrations/09).** The lecturer allowlist lives in the DB (`staff_email_domains`) and `handle_new_user()` demotes any non-allowlisted `role: "lecturer"` to `student` — a hand-rolled `supabase.auth.signUp()` can no longer mint a lecturer. The client reads the same table at sign-up (`src/lib/rolePolicy.ts`), so env `VITE_STAFF_EMAIL_DOMAINS` is retired; DB is the single source of truth. The client `profiles` INSERT policy is also closed to `role = 'student'` (previously any client could create their own lecturer/admin row).
+- **Server-side enforcement now in place (migrations/10).** The lecturer allowlist lives in the DB (`staff_emails`) and `handle_new_user()` demotes any non-allowlisted `role: "lecturer"` to `student` — a hand-rolled `supabase.auth.signUp()` can no longer mint a lecturer. The client reads the same table at sign-up (`src/lib/rolePolicy.ts`); DB is the single source of truth. The client `profiles` INSERT policy is also closed to `role = 'student'` (previously any client could create their own lecturer/admin row).
 
 ---
 
@@ -139,8 +140,8 @@
 | One shared `DashboardShell` + `StatCard`/`ProfileSettings` for both roles | Guarantees the student dashbooard is visually consistent with the lecturer's |
 | Start-now sessions insert as `ongoing` directly (no RPC) | `start_session` RPC is unnecessary when the insert policy already binds to `auth.uid()` |
 | Single "registration duration" select drives end time | Simpler UX than free-form end pickers; matches 5/15/30/60-minute class windows |
-| Lecturer sign-up gated by a staff email allowlist | Role is an auth decision; domain allowlist is the proxy for "staff" |
-| Allowlist lives in the DB (`staff_email_domains`), enforced by `handle_new_user`; client reads the same table | Env vars can't be read by Postgres; a single DB-backed source of truth closes the hand-rolled `signUp` bypass and removes the client-duplicated list |
+| Lecturer sign-up gated by a staff email allowlist | Role is an auth decision; exact email allowlist is the proxy for "staff" |
+| Allowlist lives in the DB (`staff_emails`), enforced by `handle_new_user`; client reads the same table | Env vars can't be read by Postgres; a single DB-backed source of truth closes the hand-rolled `signUp` bypass and removes the client-duplicated list |
 | Role read from `profiles.role`, never `auth.user_metadata` | `user_metadata` is client-writable; `profiles.role` is written by the signup trigger |
 | Role guards are fail-closed (`loading`/`unavailable`/mismatch ⇒ deny, mismatches redirect to their own home) | Inverts the prior fail-open behaviour that let anyone announce `/dashboard` or `/student` |
 | Clients no longer self-provision `profiles` rows (PGRST116 self-upsert removed) | Self-UPSERT let callers write their own `role`; missing profile now surfaces an explicit error |
@@ -154,9 +155,8 @@
 ---
 
 ## 5. Known issues / follow-ups
-
 1. **Execute `migrations/08_course_lecturer.sql`** in the Supabase SQL Editor (06/07 already applied). Legacy courses keep `lecturer_id NULL` until an admin reassigns them.
-2. **Execute `migrations/09_role_server_side.sql`** in the Supabase SQL Editor, then manage the lecturer allowlist in the DB (`staff_email_domains` table), e.g. `insert into public.staff_email_domains (domain) values ('uni.edu');`. This is the **required** server-side enforcement step — until it's applied, a hand-rolled `supabase.auth.signUp()` call can still mint a lecturer.
+2. **Execute `migrations/10_staff_email_allowlist.sql`** in the Supabase SQL Editor, then manage the lecturer allowlist in the DB (`staff_emails` table), e.g. `insert into public.staff_emails (email) values ('lecturer@uni.edu');`. This is the **required** server-side enforcement step — until it's applied, a hand-rolled `supabase.auth.signUp()` call can still mint a lecturer.
 3. **`tests/schema.test.ts` fails (pre-existing, 1 of 69):** it compares against `tests/table_state.json`, whose row format no longer matches (also stale after the column rename). Regenerate the snapshot.
 4. **Camera/DB verification is manual:** nothing here runs a live camera or hits the live project — validated via lint + build + tests only.
 5. **Bundle size:** production chunk >500 kB from `face-api.js`; consider dynamic import / code-splitting.
@@ -174,8 +174,9 @@
 migrations/06_real_attendance_flow.sql      # NEW — real face embeddings + enroll/roster RPCs
 migrations/07_real_table_grants.sql         # NEW — explicit GRANTs (fixes "permission denied")
 migrations/08_course_lecturer.sql           # NEW — courses.lecturer_id + owner policies (PENDING)
-migrations/09_role_server_side.sql          # NEW — staff_email_domains allowlist + handle_new_user demotion + profiles INSERT closed (PENDING)
-scripts/reset_supabase_project.sql          # UPDATED — chain now includes 05-08
+migrations/09_role_server_side.sql          # NEW — staff_email_domains allowlist + handle_new_user demotion (SUPERSEDED by 10)
+migrations/10_staff_email_allowlist.sql     # NEW — staff_emails exact-email allowlist (PENDING execution)
+scripts/reset_supabase_project.sql          # UPDATED — chain now includes 05-10
 src/lib/faceCompare.ts                      # NEW — pure match math + FACE_MODEL_VERSION
 src/lib/nav.ts                              # NEW — LECTURER_NAV / STUDENT_NAV
 src/components/DashboardShell.tsx           # NEW — collapsible sidebar shell (replaces LecturerShell/StudentShell)
@@ -204,7 +205,8 @@ tests/rolePolicy.test.ts                    # NEW (Phase B) — staff-domain all
 tests/roleGuards.test.ts                    # NEW (Phase B) — decideGuard fail-closed matrix
 src/lib/themeUtils.ts                       # NEW (Phase A) — pure theme model (Theme/THEMES/storage/resolve/cycle)
 src/lib/themeModes.ts                       # NEW (Phase A) — THEME_CYCLE + icons for ThemeToggle
-src/lib/rolePolicy.ts                       # NEW (Phase B) — DB-backed allowlist (staff_email_domains) / isStaffEmail / assertRoleAllowed / postSignupPath
+src/lib/rolePolicy.ts                       # UPDATED — staff_emails exact-email allowlist / isStaffEmail / assertRoleAllowed / postSignupPath
+src/hooks/useCaptcha.ts                     # NEW — shared captcha gate wiring for Login/Signup
 src/lib/guardPolicy.ts                      # NEW (Phase B) — pure decideGuard decision matrix + homeFor
 tests/roleGuards.test.ts                    # UPDATED — decideGuestAccess matrix
 src/components/GuestRoute.tsx               # NEW — guest-only route guard for /login and /signup
@@ -215,8 +217,6 @@ src/contexts/ThemeContext.tsx               # REWRITTEN (Phase A) — single der
 src/contexts/RoleContext.tsx                # NEW (Phase B) — profiles.role source of truth, fail-closed status
 src/components/ThemeToggle.tsx              # NEW (Phase A) — cycling light/dark/system button
 src/components/RoleRoute.tsx                # NEW (Phase B) — shared fail-closed guard
-src/components/LecturerRoute.tsx            # REWRITTEN (Phase B) — thin wrapper over RoleRoute
-src/components/StudentRoute.tsx             # REWRITTEN (Phase B) — thin wrapper over RoleRoute
 src/main.tsx                                # UPDATED — ThemeProvider > AuthProvider > RoleProvider > App
 src/components/Navbar.tsx                   # UPDATED — ThemeToggle replaces dropdown; dashboardPath(role)
 src/pages/Home.tsx                          # UPDATED — role via useRole
@@ -229,7 +229,7 @@ src/pages/StudentCourses.tsx                # UPDATED — shell prop cleanup
 src/pages/StudentProfile.tsx                # UPDATED — shell prop cleanup
 index.html                                  # UPDATED (Phase A) — blocking theme init script (FOUC)
 src/index.css                               # UPDATED (Phase A) — color-scheme for :root/.dark
-.env.example                                # UPDATED — VITE_STAFF_EMAIL_DOMAINS retired; allowlist now in staff_email_domains table
+.env.example                                # UPDATED — VITE_STAFF_EMAIL_DOMAINS retired; allowlist now in staff_emails table
 tests/loader.mjs                            # FIXED — specifier typo broke non-@/ imports in the test runner
 src/lib/dialogClasses.ts                    # NEW — fullScreenOnMobile dialog-content classes (safe-area aware)
 src/components/ui/dialog.tsx                # NEW — Base UI Dialog wrapper (Content/Header/Footer/Title/Description)

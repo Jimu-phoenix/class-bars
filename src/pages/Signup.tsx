@@ -1,14 +1,13 @@
-import { useRef, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { ArrowLeft, GraduationCap, School } from "lucide-react"
 import { useAuth, type SignUpRole } from "@/contexts/AuthContext"
 import { postSignupPath } from "@/lib/rolePolicy"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import CaptchaGate, { type CaptchaGateHandle } from "@/components/CaptchaGate"
-import { CAPTCHA_REQUIRED } from "@/lib/captcha"
+import CaptchaGate from "@/components/CaptchaGate"
+import { useCaptcha } from "@/hooks/useCaptcha"
 import { cn } from "@/lib/utils"
-
 export default function Signup() {
   const { signUp } = useAuth()
   const navigate = useNavigate()
@@ -18,9 +17,8 @@ export default function Signup() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [emailSent, setEmailSent] = useState(false)
-  const captchaRef = useRef<CaptchaGateHandle>(null)
+  const { captchaRef, onVerify, onExpire, onError, captchaReady } = useCaptcha()
 
   const handleBack = () => navigate(-1)
 
@@ -28,8 +26,7 @@ export default function Signup() {
     if (next === role) return
     setRole(next)
     setError("")
-    setCaptchaToken(null)
-    captchaRef.current?.reset()
+    onError()
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -41,7 +38,7 @@ export default function Signup() {
         email,
         password,
         fullName,
-        role
+        role,
       )
       if (needsConfirmation) {
         setEmailSent(true)
@@ -50,8 +47,7 @@ export default function Signup() {
       navigate(postSignupPath(role))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed")
-      setCaptchaToken(null)
-      captchaRef.current?.reset()
+      onError()
     } finally {
       setSubmitting(false)
     }
@@ -181,14 +177,14 @@ export default function Signup() {
                       </div>
                       <CaptchaGate
                         ref={captchaRef}
-                        onVerify={setCaptchaToken}
-                        onExpire={() => setCaptchaToken(null)}
-                        onError={() => setCaptchaToken(null)}
+                        onVerify={onVerify}
+                        onExpire={onExpire}
+                        onError={onError}
                       />
                       <Button
                         type="submit"
                         className="w-full"
-                        disabled={submitting || (CAPTCHA_REQUIRED && !captchaToken)}
+                        disabled={submitting || !captchaReady}
                       >
                         {submitting
                           ? `Creating ${roleLabel} account…`

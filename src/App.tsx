@@ -20,9 +20,8 @@ import SandboxLanding from './pages/SandboxLanding'
 import SandboxLecturer from './pages/SandboxLecturer'
 import SandboxStudent from './pages/SandboxStudent'
 import ProtectedRoute from './components/ProtectedRoute'
-import LecturerRoute from './components/LecturerRoute'
-import StudentRoute from './components/StudentRoute'
 import GuestRoute from './components/GuestRoute'
+import RoleRoute from './components/RoleRoute'
 
 function App() {
   return (
@@ -68,65 +67,65 @@ function App() {
         <Route
           path="/student"
           element={
-            <StudentRoute>
+            <RoleRoute role="student">
               <StudentHome />
-            </StudentRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/student/courses"
           element={
-            <StudentRoute>
+            <RoleRoute role="student">
               <StudentCourses />
-            </StudentRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/student/profile"
           element={
-            <StudentRoute>
+            <RoleRoute role="student">
               <StudentProfile />
-            </StudentRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/dashboard"
           element={
-            <LecturerRoute>
+            <RoleRoute role="lecturer">
               <LecturerDashboard />
-            </LecturerRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/dashboard/courses"
           element={
-            <LecturerRoute>
+            <RoleRoute role="lecturer">
               <LecturerCourses />
-            </LecturerRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/dashboard/profile"
           element={
-            <LecturerRoute>
+            <RoleRoute role="lecturer">
               <LecturerProfile />
-            </LecturerRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/dashboard/sessions/new"
           element={
-            <LecturerRoute>
+            <RoleRoute role="lecturer">
               <NewSession />
-            </LecturerRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/dashboard/sessions/:id"
           element={
-            <LecturerRoute>
+            <RoleRoute role="lecturer">
               <SessionLive />
-            </LecturerRoute>
+            </RoleRoute>
           }
         />
         <Route

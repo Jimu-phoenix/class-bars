@@ -1,13 +1,12 @@
-import { useRef, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import CaptchaGate, { type CaptchaGateHandle } from "@/components/CaptchaGate"
-import { CAPTCHA_REQUIRED } from "@/lib/captcha"
-
+import CaptchaGate from "@/components/CaptchaGate"
+import { useCaptcha } from "@/hooks/useCaptcha"
 export default function Login() {
   const { signIn } = useAuth()
   const navigate = useNavigate()
@@ -15,8 +14,13 @@ export default function Login() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  const captchaRef = useRef<CaptchaGateHandle>(null)
+  const {
+    captchaRef,
+    onVerify,
+    onExpire,
+    onError,
+    captchaReady,
+  } = useCaptcha()
 
   const handleBack = () => navigate(-1)
 
@@ -44,8 +48,7 @@ export default function Login() {
       navigate(target)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed")
-      setCaptchaToken(null)
-      captchaRef.current?.reset()
+      onError()
     } finally {
       setSubmitting(false)
     }
@@ -114,14 +117,14 @@ export default function Login() {
                     </div>
                     <CaptchaGate
                       ref={captchaRef}
-                      onVerify={setCaptchaToken}
-                      onExpire={() => setCaptchaToken(null)}
-                      onError={() => setCaptchaToken(null)}
+                      onVerify={onVerify}
+                      onExpire={onExpire}
+                      onError={onError}
                     />
                     <Button
                       type="submit"
                       className="w-full"
-                      disabled={submitting || (CAPTCHA_REQUIRED && !captchaToken)}
+                      disabled={submitting || !captchaReady}
                     >
                       {submitting ? "Signing in…" : "Sign in"}
                     </Button>
