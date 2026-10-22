@@ -10,7 +10,8 @@ export type GuardDecision =
 export function homeFor(role: UserRole): string {
   if (role === "lecturer") return "/dashboard"
   if (role === "student") return "/student"
-  return "/profile"
+  if (role === "admin") return "/admin"
+  return "/login"
 }
 
 /**
@@ -27,12 +28,12 @@ export function decideGuard(args: {
   hasUser: boolean
   status: "loading" | "ready" | "unavailable"
   actual: UserRole | null
-  required: Exclude<UserRole, "admin">
+  required: UserRole
 }): GuardDecision {
   const { authLoading, hasUser, status, actual, required } = args
   if (authLoading || status === "loading") return { kind: "loading" }
   if (!hasUser) return { kind: "login" }
-  if (status !== "ready" || !actual) return { kind: "deny", to: "/profile" }
+  if (status !== "ready" || !actual) return { kind: "deny", to: "/login" }
   if (actual !== required) return { kind: "deny", to: homeFor(actual) }
   return { kind: "allow" }
 }
@@ -55,5 +56,5 @@ export function decideGuestAccess(args: {
   if (authLoading || status === "loading") return { kind: "loading" }
   if (!hasUser) return { kind: "allow" }
   if (status === "ready" && actual) return { kind: "deny", to: homeFor(actual) }
-  return { kind: "deny", to: "/profile" }
+  return { kind: "deny", to: "/login" }
 }

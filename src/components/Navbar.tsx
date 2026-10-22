@@ -16,7 +16,7 @@ const navLinks = [
  * a dashboard — the route guards will correct the destination anyway.
  */
 const dashboardPath = (role: UserRole | null) =>
-  role === "lecturer" ? "/dashboard" : role === "student" ? "/student" : "/profile"
+  role === "lecturer" ? "/dashboard" : role === "student" ? "/student" : "/login"
 
 export default function Navbar() {
   const { user, loading, signOut } = useAuth()

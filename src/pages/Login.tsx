@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import CaptchaGate from "@/components/CaptchaGate"
 import { useCaptcha } from "@/hooks/useCaptcha"
+
 export default function Login() {
   const { signIn } = useAuth()
   const navigate = useNavigate()
@@ -33,7 +34,7 @@ export default function Login() {
       const {
         data: { user },
       } = await supabase.auth.getUser()
-      let target = "/profile"
+      let target = "/login"
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
@@ -44,6 +45,7 @@ export default function Login() {
         // no `user_metadata` fallback: that value is client-writable.
         if (profile?.role === "lecturer") target = "/dashboard"
         else if (profile?.role === "student") target = "/student"
+        else if (profile?.role === "admin") target = "/admin"
       }
       navigate(target)
     } catch (err) {
@@ -59,7 +61,6 @@ export default function Login() {
       <main className="flex-1 relative z-10">
         <div className="fixed inset-0 -z-10 pointer-events-none" aria-hidden="true">
           <div className="absolute inset-0 hero-gradient opacity-5" />
-          <div className="absolute inset-0 hero-gradient-bottom opacity-10" />
           <div className="absolute inset-0 opacity-20 grid-bg-primary" />
           <div className="absolute inset-0 opacity-10 grid-bg-secondary animate-grid-move" />
         </div>

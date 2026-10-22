@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import ThemeToggle from "@/components/ThemeToggle"
 import { cn } from "@/lib/utils"
-import { LECTURER_NAV, STUDENT_NAV, type NavItem } from "@/lib/nav"
+import { LECTURER_NAV, STUDENT_NAV, ADMIN_NAV, type NavItem } from "@/lib/nav"
 
 const SIDEBAR_STORAGE_KEY = "class-bars:sidebar-collapsed"
 
@@ -61,8 +61,9 @@ export default function DashboardShell({ title, description, children }: Dashboa
   // never masquerade as the other role's dashboard.
   const { role } = useRole()
   const isLecturer = role === "lecturer"
-  const roleLabel = isLecturer ? "Lecturer dashboard" : "Student dashboard"
-  const navItems: NavItem[] = isLecturer ? LECTURER_NAV : STUDENT_NAV
+  const isAdmin = role === "admin"
+  const roleLabel = isLecturer ? "Lecturer dashboard" : isAdmin ? "Admin dashboard" : "Student dashboard"
+  const navItems: NavItem[] = isLecturer ? LECTURER_NAV : isAdmin ? ADMIN_NAV : STUDENT_NAV
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(readCollapsed)
 

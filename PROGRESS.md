@@ -1,8 +1,8 @@
 # Class-BARS Progress Report
 
-**Date:** 2026-10-06
+**Date:** 2026-10-22
 **Repo:** `D:\classBars\class-bars`
-**Overall status:** Real (DB-backed) attendance flow is built end-to-end and verified by lint/build/tests. Role-based access is now hardened end-to-end (client guards + server-side `staff_emails` allowlist enforced in the signup trigger), the theme toggle was rewritten, the profile UI now lives inside each role's dashboard (no standalone page for students/lecturers), auth pages are guest-only (signed-in users bounce to their dashboard; no nav/footer), and the shared dashboard shell + student pages were rebuilt mobile-first (bottom tab bar on phones, full-screen dialogs for face enrollment/verify, collapsible sidebar on desktop). Sandbox remains untouched. Migrations 06/07/09: 06/07 applied to the live project, **08 and 09 are pending manual execution**; migration 10 (email-based lecturer allowlist) scripted and ready to run.
+**Overall status:** Real (DB-backed) attendance flow built end-to-end and verified by lint/build/tests. Role-based access hardened end-to-end (client guards + server-side `staff_emails` allowlist enforced in the signup trigger). Theme toggle rewritten. Profile UI lives inside each role's dashboard. Auth pages guest-only. Dashboard shell + student pages rebuilt mobile-first. Sandbox untouched. Migrations 06/07 applied to live project; **08, 09 superseded by 10; 10 pending execution; 11 scripted for admin RLS**. Admin dashboard built (Home, Venues, Users & Roles, System Logs) with magic-link login and no signup.
 
 ---
 
@@ -22,7 +22,7 @@
 | Student dashboard | Done | Same shell/sidebar, Overview + Courses + Update profile pages, live face check-in |
 | New session form | Done | "Start now" vs "Schedule for later" + registration duration (5/15/30/60 min) that auto-computes session end |
 | Face pipeline | Done | face-api 0.22.2 (tiny detector/landmarks/recognition, models in `public/models/`), pure math + model-version helpers in `src/lib/faceCompare.ts` |
-| Automated tests | 73/74 pass | 1 known pre-existing failure: `tests/schema.test.ts` reads stale `table_state.json` snapshot (row format + column rename); regenerating the snapshot fixes it |
+| Admin dashboard | Done | Magic-link login, no signup; Home (live stats), Venues (CRUD), Users & Roles (staff email allowlist), System Logs (audit_logs). Sidebar-driven navigation, all routes AdminRoute-guarded. |
 | Sandbox module | Untouched | Intentionally left as-is per user decision |
 
 ---
@@ -155,93 +155,35 @@
 ---
 
 ## 5. Known issues / follow-ups
-1. **Execute `migrations/08_course_lecturer.sql`** in the Supabase SQL Editor (06/07 already applied). Legacy courses keep `lecturer_id NULL` until an admin reassigns them.
-2. **Execute `migrations/10_staff_email_allowlist.sql`** in the Supabase SQL Editor, then manage the lecturer allowlist in the DB (`staff_emails` table), e.g. `insert into public.staff_emails (email) values ('lecturer@uni.edu');`. This is the **required** server-side enforcement step — until it's applied, a hand-rolled `supabase.auth.signUp()` call can still mint a lecturer.
-3. **`tests/schema.test.ts` fails (pre-existing, 1 of 69):** it compares against `tests/table_state.json`, whose row format no longer matches (also stale after the column rename). Regenerate the snapshot.
-4. **Camera/DB verification is manual:** nothing here runs a live camera or hits the live project — validated via lint + build + tests only.
-5. **Bundle size:** production chunk >500 kB from `face-api.js`; consider dynamic import / code-splitting.
-6. **Face threshold:** `isMatch` uses strict `<` vs 0.6; exactly-at-threshold pairs reject. Revisit when tuning FAR/FRR.
-7. **Phase-2 scope (non-goals):** geofencing (PostGIS) and OTP fallback intentionally unbuilt.
-8. **Edge functions:** repo tracks none; any on the live project predate this repo — port or delete.
-9. **Pre-existing real users with wrong stored role:** migration 09 only prevents new bad roles; earlier lecturers still need a guarded repair (see migration 09 §5 informational query for candidates).
-10. **Dev-server quirk:** the Vite script runs the Windows `node.exe`; use Windows `curl.exe` and `--strictPort` when probing.
+
+1. **Execute `migrations/08_course_lecturer.sql`** in Supabase SQL Editor (06/07 already applied).
+2. **Execute `migrations/10_staff_email_allowlist.sql`** — required server-side lecturer enforcement.
+3. **Execute `migrations/11_admin_section_rls.sql`** — RLS for admin CRUD on staff_emails/venues/audit_logs.
+4. **`tests/schema.test.ts` fails** — stale `table_state.json` snapshot; regenerate.
+5. **Camera/DB verification is manual** — validated via lint + tsc + tests only.
+
 
 ---
 
 ## 7. Files changed in the latest phase
 
 ```
-migrations/06_real_attendance_flow.sql      # NEW — real face embeddings + enroll/roster RPCs
-migrations/07_real_table_grants.sql         # NEW — explicit GRANTs (fixes "permission denied")
-migrations/08_course_lecturer.sql           # NEW — courses.lecturer_id + owner policies (PENDING)
-migrations/09_role_server_side.sql          # NEW — staff_email_domains allowlist + handle_new_user demotion (SUPERSEDED by 10)
-migrations/10_staff_email_allowlist.sql     # NEW — staff_emails exact-email allowlist (PENDING execution)
-scripts/reset_supabase_project.sql          # UPDATED — chain now includes 05-10
-src/lib/faceCompare.ts                      # NEW — pure match math + FACE_MODEL_VERSION
-src/lib/nav.ts                              # NEW — LECTURER_NAV / STUDENT_NAV
-src/components/DashboardShell.tsx           # NEW — collapsible sidebar shell (replaces LecturerShell/StudentShell)
-src/components/dashboard/StatCard.tsx       # NEW — shared stat card
-src/components/dashboard/ProfileSettings.tsx# NEW — shared profile editor
-src/components/face/FaceCaptureFrame.tsx    # NEW
-src/components/face/FaceEnrollCard.tsx      # NEW
-src/components/face/FaceVerifyCard.tsx      # NEW
-src/pages/LecturerDashboard.tsx             # REWRITTEN — stat cards + unified shell
-src/pages/LecturerCourses.tsx               # UPDATED — owner-scoped courses
-src/pages/LecturerProfile.tsx               # REWRITTEN — thin wrapper over ProfileSettings
-src/pages/NewSession.tsx                    # REWRITTEN — start-now/schedule + duration
-src/pages/SessionLive.tsx                   # UPDATED — unified shell
-src/pages/StudentHome.tsx                   # REWRITTEN — student Overview dashboard
-src/pages/StudentCourses.tsx                # NEW — /student/courses
-src/pages/StudentProfile.tsx                # NEW — /student/profile
-src/pages/Signup.tsx                        # REWRITTEN — role toggle + hCaptcha
-src/contexts/AuthContext.tsx                # UPDATED — signUp captchaToken
-src/types/db.ts                             # UPDATED — CourseRow.lecturer_id
-src/App.tsx                                 # UPDATED — /student/courses, /student/profile, /dashboard/profile
-tests/realAttendance.test.ts                # NEW
-tests/faceCompare.test.ts                   # NEW
-tests/loader.mjs                            # FIXED — nested @/ alias file:// double-prefix bug
-tests/theme.test.ts                         # NEW (Phase A) — nextTheme/resolveTheme/readStoredTheme/isTheme
-tests/rolePolicy.test.ts                    # NEW (Phase B) — staff-domain allowlist + assertRoleAllowed + postSignupPath
-tests/roleGuards.test.ts                    # NEW (Phase B) — decideGuard fail-closed matrix
-src/lib/themeUtils.ts                       # NEW (Phase A) — pure theme model (Theme/THEMES/storage/resolve/cycle)
-src/lib/themeModes.ts                       # NEW (Phase A) — THEME_CYCLE + icons for ThemeToggle
-src/lib/rolePolicy.ts                       # UPDATED — staff_emails exact-email allowlist / isStaffEmail / assertRoleAllowed / postSignupPath
-src/hooks/useCaptcha.ts                     # NEW — shared captcha gate wiring for Login/Signup
-src/lib/guardPolicy.ts                      # NEW (Phase B) — pure decideGuard decision matrix + homeFor
-tests/roleGuards.test.ts                    # UPDATED — decideGuestAccess matrix
-src/components/GuestRoute.tsx               # NEW — guest-only route guard for /login and /signup
-src/pages/Login.tsx                         # UPDATED — no Navbar/Footer; guarded by GuestRoute
-src/pages/Signup.tsx                        # UPDATED — no Navbar/Footer; guarded by GuestRoute
-src/App.tsx                                 # UPDATED — /login and /signup wrapped in GuestRoute
-src/contexts/ThemeContext.tsx               # REWRITTEN (Phase A) — single derived resolvedTheme effect, cycleTheme, live matchMedia
-src/contexts/RoleContext.tsx                # NEW (Phase B) — profiles.role source of truth, fail-closed status
-src/components/ThemeToggle.tsx              # NEW (Phase A) — cycling light/dark/system button
-src/components/RoleRoute.tsx                # NEW (Phase B) — shared fail-closed guard
-src/main.tsx                                # UPDATED — ThemeProvider > AuthProvider > RoleProvider > App
-src/components/Navbar.tsx                   # UPDATED — ThemeToggle replaces dropdown; dashboardPath(role)
-src/pages/Home.tsx                          # UPDATED — role via useRole
-src/pages/Login.tsx                         # UPDATED — profile role only, no metadata fallback
-src/pages/Onboarding.tsx                    # REWRITTEN — role-driven redirect, no self-upsert
-src/pages/Profile.tsx                       # UPDATED — redirects known roles into dashboard; face section moved to FaceBiometricsCard
-src/components/dashboard/FaceBiometricsCard.tsx # NEW — face template card inside student dashboard profile
-src/pages/StudentHome.tsx                   # UPDATED — shell prop cleanup
-src/pages/StudentCourses.tsx                # UPDATED — shell prop cleanup
-src/pages/StudentProfile.tsx                # UPDATED — shell prop cleanup
-index.html                                  # UPDATED (Phase A) — blocking theme init script (FOUC)
-src/index.css                               # UPDATED (Phase A) — color-scheme for :root/.dark
-.env.example                                # UPDATED — VITE_STAFF_EMAIL_DOMAINS retired; allowlist now in staff_emails table
-tests/loader.mjs                            # FIXED — specifier typo broke non-@/ imports in the test runner
-src/lib/dialogClasses.ts                    # NEW — fullScreenOnMobile dialog-content classes (safe-area aware)
-src/components/ui/dialog.tsx                # NEW — Base UI Dialog wrapper (Content/Header/Footer/Title/Description)
-src/components/ui/tabs.tsx                  # NEW — Base UI Tabs wrapper (List/Trigger/Content, data-active styling)
-src/components/ui/input.tsx                 # NEW — Base UI Input wrapper
-src/components/DashboardShell.tsx           # REWRITTEN (3.6) — collapsible sidebar + mobile top bar + bottom tab bar
-src/lib/nav.ts                              # UPDATED (3.6) — short labels for the tab bar (Home/Courses/Profile)
-src/components/dashboard/FaceBiometricsCard.tsx # REWRITTEN (3.6) — Dialog-based enroll + in-dialog confirm-remove
-src/components/dashboard/ProfileSettings.tsx    # REWRITTEN (3.6) — section layout + ui/input
-src/components/dashboard/StatCard.tsx       # UPDATED (3.6) — card layout polish
-src/pages/StudentHome.tsx                   # REWRITTEN (3.6) — skeleton loaders + Dialog verify flow
-src/pages/StudentCourses.tsx                # REWRITTEN (3.6) — Tabs + catalog search + enroll dialog
-src/pages/StudentProfile.tsx                # UPDATED (3.6) — "Profile" title
-src/index.css                               # UPDATED (3.6) — tap-highlight / overscroll / touch-action / reduced-motion
+migrations/10_staff_email_allowlist.sql  # NEW — staff_emails exact-email allowlist (PENDING execution)
+migrations/11_admin_section_rls.sql      # NEW — RLS for admin CRUD (PENDING execution)
+src/contexts/AuthContext.tsx              # UPDATED — signInWithOtp (magic link), signUp captchaToken
+src/lib/guardPolicy.ts                    # UPDATED — homeFor maps admin→/admin; fallbacks /profile→/login
+src/lib/nav.ts                            # UPDATED — ADMIN_NAV (Home, Venues, Users & Roles, System Logs)
+src/lib/rolePolicy.ts                     # UPDATED — staff_emails exact-email allowlist
+src/pages/AdminDashboard.tsx              # NEW — Home/Venues/Users&Roles/System Logs, sidebar-driven
+src/pages/AdminLogin.tsx                  # NEW — magic-link only, no password, no signup
+src/components/AdminRoute.tsx             # NEW — fail-closed guard for /admin (role="admin")
+src/components/GuestRoute.tsx             # NEW — guest-only route guard for /login and /signup
+src/pages/Login.tsx                       # UPDATED — /profile→/login fallback, captcha via useCaptcha
+src/pages/Onboarding.tsx                  # UPDATED — /profile→/login fallback
+src/components/Navbar.tsx                 # UPDATED — dashboardPath fallback /profile→/login
+src/App.tsx                               # UPDATED — /profile route removed; /admin routes added
+src/pages/Profile.tsx                     # DELETED — standalone profile page removed
+src/hooks/useCaptcha.ts                   # NEW — shared captcha gate wiring
 ```
+
+---

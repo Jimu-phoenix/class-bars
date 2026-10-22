@@ -4,7 +4,6 @@ import FaceTest from './pages/FaceTest'
 import FaceVerify from './pages/FaceVerify'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
-import Profile from './pages/Profile'
 import Onboarding from './pages/Onboarding'
 import LecturerDashboard from './pages/LecturerDashboard'
 import LecturerCourses from './pages/LecturerCourses'
@@ -17,8 +16,11 @@ import StudentProfile from './pages/StudentProfile'
 import NotFound from './pages/NotFound'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import SandboxLanding from './pages/SandboxLanding'
-import SandboxLecturer from './pages/SandboxLecturer'
+import AdminDashboard from './pages/AdminDashboard'
+import AdminLogin from './pages/AdminLogin'
+import AdminRoute from './components/AdminRoute'
 import SandboxStudent from './pages/SandboxStudent'
+import SandboxLecturer from './pages/SandboxLecturer'
 import ProtectedRoute from './components/ProtectedRoute'
 import GuestRoute from './components/GuestRoute'
 import RoleRoute from './components/RoleRoute'
@@ -44,6 +46,25 @@ function App() {
             </GuestRoute>
           }
         />
+        <Route
+          path="/admin/login"
+          element={
+            <GuestRoute>
+              <AdminLogin />
+            </GuestRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminDashboard />
+            </AdminRoute>
+          }
+        />
+        <Route path="/admin/venues" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/users" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/logs" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/sandbox" element={<SandboxLanding />} />
         <Route path="/sandbox/lecturer" element={<SandboxLecturer />} />
@@ -53,14 +74,6 @@ function App() {
           element={
             <ProtectedRoute>
               <Onboarding />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <Profile />
             </ProtectedRoute>
           }
         />

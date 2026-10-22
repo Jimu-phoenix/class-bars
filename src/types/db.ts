@@ -58,6 +58,12 @@ export type VenueRow = {
   building: string | null
 }
 
+export type StaffEmailRow = {
+  email: string
+  created_at: string
+}
+
+
 export type ClassSessionRow = {
   id: string
   course_id: string
