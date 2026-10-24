@@ -25,9 +25,6 @@ export default function AdminLogin() {
     setError("")
     setSubmitting(true)
     try {
-      // No password: Supabase sends a magic-link confirmation email to the
-      // address. The user clicks it, receives a session, and is redirected
-      // back to /admin (guarded by AdminRoute).
       await signInWithOtp(email)
       setSent(true)
     } catch (err) {
@@ -136,12 +133,6 @@ export default function AdminLogin() {
                         </>
                       )}
                     </Button>
-                    <p className="text-center text-sm muted-text">
-                      Already have an account?{" "}
-                      <Link to="/login" className="text-primary hover:underline font-medium">
-                        Sign in
-                      </Link>
-                    </p>
                   </form>
                 </CardContent>
               </Card>

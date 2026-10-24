@@ -16,8 +16,13 @@ import {
   getActiveFaceEmbedding,
   parseEmbedding,
 } from "@/lib/realAttendance"
-import { FACE_MODEL_VERSION } from "@/lib/faceModels"
 import { euclideanDistance } from "@/lib/faceCompare"
+import {
+  FLAGGED_CHECKIN_MESSAGE,
+  checkInBlockMessage,
+  geolocationErrorMessage,
+  getCurrentPosition,
+} from "@/lib/geofence"
 import { fullScreenOnMobile } from "@/lib/dialogClasses"
 import { usePoll } from "@/hooks/usePoll"
 import DashboardShell from "@/components/DashboardShell"
@@ -90,11 +95,14 @@ export default function StudentHome() {
       const row = await getActiveFaceEmbedding(user.id)
       if (!row) {
         setEmbedding({ status: "missing" })
-      } else if (row.model_version !== FACE_MODEL_VERSION) {
-        setEmbedding({ status: "stale" })
-      } else {
-        setEmbedding({ status: "ok" })
+        return
       }
+      const stored = parseEmbedding(row.embedding_json)
+      if (!stored) {
+        setEmbedding({ status: "stale" })
+        return
+      }
+      setEmbedding({ status: "ok" })
     } catch {
       setEmbedding({ status: "missing" })
     }
@@ -195,7 +203,7 @@ export default function StudentHome() {
         return
       }
       const stored = parseEmbedding(row.embedding_json)
-      if (!stored || row.model_version !== FACE_MODEL_VERSION) {
+      if (!stored) {
         setError("Your face template is out of date. Re-enroll it from your profile.")
         return
       }
@@ -228,15 +236,24 @@ export default function StudentHome() {
     setSubmitting(true)
     setError("")
     try {
+      const location = await getCurrentPosition()
       const distance = euclideanDistance(storedDescriptor, descriptor)
-      const row = await checkInFace(selectedSession.id, user.id, distance)
+      const row = await checkInFace(
+        selectedSession.id,
+        user.id,
+        distance,
+        location,
+      )
       setCheckedInBySession((m) => ({ ...m, [selectedSession.id]: row }))
       setCheckedToday((n) => n + 1)
       setTotalCheckins((n) => n + 1)
       setConfirmedCheckin(row)
       setStage("confirmed")
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Check-in failed"
+      const message =
+        geolocationErrorMessage(err) ??
+        checkInBlockMessage(err) ??
+        (err instanceof Error ? err.message : "Check-in failed")
       if (/already recorded/i.test(message)) {
         const { data } = await supabase
           .from("attendance_records")
@@ -285,6 +302,7 @@ export default function StudentHome() {
   const confirmedClassName = confirmedCheckin
     ? liveSessions.find((s) => s.id === confirmedCheckin.session_id)?.courses?.course_name
     : undefined
+  const confirmedFlagged = confirmedCheckin?.status === "flagged"
 
   const selectedName =
     selectedSession?.courses?.course_name ?? selectedSession?.courses?.course_code ?? "class"
@@ -360,13 +378,28 @@ export default function StudentHome() {
       {stage === "confirmed" && confirmedCheckin ? (
         <div
           role="status"
-          className="flex flex-col items-center gap-3 rounded-xl border border-green-500/30 bg-green-500/5 px-4 py-10 text-center"
+          className={cn(
+            "flex flex-col items-center gap-3 rounded-xl border px-4 py-10 text-center",
+            confirmedFlagged
+              ? "border-amber-500/30 bg-amber-500/5"
+              : "border-green-500/30 bg-green-500/5",
+          )}
         >
-          <CircleCheck className="size-10 text-green-600" aria-hidden="true" />
-          <p className="text-xl font-semibold">You&apos;re checked in</p>
+          <CircleCheck
+            className={cn("size-10", confirmedFlagged ? "text-amber-600" : "text-green-600")}
+            aria-hidden="true"
+          />
+          <p className="text-xl font-semibold">
+            {confirmedFlagged ? "Checked in — flagged for review" : "You're checked in"}
+          </p>
           <p className="text-sm text-muted-foreground">
             {confirmedClassName ?? "Your class"} — you now appear on the lecturer&apos;s live list.
           </p>
+          {confirmedFlagged && (
+            <p className="max-w-sm text-sm font-medium text-amber-700 dark:text-amber-400">
+              {FLAGGED_CHECKIN_MESSAGE}
+            </p>
+          )}
           <Button onClick={doneConfirming} className="mt-2 h-11 w-full sm:w-auto">
             Back to classes
           </Button>

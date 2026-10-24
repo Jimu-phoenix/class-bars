@@ -1,6 +1,6 @@
 # Class-BARS
 
-**Class-BARS (Biometric Attendance Recording System)** is a web application for recording student class attendance using facial recognition. Lecturers start a session for a course/venue; enrolled students check in by looking at their camera — a face embedding is matched against the student's stored template and attendance is recorded. No geolocation or OTP is involved in this phase.
+**Class-BARS (Biometric Attendance Recording System)** is a web application for recording student class attendance using facial recognition. Lecturers start a session for a course/venue; enrolled students check in by looking at their camera — a face embedding is matched against the student's stored template and attendance is recorded. Check-in also verifies the student is near the session venue using a PostGIS geofence (a circle or a four-corner class box); only the gap from the fence and reported GPS accuracy are stored, never raw coordinates. OTP fallback is still deferred.
 
 A built-in **sandbox mode** lets you demo the entire flow end-to-end with no real accounts: a guest lecturer starts the default test class, guest students check in with face capture only. All sandbox data lives in separate tables and is disposable.
 
@@ -42,8 +42,15 @@ SQL files are applied manually via Supabase Dashboard -> SQL Editor, **in this o
 3. `migrations/02_sandbox_module.sql` — sandbox tables + RLS (isolated from all real tables)
 4. `migrations/04_sandbox_profile_exclusion.sql` — signup trigger: creates profiles with correct roles, keeps anonymous/sandbox identities out of `profiles`
 5. `migrations/05_sandbox_participants.sql` — sandbox participant profiles: stored face templates for the 2-step onboarding → check-in flow
+6. `migrations/06_real_attendance_flow.sql` — real attendance tables/RPCs and session checks
+7. `migrations/07_real_table_grants.sql` — explicit grants for the real tables
+8. `migrations/08_course_lecturer.sql` — course–lecturer assignments
+9. `migrations/09_role_server_side.sql` — server-side role enforcement and staff-email checks
+10. `migrations/10_staff_email_allowlist.sql` — staff email allowlist
+11. `migrations/11_admin_section_rls.sql` — admin section RLS (required by migration 12)
+12. `migrations/12_geofencing.sql` — PostGIS geofences (circle or class box), hardened check-in RPC, flagged attendance
 
-`migrations/03_table_details.sql` is **not** part of the chain — it's a read-only report of your live schema (columns, constraints, RLS policies, triggers) for verification and drift checks.
+`migrations/03_table_details.sql` is **not** part of the chain — it's a read-only report of your live schema (columns, constraints, RLS policies, triggers) for verification and drift checks. Migrations 08–12 have not been applied to every environment; apply them in order before deploying the matching client.
 
 ### Resetting the database
 
@@ -58,6 +65,8 @@ node --import ./tests/register.mjs --test tests/*.test.ts
 ```
 
 Supabase is mocked — the suite makes no network requests. See `test_result.md` for coverage details.
+
+Geofencing has an additional manual SQL check: run `migrations/12_geofencing.sql` twice, then run `tests/sql/geofencing_checks.sql` in the Supabase SQL Editor. It rolls back all fixtures and prints `PASS` notices for the schema, circle radius and box geometry constraints, RPC privileges and RLS, unique sharing, venue cascade deletion, the closed direct-insert path, and the full decision table for both shapes (including small fences and clockwise/anticlockwise boxes).
 
 ## Project structure
 
@@ -77,4 +86,4 @@ tests/            Zero-dependency Node test suite
 
 ## Roadmap
 
-See [PROGRESS.md](PROGRESS.md) for current status, decisions log, and follow-ups. Geofencing (PostGIS) and OTP fallback are intentionally deferred to Phase 2.
+See [PROGRESS.md](PROGRESS.md) for current status, decisions log, and follow-ups. Geofencing (PostGIS) is implemented in migration 12; OTP fallback remains deferred.

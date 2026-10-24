@@ -26,12 +26,52 @@ export function isMatch(
   return euclideanDistance(registered, detected) < threshold;
 }
 
-export function parseEmbedding(embeddingJson: string): Float32Array | null {
+function unwrapEmbeddingArray(arr: unknown): unknown {
+  if (!Array.isArray(arr)) return arr
+  if (arr.length === 128 && typeof arr[0] === "number") {
+    return arr
+  }
+  if (arr.length === 1 && Array.isArray(arr[0])) {
+    return unwrapEmbeddingArray(arr[0])
+  }
+  return arr
+}
+
+export function parseEmbedding(embeddingJson: unknown): Float32Array | null {
   try {
-    const arr = JSON.parse(embeddingJson) as number[];
-    return arr.length === 128 ? new Float32Array(arr) : null;
+    let arr: unknown
+
+    if (Array.isArray(embeddingJson)) {
+      arr = embeddingJson
+    } else if (typeof embeddingJson === "string") {
+      const trimmed = embeddingJson.trim()
+      if (trimmed === "") return null
+      arr = JSON.parse(trimmed)
+    } else if (embeddingJson && typeof embeddingJson === "object") {
+      arr = embeddingJson
+    } else {
+      return null
+    }
+
+    arr = unwrapEmbeddingArray(arr)
+
+    if (!Array.isArray(arr) || arr.length !== 128) {
+      return null
+    }
+    const numbers = arr.map((n) => {
+      if (typeof n === "number") return n
+      if (typeof n === "string" && n.trim() !== "") {
+        const parsed = Number(n)
+        return Number.isFinite(parsed) ? parsed : NaN
+      }
+      return NaN
+    })
+    if (numbers.some((n) => !Number.isFinite(n))) {
+      return null
+    }
+    return new Float32Array(numbers)
   } catch {
-    return null;
+    return null
   }
 }
 

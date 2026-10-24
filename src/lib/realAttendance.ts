@@ -4,6 +4,7 @@ import {
   faceConfidence,
   parseEmbedding,
 } from "@/lib/faceCompare"
+import type { Coordinates } from "@/lib/geofence"
 import type {
   AttendanceMethod,
   AttendanceRecordRow,
@@ -74,6 +75,7 @@ export type SessionAttendanceRow = {
   status: AttendanceStatus
   check_in_time: string | null
   confidence_score: number | null
+  flag_reason: string | null
 }
 
 export async function getSessionAttendance(
@@ -90,6 +92,7 @@ export async function checkInFace(
   sessionId: string,
   studentId: string,
   distance: number,
+  location: Coordinates,
 ): Promise<AttendanceRecordRow> {
   const confidence = faceConfidence(distance)
   const { data, error } = await supabase.rpc("check_in_attendance", {
@@ -98,6 +101,9 @@ export async function checkInFace(
     p_device_id: null,
     p_method: "face",
     p_confidence: confidence,
+    p_latitude: location.latitude,
+    p_longitude: location.longitude,
+    p_accuracy_m: location.accuracy,
   })
   if (error) throw error
   return data as AttendanceRecordRow

@@ -329,6 +329,11 @@ export default function SessionLive() {
                       <p className="text-xs text-muted-foreground">
                         {a.student_number ?? "—"}
                       </p>
+                      {a.status === "flagged" && a.flag_reason && (
+                        <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                          {a.flag_reason.replace(/_/g, " ")}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
@@ -341,6 +346,7 @@ export default function SessionLive() {
                       className={cn(
                         a.status === "present" && "text-green-700 dark:text-green-400",
                         a.status === "late" && "text-amber-700 dark:text-amber-400",
+                        a.status === "flagged" && "text-amber-700 dark:text-amber-400",
                       )}
                     >
                       {a.status}
