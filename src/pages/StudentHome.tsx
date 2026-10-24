@@ -5,7 +5,9 @@ import {
   CircleCheck,
   Clock,
   Loader2,
+  LocateFixed,
   Presentation,
+  RefreshCw,
   ScanFace,
   UserRound,
 } from "lucide-react"
@@ -19,9 +21,12 @@ import {
 import { euclideanDistance } from "@/lib/faceCompare"
 import {
   FLAGGED_CHECKIN_MESSAGE,
+  GOOD_ACCURACY_M,
+  MAX_ACCURACY_M,
   checkInBlockMessage,
   geolocationErrorMessage,
   getCurrentPosition,
+  type Coordinates,
 } from "@/lib/geofence"
 import { fullScreenOnMobile } from "@/lib/dialogClasses"
 import { usePoll } from "@/hooks/usePoll"
@@ -67,6 +72,16 @@ function formatStartedAt(iso: string) {
   })
 }
 
+function accuracyLabel(accuracy: number) {
+  if (accuracy <= GOOD_ACCURACY_M) {
+    return { label: "Good", className: "bg-emerald-500/10 text-emerald-600" }
+  }
+  if (accuracy <= MAX_ACCURACY_M) {
+    return { label: "Fair", className: "bg-amber-500/10 text-amber-600" }
+  }
+  return { label: "Poor", className: "bg-destructive/10 text-destructive" }
+}
+
 export default function StudentHome() {
   const { user, loading: authLoading } = useAuth()
 
@@ -88,6 +103,24 @@ export default function StudentHome() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [verifyResult, setVerifyResult] = useState<VerifyVerdict>(null)
+  const [location, setLocation] = useState<Coordinates | null>(null)
+  const [locationLoading, setLocationLoading] = useState(true)
+  const [locationError, setLocationError] = useState("")
+
+  const loadLocation = useCallback(async () => {
+    setLocationLoading(true)
+    setLocationError("")
+    try {
+      setLocation(await getCurrentPosition())
+    } catch (err) {
+      setLocationError(
+        geolocationErrorMessage(err) ??
+          (err instanceof Error ? err.message : "Could not get your location"),
+      )
+    } finally {
+      setLocationLoading(false)
+    }
+  }, [])
 
   const loadEmbedding = useCallback(async () => {
     if (!user) return
@@ -146,9 +179,10 @@ export default function StudentHome() {
       void loadEmbedding()
       void loadStats()
       void loadProfile()
+      void loadLocation()
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [user, loadEmbedding, loadStats, loadProfile])
+  }, [user, loadEmbedding, loadStats, loadProfile, loadLocation])
 
   const refresh = useCallback(async () => {
     if (!user) return
@@ -237,6 +271,8 @@ export default function StudentHome() {
     setError("")
     try {
       const location = await getCurrentPosition()
+      setLocation(location)
+      setLocationError("")
       const distance = euclideanDistance(storedDescriptor, descriptor)
       const row = await checkInFace(
         selectedSession.id,
@@ -315,6 +351,7 @@ export default function StudentHome() {
         : { value: "Update", accent: "bg-amber-500/10 text-amber-600" }
 
   const firstName = fullName.trim().split(" ")[0]
+  const locationAccuracy = location ? accuracyLabel(location.accuracy) : null
 
   return (
     <DashboardShell
@@ -374,6 +411,88 @@ export default function StudentHome() {
           accent={faceStat.accent}
         />
       </div>
+
+      <section
+        aria-labelledby="location-heading"
+        className="rounded-xl border border-border bg-card p-4"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+              <LocateFixed className="size-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2 id="location-heading" className="text-sm font-semibold">
+                Your location
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Coordinates stay on this device — check-in stores only distance and accuracy.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0"
+            onClick={() => void loadLocation()}
+            disabled={locationLoading}
+          >
+            <RefreshCw
+              className={cn("size-3.5", locationLoading && "animate-spin")}
+              aria-hidden="true"
+            />
+            {location ? "Refresh" : "Locate"}
+          </Button>
+        </div>
+
+        {locationLoading && !location ? (
+          <div className="mt-4 grid grid-cols-2 gap-2" aria-hidden="true">
+            <div className="h-14 animate-pulse rounded-lg bg-muted" />
+            <div className="h-14 animate-pulse rounded-lg bg-muted" />
+          </div>
+        ) : locationError ? (
+          <p role="alert" className="mt-3 rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+            {locationError}
+          </p>
+        ) : location && locationAccuracy ? (
+          <>
+            <dl className="mt-4 grid grid-cols-2 gap-2">
+              <div className="rounded-lg bg-muted/50 p-2.5">
+                <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Latitude
+                </dt>
+                <dd className="mt-0.5 truncate font-mono text-sm tabular-nums">
+                  {location.latitude.toFixed(6)}
+                </dd>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-2.5">
+                <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Longitude
+                </dt>
+                <dd className="mt-0.5 truncate font-mono text-sm tabular-nums">
+                  {location.longitude.toFixed(6)}
+                </dd>
+              </div>
+            </dl>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium",
+                  locationAccuracy.className,
+                )}
+              >
+                ±{Math.round(location.accuracy)} m accuracy
+              </span>
+              <span>{locationAccuracy.label}</span>
+              {location.accuracy > MAX_ACCURACY_M && (
+                <span className="text-destructive">
+                  Too poor to check in — move somewhere with a clearer view of the sky.
+                </span>
+              )}
+            </div>
+          </>
+        ) : null}
+      </section>
 
       {stage === "confirmed" && confirmedCheckin ? (
         <div
