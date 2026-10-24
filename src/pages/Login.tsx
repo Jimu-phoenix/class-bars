@@ -1,12 +1,12 @@
-import { useRef, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import CaptchaGate, { type CaptchaGateHandle } from "@/components/CaptchaGate"
-import { CAPTCHA_REQUIRED } from "@/lib/captcha"
+import CaptchaGate from "@/components/CaptchaGate"
+import { useCaptcha } from "@/hooks/useCaptcha"
 
 export default function Login() {
   const { signIn } = useAuth()
@@ -15,8 +15,13 @@ export default function Login() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  const captchaRef = useRef<CaptchaGateHandle>(null)
+  const {
+    captchaRef,
+    onVerify,
+    onExpire,
+    onError,
+    captchaReady,
+  } = useCaptcha()
 
   const handleBack = () => navigate(-1)
 
@@ -29,7 +34,7 @@ export default function Login() {
       const {
         data: { user },
       } = await supabase.auth.getUser()
-      let target = "/profile"
+      let target = "/login"
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
@@ -40,12 +45,12 @@ export default function Login() {
         // no `user_metadata` fallback: that value is client-writable.
         if (profile?.role === "lecturer") target = "/dashboard"
         else if (profile?.role === "student") target = "/student"
+        else if (profile?.role === "admin") target = "/admin"
       }
       navigate(target)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed")
-      setCaptchaToken(null)
-      captchaRef.current?.reset()
+      onError()
     } finally {
       setSubmitting(false)
     }
@@ -56,7 +61,6 @@ export default function Login() {
       <main className="flex-1 relative z-10">
         <div className="fixed inset-0 -z-10 pointer-events-none" aria-hidden="true">
           <div className="absolute inset-0 hero-gradient opacity-5" />
-          <div className="absolute inset-0 hero-gradient-bottom opacity-10" />
           <div className="absolute inset-0 opacity-20 grid-bg-primary" />
           <div className="absolute inset-0 opacity-10 grid-bg-secondary animate-grid-move" />
         </div>
@@ -114,14 +118,14 @@ export default function Login() {
                     </div>
                     <CaptchaGate
                       ref={captchaRef}
-                      onVerify={setCaptchaToken}
-                      onExpire={() => setCaptchaToken(null)}
-                      onError={() => setCaptchaToken(null)}
+                      onVerify={onVerify}
+                      onExpire={onExpire}
+                      onError={onError}
                     />
                     <Button
                       type="submit"
                       className="w-full"
-                      disabled={submitting || (CAPTCHA_REQUIRED && !captchaToken)}
+                      disabled={submitting || !captchaReady}
                     >
                       {submitting ? "Signing in…" : "Sign in"}
                     </Button>

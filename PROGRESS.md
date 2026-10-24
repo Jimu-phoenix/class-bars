@@ -1,8 +1,8 @@
 # Class-BARS Progress Report
 
-**Date:** 2026-10-06
+**Date:** 2026-10-23
 **Repo:** `D:\classBars\class-bars`
-**Overall status:** Real (DB-backed) attendance flow is built end-to-end and verified by lint/build/tests. Role-based access is now hardened end-to-end (client guards + server-side `staff_email_domains` allowlist enforced in the signup trigger), the theme toggle was rewritten, the profile UI now lives inside each role's dashboard (no standalone page for students/lecturers), auth pages are guest-only (signed-in users bounce to their dashboard; no nav/footer), and the shared dashboard shell + student pages were rebuilt mobile-first (bottom tab bar on phones, full-screen dialogs for face enrollment/verify, collapsible sidebar on desktop). Sandbox remains untouched. Migrations 06/07/09: 06/07 applied to the live project, **08 and 09 are pending manual execution**.
+**Overall status:** Real (DB-backed) attendance flow built end-to-end and verified by lint/build/tests. Role-based access hardened end-to-end (client guards + server-side `staff_emails` allowlist enforced in the signup trigger). Theme toggle rewritten. Profile UI lives inside each role's dashboard. Auth pages guest-only. Dashboard shell + student pages rebuilt mobile-first. Sandbox untouched. Migrations 06/07 applied to live project; **08, 09 superseded by 10; 10 pending execution; 11 scripted for admin RLS; 12 geofencing revised in place for circle/box fences, scripted and pending execution after 11**. Admin dashboard built (Home, Venues, Users & Roles, System Logs) with magic-link login and no signup; Venues supports circle and four-corner box geofence editing.
 
 ---
 
@@ -15,13 +15,15 @@
 | Real attendance flow (`migrations/06`) | Applied | `face_embeddings` renamed/self-own policy; SECURITY DEFINER RPCs: `upsert_face_embedding`, `clear_face_embedding`, `enroll_self`, `get_session_attendance`; hardening; grants |
 | Real-table GRANTs (`migrations/07`) | **Applied — fixes "permission denied"** | Explicit DML grants to `authenticated`, SELECT to `anon` on real tables + EXECUTE on client RPCs |
 | Course ownership (`migrations/08`) | **Scripted — NOT yet executed** | `courses.lecturer_id` FK + owner-scoped create/update policies |
-| Role enforcement (`migrations/09`) | **Scripted — NOT yet executed** | `staff_email_domains` allowlist table; `handle_new_user` demotes non-allowlisted lecturers; profiles INSERT closed to `role='student'` |
+| Role enforcement (`migrations/09`) | **Scripted — superseded by 10** | `staff_email_domains` domain allowlist replaced by `staff_emails` exact-email allowlist in migration 10; `handle_new_user` demotes non-allowlisted lecturers; profiles INSERT closed to `role='student'` |
+| Lecturer allowlist (`migrations/10`) | **Scripted — NOT yet executed** | `staff_emails` table (exact email match, replaces `staff_email_domains` domain match); `is_staff_email()` re-pointed; client `rolePolicy.ts` reads the same table |
 | Signup | Done | Student/Lecturer toggle + hCaptcha; `AuthContext.signUp` accepts `captchaToken` |
 | Lecturer dashboard | Done | Collapsible sidebar (Overview, Courses, Update profile, Sign out), stat cards, session live page |
 | Student dashboard | Done | Same shell/sidebar, Overview + Courses + Update profile pages, live face check-in |
 | New session form | Done | "Start now" vs "Schedule for later" + registration duration (5/15/30/60 min) that auto-computes session end |
 | Face pipeline | Done | face-api 0.22.2 (tiny detector/landmarks/recognition, models in `public/models/`), pure math + model-version helpers in `src/lib/faceCompare.ts` |
-| Automated tests | 73/74 pass | 1 known pre-existing failure: `tests/schema.test.ts` reads stale `table_state.json` snapshot (row format + column rename); regenerating the snapshot fixes it |
+| Admin dashboard | Done | Magic-link login, no signup; Home (live stats), Venues (CRUD + circle/box geofence editor), Users & Roles (staff email allowlist), System Logs (audit_logs). Sidebar-driven navigation, all routes AdminRoute-guarded. |
+| Geofencing (`migrations/12`) | **Scripted — NOT yet executed** | PostGIS proximity check in `check_in_attendance`; one `geofences` row per venue (circle 2–50 m or four-corner box); gap-based decision table with small-fence handling; raw coordinates never stored; admin-only fence writes. Depends on 11. |
 | Sandbox module | Untouched | Intentionally left as-is per user decision |
 
 ---
@@ -68,6 +70,15 @@
 - face-api 0.22.2; detection options `TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 })`; hook must call `withFaceLandmarks(true)` for the tiny-landmark net; `public/models/` complete.
 - Model version pins template compat: stale templates (version mismatch) are rejected client-side and prompted for re-enrollment.
 
+### 2.8 Geofencing (PostGIS proximity check)
+
+- `migrations/12_geofencing.sql` adds PostGIS, a `geofences` table (circle or four-corner box; circles 2–50 m, boxes valid/≥4 m²/every corner ≤50 m from the centre), `venues.geofence_id` (unique, `ON DELETE SET NULL`), an `AFTER DELETE` trigger that removes a deleted venue's fence, attendance `flag_reason` + `location_distance_m` + `location_accuracy_m`, and restrictive admin-only venue INSERT/UPDATE/DELETE policies over migration 11's permissive ones. The old inline venue lat/lng/radius columns were dropped; migration 12 was edited in place because it had not been executed.
+- The direct `attendance_records` INSERT path (`Students insert own attendance` + 07 grant) is revoked, so all writes must go through the SECURITY DEFINER check-in RPC. The old 5-argument `check_in_attendance` is dropped; the new 8-argument version requires lat/lng/accuracy. `set_venue_geofence` is SECURITY INVOKER so the admin RLS policies still apply.
+- Decision table (gap = distance from the fence, 0 inside/on the edge; half_size = radius or sqrt(box area)/2; good_limit = min(10, half_size)): invalid/null/NaN/accuracy > 100 → `no_location`; venue without fence → `no_geofence`; gap = 0 → normal; gap > accuracy → `outside`; 0 < gap ≤ accuracy and accuracy ≤ good_limit → `outside_good_accuracy`; same band with accuracy > good_limit → allowed, status `flagged`, reason `low_accuracy_overlap`. Only the gap and reported accuracy are stored for flagged records (DPA minimisation). Browser accuracy is roughly a 68% confidence radius, so honest students near an edge may occasionally be blocked and retry.
+- Client: `src/lib/geofence.ts` (pure validation, box corner ordering/area/validation, small-fence half-size, coordinate parsing, geolocation wrapper, block messages) + Node tests. `StudentHome` captures a fresh high-accuracy fix before check-in and shows a distinct amber flagged confirmation. `SessionLive` shows the flag reason with the amber status badge.
+- Admin Venues: list shows `Circle, 12 m`, `Box`, or `Not set`; the edit dialog lazy-loads a Leaflet map (`VenueGeofenceMap`) with Circle/Class box tabs, a 2–50 m radius slider (step 0.5), four draggable numbered corners with a live polygon, map click to place the next empty corner, pasted `"lat, lng"` rows, "use my current location" (next empty corner for boxes, reporting each accuracy), a live small-fence notice, zoom up to 22, and a confirm step that deletes the geofence row. Saves go through `set_venue_geofence`; FK (23503) and unique (23505) errors are mapped to clear messages.
+- Manual verification: `tests/sql/geofencing_checks.sql` (run migration 12 twice first) covers schema/function privileges, radius 2/50 and box valid/crossed/collinear/tiny/oversized geometry, admin/lecturer/student RLS, unique sharing, venue cascade deletion, closed direct insert, the full decision table for circles and boxes (including gap = accuracy), clockwise/anticlockwise equality, and small-fence cases.
+
 ---
 
 ## 3. Phase A — theme (light/dark/system) + Phase B — role access hardening
@@ -80,14 +91,14 @@
 ### 3.2 Role access hardening (`current`)
 - **Root cause:** role was self-declared at signup (`signUp({ options: { data: { role } } })`), stored by `handle_new_user()`, then **trusted** from client-writable `auth.user_metadata` — and guards were fail-open (`/dashboard` only checked "has a lecturer-ish profile"). Clients also self-provisioned `profiles` rows on `PGRST116`, writing their own `role`.
 - **Fix (client-guard scope, per user decision):**
-  - `src/lib/rolePolicy.ts` — staff allowlist (DB-backed `staff_email_domains`, seeded with `mubas.ac.mw`); `assertRoleAllowed` rejects lecturer signup on non-staff addresses (`AuthContext.signUp` enforces it); `postSignupPath` routes lecturer→`/dashboard`, else→`/onboarding`.
+  - `src/lib/rolePolicy.ts` — staff allowlist (DB-backed `staff_emails`, exact email match seeded with `lecturer@mubas.ac.mw`); `assertRoleAllowed` rejects lecturer signup on non-allowlisted addresses (`AuthContext.signUp` enforces it); `postSignupPath` routes lecturer→`/dashboard`, else→`/onboarding`.
   - `src/contexts/RoleContext.tsx` — role read from `profiles.role` via `maybeSingle`, **never** from `user_metadata`; fail-closed `status: "loading" | "ready" | "unavailable"`.
-  - `src/lib/guardPolicy.ts` + `src/components/RoleRoute.tsx` — shared fail-closed guard (`authLoading`/`status` spinner → sign-out → login with `state.from` → non-ready → `/profile` → mismatch → own home). `LecturerRoute`/`StudentRoute` are thin wrappers.
+  - `src/lib/guardPolicy.ts` + `src/components/RoleRoute.tsx` — shared fail-closed guard (`authLoading`/`status` spinner → sign-out → login with `state.from` → non-ready → `/profile` → mismatch → own home). `LecturerRoute`/`StudentRoute` wrappers deleted; `<RoleRoute role="student">`/`<RoleRoute role="lecturer">` inline in `App.tsx`.
   - All hardcoded `user_metadata?.role` reads removed (Navbar/Home/Login/Signup/Profile/ProfileSettings); `PGRST116` self-upsert branches removed (missing profile → explicit error, no more self-authoring). Provider order: `ThemeProvider > AuthProvider > RoleProvider > App`.
 - **New tests:** `tests/rolePolicy.test.ts`, `tests/roleGuards.test.ts` (`decideGuard`), `tests/theme.test.ts` (`nextTheme`/`resolveTheme`/`readStoredTheme`). 23 added, all passing; lint + tsc + build clean.
 
 ### 3.3 Sanity note
-- **Server-side enforcement now in place (migrations/09).** The lecturer allowlist lives in the DB (`staff_email_domains`) and `handle_new_user()` demotes any non-allowlisted `role: "lecturer"` to `student` — a hand-rolled `supabase.auth.signUp()` can no longer mint a lecturer. The client reads the same table at sign-up (`src/lib/rolePolicy.ts`), so env `VITE_STAFF_EMAIL_DOMAINS` is retired; DB is the single source of truth. The client `profiles` INSERT policy is also closed to `role = 'student'` (previously any client could create their own lecturer/admin row).
+- **Server-side enforcement now in place (migrations/10).** The lecturer allowlist lives in the DB (`staff_emails`) and `handle_new_user()` demotes any non-allowlisted `role: "lecturer"` to `student` — a hand-rolled `supabase.auth.signUp()` can no longer mint a lecturer. The client reads the same table at sign-up (`src/lib/rolePolicy.ts`); DB is the single source of truth. The client `profiles` INSERT policy is also closed to `role = 'student'` (previously any client could create their own lecturer/admin row).
 
 ---
 
@@ -139,8 +150,8 @@
 | One shared `DashboardShell` + `StatCard`/`ProfileSettings` for both roles | Guarantees the student dashbooard is visually consistent with the lecturer's |
 | Start-now sessions insert as `ongoing` directly (no RPC) | `start_session` RPC is unnecessary when the insert policy already binds to `auth.uid()` |
 | Single "registration duration" select drives end time | Simpler UX than free-form end pickers; matches 5/15/30/60-minute class windows |
-| Lecturer sign-up gated by a staff email allowlist | Role is an auth decision; domain allowlist is the proxy for "staff" |
-| Allowlist lives in the DB (`staff_email_domains`), enforced by `handle_new_user`; client reads the same table | Env vars can't be read by Postgres; a single DB-backed source of truth closes the hand-rolled `signUp` bypass and removes the client-duplicated list |
+| Lecturer sign-up gated by a staff email allowlist | Role is an auth decision; exact email allowlist is the proxy for "staff" |
+| Allowlist lives in the DB (`staff_emails`), enforced by `handle_new_user`; client reads the same table | Env vars can't be read by Postgres; a single DB-backed source of truth closes the hand-rolled `signUp` bypass and removes the client-duplicated list |
 | Role read from `profiles.role`, never `auth.user_metadata` | `user_metadata` is client-writable; `profiles.role` is written by the signup trigger |
 | Role guards are fail-closed (`loading`/`unavailable`/mismatch ⇒ deny, mismatches redirect to their own home) | Inverts the prior fail-open behaviour that let anyone announce `/dashboard` or `/student` |
 | Clients no longer self-provision `profiles` rows (PGRST116 self-upsert removed) | Self-UPSERT let callers write their own `role`; missing profile now surfaces an explicit error |
@@ -149,99 +160,59 @@
 | Profile UI lives inside each role's dashboard; standalone `/profile` redirects known roles there, keeps admin/unreadable fallback | Profile is content, not a page — like Courses/Overview it renders in the shared `DashboardShell`; face enrollment moved into the student dashboard as `FaceBiometricsCard` |
 | Mobile = bottom tab bar + sticky top bar; desktop = collapsible sidebar; dialog content full-screen on phones (`fullScreenOnMobile`) | Matches the newer app-wide draft; phone-first layouts give the camera room and respect safe-area insets, and a fixed tab bar beats a drawer for one-thumb navigation |
 | All dashboards share one role-neutral shell | `DashboardShell` reads the role from `useRole()`, so the mobile/mobile-first shell upgrades the lecturer dashboard for free |
+| Geofence is a server-side proximity check, not proof of presence | GPS can be spoofed; it complements face matching and only produces a review flag at the accuracy boundary |
+| Store only distance and reported accuracy, never raw student coordinates | DPA data minimisation; the precise location is not needed after the server decision |
+| Add RESTRICTIVE admin-only venue write policies in 12 | Migration 11's permissive venue policies accepted any signed-in user; the fence must not be movable by students |
+| Drop the 5-arg check-in RPC and revoke direct attendance INSERT | Otherwise the fence is advisory and can be bypassed by calling an old function or inserting directly |
+| Venues without a fence block check-in | Fail closed; admins must explicitly configure a room before it can be used for attendance |
 | Sandbox module left untouched throughout | Explicit user instruction; all new work is on the real tables |
 
 ---
 
 ## 5. Known issues / follow-ups
 
-1. **Execute `migrations/08_course_lecturer.sql`** in the Supabase SQL Editor (06/07 already applied). Legacy courses keep `lecturer_id NULL` until an admin reassigns them.
-2. **Execute `migrations/09_role_server_side.sql`** in the Supabase SQL Editor, then manage the lecturer allowlist in the DB (`staff_email_domains` table), e.g. `insert into public.staff_email_domains (domain) values ('uni.edu');`. This is the **required** server-side enforcement step — until it's applied, a hand-rolled `supabase.auth.signUp()` call can still mint a lecturer.
-3. **`tests/schema.test.ts` fails (pre-existing, 1 of 69):** it compares against `tests/table_state.json`, whose row format no longer matches (also stale after the column rename). Regenerate the snapshot.
-4. **Camera/DB verification is manual:** nothing here runs a live camera or hits the live project — validated via lint + build + tests only.
-5. **Bundle size:** production chunk >500 kB from `face-api.js`; consider dynamic import / code-splitting.
-6. **Face threshold:** `isMatch` uses strict `<` vs 0.6; exactly-at-threshold pairs reject. Revisit when tuning FAR/FRR.
-7. **Phase-2 scope (non-goals):** geofencing (PostGIS) and OTP fallback intentionally unbuilt.
-8. **Edge functions:** repo tracks none; any on the live project predate this repo — port or delete.
-9. **Pre-existing real users with wrong stored role:** migration 09 only prevents new bad roles; earlier lecturers still need a guarded repair (see migration 09 §5 informational query for candidates).
-10. **Dev-server quirk:** the Vite script runs the Windows `node.exe`; use Windows `curl.exe` and `--strictPort` when probing.
+1. **Execute `migrations/08_course_lecturer.sql`** in Supabase SQL Editor (06/07 already applied).
+2. **Execute `migrations/10_staff_email_allowlist.sql`** — required server-side lecturer enforcement.
+3. **Execute `migrations/11_admin_section_rls.sql`** — RLS for admin CRUD on staff_emails/venues/audit_logs.
+4. **Execute `migrations/12_geofencing.sql` after 11** — revised in place (not executed anywhere yet), requires PostGIS. Verify the extension is available in the Supabase project, then run `tests/sql/geofencing_checks.sql` (apply 12 twice first).
+5. **`scripts/reset_supabase_project.sql` is missing migrations 10, 11 and 12** — it still builds base, 01, 02, 04–09. Do not use it to rebuild a project that needs the staff allowlist, admin/geofence policies, or geofencing until it is updated.
+6. **`tests/schema.test.ts` fails** — stale `table_state.json` snapshot; regenerate.
+7. **Camera/GPS/DB verification is manual** — validated via lint + tsc + unit tests only; live PostGIS and real device geolocation are unverified in this environment.
+
 
 ---
 
 ## 7. Files changed in the latest phase
 
 ```
-migrations/06_real_attendance_flow.sql      # NEW — real face embeddings + enroll/roster RPCs
-migrations/07_real_table_grants.sql         # NEW — explicit GRANTs (fixes "permission denied")
-migrations/08_course_lecturer.sql           # NEW — courses.lecturer_id + owner policies (PENDING)
-migrations/09_role_server_side.sql          # NEW — staff_email_domains allowlist + handle_new_user demotion + profiles INSERT closed (PENDING)
-scripts/reset_supabase_project.sql          # UPDATED — chain now includes 05-08
-src/lib/faceCompare.ts                      # NEW — pure match math + FACE_MODEL_VERSION
-src/lib/nav.ts                              # NEW — LECTURER_NAV / STUDENT_NAV
-src/components/DashboardShell.tsx           # NEW — collapsible sidebar shell (replaces LecturerShell/StudentShell)
-src/components/dashboard/StatCard.tsx       # NEW — shared stat card
-src/components/dashboard/ProfileSettings.tsx# NEW — shared profile editor
-src/components/face/FaceCaptureFrame.tsx    # NEW
-src/components/face/FaceEnrollCard.tsx      # NEW
-src/components/face/FaceVerifyCard.tsx      # NEW
-src/pages/LecturerDashboard.tsx             # REWRITTEN — stat cards + unified shell
-src/pages/LecturerCourses.tsx               # UPDATED — owner-scoped courses
-src/pages/LecturerProfile.tsx               # REWRITTEN — thin wrapper over ProfileSettings
-src/pages/NewSession.tsx                    # REWRITTEN — start-now/schedule + duration
-src/pages/SessionLive.tsx                   # UPDATED — unified shell
-src/pages/StudentHome.tsx                   # REWRITTEN — student Overview dashboard
-src/pages/StudentCourses.tsx                # NEW — /student/courses
-src/pages/StudentProfile.tsx                # NEW — /student/profile
-src/pages/Signup.tsx                        # REWRITTEN — role toggle + hCaptcha
-src/contexts/AuthContext.tsx                # UPDATED — signUp captchaToken
-src/types/db.ts                             # UPDATED — CourseRow.lecturer_id
-src/App.tsx                                 # UPDATED — /student/courses, /student/profile, /dashboard/profile
-tests/realAttendance.test.ts                # NEW
-tests/faceCompare.test.ts                   # NEW
-tests/loader.mjs                            # FIXED — nested @/ alias file:// double-prefix bug
-tests/theme.test.ts                         # NEW (Phase A) — nextTheme/resolveTheme/readStoredTheme/isTheme
-tests/rolePolicy.test.ts                    # NEW (Phase B) — staff-domain allowlist + assertRoleAllowed + postSignupPath
-tests/roleGuards.test.ts                    # NEW (Phase B) — decideGuard fail-closed matrix
-src/lib/themeUtils.ts                       # NEW (Phase A) — pure theme model (Theme/THEMES/storage/resolve/cycle)
-src/lib/themeModes.ts                       # NEW (Phase A) — THEME_CYCLE + icons for ThemeToggle
-src/lib/rolePolicy.ts                       # NEW (Phase B) — DB-backed allowlist (staff_email_domains) / isStaffEmail / assertRoleAllowed / postSignupPath
-src/lib/guardPolicy.ts                      # NEW (Phase B) — pure decideGuard decision matrix + homeFor
-tests/roleGuards.test.ts                    # UPDATED — decideGuestAccess matrix
-src/components/GuestRoute.tsx               # NEW — guest-only route guard for /login and /signup
-src/pages/Login.tsx                         # UPDATED — no Navbar/Footer; guarded by GuestRoute
-src/pages/Signup.tsx                        # UPDATED — no Navbar/Footer; guarded by GuestRoute
-src/App.tsx                                 # UPDATED — /login and /signup wrapped in GuestRoute
-src/contexts/ThemeContext.tsx               # REWRITTEN (Phase A) — single derived resolvedTheme effect, cycleTheme, live matchMedia
-src/contexts/RoleContext.tsx                # NEW (Phase B) — profiles.role source of truth, fail-closed status
-src/components/ThemeToggle.tsx              # NEW (Phase A) — cycling light/dark/system button
-src/components/RoleRoute.tsx                # NEW (Phase B) — shared fail-closed guard
-src/components/LecturerRoute.tsx            # REWRITTEN (Phase B) — thin wrapper over RoleRoute
-src/components/StudentRoute.tsx             # REWRITTEN (Phase B) — thin wrapper over RoleRoute
-src/main.tsx                                # UPDATED — ThemeProvider > AuthProvider > RoleProvider > App
-src/components/Navbar.tsx                   # UPDATED — ThemeToggle replaces dropdown; dashboardPath(role)
-src/pages/Home.tsx                          # UPDATED — role via useRole
-src/pages/Login.tsx                         # UPDATED — profile role only, no metadata fallback
-src/pages/Onboarding.tsx                    # REWRITTEN — role-driven redirect, no self-upsert
-src/pages/Profile.tsx                       # UPDATED — redirects known roles into dashboard; face section moved to FaceBiometricsCard
-src/components/dashboard/FaceBiometricsCard.tsx # NEW — face template card inside student dashboard profile
-src/pages/StudentHome.tsx                   # UPDATED — shell prop cleanup
-src/pages/StudentCourses.tsx                # UPDATED — shell prop cleanup
-src/pages/StudentProfile.tsx                # UPDATED — shell prop cleanup
-index.html                                  # UPDATED (Phase A) — blocking theme init script (FOUC)
-src/index.css                               # UPDATED (Phase A) — color-scheme for :root/.dark
-.env.example                                # UPDATED — VITE_STAFF_EMAIL_DOMAINS retired; allowlist now in staff_email_domains table
-tests/loader.mjs                            # FIXED — specifier typo broke non-@/ imports in the test runner
-src/lib/dialogClasses.ts                    # NEW — fullScreenOnMobile dialog-content classes (safe-area aware)
-src/components/ui/dialog.tsx                # NEW — Base UI Dialog wrapper (Content/Header/Footer/Title/Description)
-src/components/ui/tabs.tsx                  # NEW — Base UI Tabs wrapper (List/Trigger/Content, data-active styling)
-src/components/ui/input.tsx                 # NEW — Base UI Input wrapper
-src/components/DashboardShell.tsx           # REWRITTEN (3.6) — collapsible sidebar + mobile top bar + bottom tab bar
-src/lib/nav.ts                              # UPDATED (3.6) — short labels for the tab bar (Home/Courses/Profile)
-src/components/dashboard/FaceBiometricsCard.tsx # REWRITTEN (3.6) — Dialog-based enroll + in-dialog confirm-remove
-src/components/dashboard/ProfileSettings.tsx    # REWRITTEN (3.6) — section layout + ui/input
-src/components/dashboard/StatCard.tsx       # UPDATED (3.6) — card layout polish
-src/pages/StudentHome.tsx                   # REWRITTEN (3.6) — skeleton loaders + Dialog verify flow
-src/pages/StudentCourses.tsx                # REWRITTEN (3.6) — Tabs + catalog search + enroll dialog
-src/pages/StudentProfile.tsx                # UPDATED (3.6) — "Profile" title
-src/index.css                               # UPDATED (3.6) — tap-highlight / overscroll / touch-action / reduced-motion
+migrations/10_staff_email_allowlist.sql  # NEW — staff_emails exact-email allowlist (PENDING execution)
+migrations/11_admin_section_rls.sql      # NEW — RLS for admin CRUD (PENDING execution)
+migrations/12_geofencing.sql             # UPDATED IN PLACE — circle/box geofences, gap check, flagged attendance (PENDING execution)
+src/lib/geofence.ts                      # UPDATED — bounds, box ordering/validation, half-size, geolocation + block messages
+src/components/admin/VenueGeofenceMap.tsx # UPDATED — circle/box map, draggable corners, live polygon
+src/pages/AdminDashboard.tsx             # UPDATED — circle/box tabs, corners, small-fence notice, RPC save, fence delete
+src/pages/StudentHome.tsx                # UPDATED — location capture + flagged confirmation
+src/pages/SessionLive.tsx                # UPDATED — flag reason on flagged roster rows
+src/lib/realAttendance.ts                # UPDATED — 8-arg check-in RPC with location
+src/types/db.ts                          # UPDATED — GeofenceRow, venue geofence_id, attendance flag/location fields
+tests/geofence.test.ts                   # UPDATED — bounds, box ordering/validation, half-size, pasted pairs
+tests/sql/geofencing_checks.sql          # UPDATED — circle/box schema, RLS, RPC, decision table (rolls back)
+README.md                                # UPDATED — migration order, geofencing, test instructions
+PROGRESS.md                              # UPDATED — this report
+src/contexts/AuthContext.tsx              # UPDATED — signInWithOtp (magic link), signUp captchaToken
+src/lib/guardPolicy.ts                    # UPDATED — homeFor maps admin→/admin; fallbacks /profile→/login
+src/lib/nav.ts                            # UPDATED — ADMIN_NAV (Home, Venues, Users & Roles, System Logs)
+src/lib/rolePolicy.ts                     # UPDATED — staff_emails exact-email allowlist
+src/pages/AdminDashboard.tsx              # NEW — Home/Venues/Users&Roles/System Logs, sidebar-driven
+src/pages/AdminLogin.tsx                  # NEW — magic-link only, no password, no signup
+src/components/AdminRoute.tsx             # NEW — fail-closed guard for /admin (role="admin")
+src/components/GuestRoute.tsx             # NEW — guest-only route guard for /login and /signup
+src/pages/Login.tsx                       # UPDATED — /profile→/login fallback, captcha via useCaptcha
+src/pages/Onboarding.tsx                  # UPDATED — /profile→/login fallback
+src/components/Navbar.tsx                 # UPDATED — dashboardPath fallback /profile→/login
+src/App.tsx                               # UPDATED — /profile route removed; /admin routes added
+src/pages/Profile.tsx                     # DELETED — standalone profile page removed
+src/hooks/useCaptcha.ts                   # NEW — shared captcha gate wiring
 ```
+
+---

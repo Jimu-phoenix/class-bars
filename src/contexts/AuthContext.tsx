@@ -22,6 +22,7 @@ type AuthContextValue = {
     role?: SignUpRole
   ) => Promise<{ needsConfirmation: boolean }>
   signIn: (email: string, password: string) => Promise<void>
+  signInWithOtp: (email: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -58,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Role is only declared here, and only after a policy check: a non-staff
     // address can never send `lecturer` metadata downstream to
     // handle_new_user() (which independently re-verifies against the
-    // staff_email_domains table before minting the role).
+    // staff_emails table before minting the role).
     await assertRoleAllowed(email, role)
 
     const { data, error } = await supabase.auth.signUp({
@@ -80,6 +81,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error
   }
 
+  /** Magic-link sign-in: Supabase sends a confirmation email to the address. */
+  const signInWithOtp = async (email: string) => {
+    const { error } = await supabase.auth.signInWithOtp({ email })
+    if (error) throw error
+  }
+
   const signOut = async () => {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
@@ -87,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, loading, signUp, signIn, signOut }}
+      value={{ user, session, loading, signUp, signIn, signInWithOtp, signOut }}
     >
       {children}
     </AuthContext.Provider>

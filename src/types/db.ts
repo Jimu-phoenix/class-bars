@@ -26,7 +26,7 @@ export type EnrollmentRow = {
 export type FaceEmbeddingRow = {
   id: string
   user_id: string
-  embedding_json: string
+  embedding_json: unknown
   model_version: string
   is_active: boolean
   created_at: string
@@ -42,6 +42,9 @@ export type AttendanceRecordRow = {
   status: AttendanceStatus
   check_in_time: string
   confidence_score: number | null
+  flag_reason: string | null
+  location_distance_m: number | null
+  location_accuracy_m: number | null
 }
 
 export type CourseRow = {
@@ -52,11 +55,39 @@ export type CourseRow = {
   lecturer_id: string | null
 }
 
+export type GeofenceShape = "circle" | "box"
+
+export type GeofenceRow = {
+  id: string
+  shape: GeofenceShape
+  center_lat: number | null
+  center_lng: number | null
+  radius_m: number | null
+  c1_lat: number | null
+  c1_lng: number | null
+  c2_lat: number | null
+  c2_lng: number | null
+  c3_lat: number | null
+  c3_lng: number | null
+  c4_lat: number | null
+  c4_lng: number | null
+  created_at: string
+  updated_at: string
+}
+
 export type VenueRow = {
   id: string
   name: string
   building: string | null
+  geofence_id: string | null
+  geofences: GeofenceRow | null
 }
+
+export type StaffEmailRow = {
+  email: string
+  created_at: string
+}
+
 
 export type ClassSessionRow = {
   id: string

@@ -27,9 +27,8 @@ export default function Onboarding() {
     if (status === "loading") return
 
     if (status !== "ready") {
-      // Role could not be read: land on the role-agnostic profile page rather
-      // than guessing. /profile surfaces the account so the user can report it.
-      navigate("/profile", { replace: true })
+      // Role could not be read: land on /login rather than guessing.
+      navigate("/login", { replace: true })
       return
     }
 
@@ -44,7 +43,7 @@ export default function Onboarding() {
     }
 
     // `admin` and any other role have no onboarding path.
-    navigate("/profile", { replace: true })
+    navigate("/login", { replace: true })
   }, [user, loading, status, role, navigate])
 
   return (
