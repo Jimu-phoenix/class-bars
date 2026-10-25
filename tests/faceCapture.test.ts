@@ -76,7 +76,7 @@ test("session distances recording and clearing", () => {
 test("pipeline constants match required baseline", () => {
   assert.equal(DETECTOR_INPUT_SIZE, 320)
   assert.equal(DETECTOR_SCORE_THRESHOLD, 0.4)
-  assert.equal(USE_TINY_LANDMARKS, true)
+  assert.equal(USE_TINY_LANDMARKS, false)
   assert.equal(CAMERA_IDEAL_WIDTH, 1280)
   assert.equal(CAMERA_IDEAL_HEIGHT, 720)
   assert.equal(WARMUP_MS, 800)

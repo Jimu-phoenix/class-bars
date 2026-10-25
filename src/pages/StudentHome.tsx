@@ -17,6 +17,7 @@ import {
   checkInFace,
   getActiveFaceEmbedding,
   parseEmbedding,
+  FACE_MODEL_VERSION,
 } from "@/lib/realAttendance"
 import { euclideanDistance } from "@/lib/faceCompare"
 import {
@@ -130,6 +131,10 @@ export default function StudentHome() {
         setEmbedding({ status: "missing" })
         return
       }
+      if (row.model_version !== FACE_MODEL_VERSION) {
+        setEmbedding({ status: "stale" })
+        return
+      }
       const stored = parseEmbedding(row.embedding_json)
       if (!stored) {
         setEmbedding({ status: "stale" })
@@ -234,6 +239,10 @@ export default function StudentHome() {
       const row = await getActiveFaceEmbedding(user.id)
       if (!row) {
         setError("You have no face template yet. Enroll your face from your profile first.")
+        return
+      }
+      if (row.model_version !== FACE_MODEL_VERSION) {
+        setError("Your face template is out of date. Re-enroll it from your profile.")
         return
       }
       const stored = parseEmbedding(row.embedding_json)

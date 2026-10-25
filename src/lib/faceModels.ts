@@ -3,6 +3,7 @@ import { FACE_MODEL_VERSION } from "@/lib/faceCompare"
 import {
   DETECTOR_INPUT_SIZE,
   DETECTOR_SCORE_THRESHOLD,
+  USE_TINY_LANDMARKS,
 } from "@/lib/faceCapture"
 
 export { FACE_MODEL_VERSION }
@@ -27,7 +28,9 @@ export type FaceModelsStatus = {
 export function faceModelsStatus(): FaceModelsStatus {
   return {
     detector: faceapi.nets.tinyFaceDetector.isLoaded,
-    landmarks: faceapi.nets.faceLandmark68TinyNet.isLoaded,
+    landmarks: USE_TINY_LANDMARKS
+      ? faceapi.nets.faceLandmark68TinyNet.isLoaded
+      : faceapi.nets.faceLandmark68Net.isLoaded,
     recognition: faceapi.nets.faceRecognitionNet.isLoaded,
   }
 }
@@ -42,8 +45,11 @@ export async function loadDeferredModels(
   onError: (err: Error) => void = () => {},
 ): Promise<void> {
   try {
+    const landmarkNet = USE_TINY_LANDMARKS
+      ? faceapi.nets.faceLandmark68TinyNet
+      : faceapi.nets.faceLandmark68Net
     await Promise.all([
-      faceapi.nets.faceLandmark68TinyNet
+      landmarkNet
         .loadFromUri(FACE_MODELS_BASE)
         .then(onLandmarksReady),
       faceapi.nets.faceRecognitionNet
@@ -58,9 +64,12 @@ export async function loadDeferredModels(
 
 export async function warmFaceModels(): Promise<void> {
   try {
+    const landmarkNet = USE_TINY_LANDMARKS
+      ? faceapi.nets.faceLandmark68TinyNet
+      : faceapi.nets.faceLandmark68Net
     await Promise.all([
       loadDetectionModel(),
-      faceapi.nets.faceLandmark68TinyNet.loadFromUri(FACE_MODELS_BASE),
+      landmarkNet.loadFromUri(FACE_MODELS_BASE),
       faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODELS_BASE),
     ])
   } catch (err) {
