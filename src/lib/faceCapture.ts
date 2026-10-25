@@ -3,6 +3,7 @@
 
 // Pipeline configuration constants: single source of truth for enrolment and verification.
 export const DETECTOR_INPUT_SIZE = 320
+export const VERIFY_INPUT_SIZE = 416
 export const DETECTOR_SCORE_THRESHOLD = 0.4
 // Landmark model configuration: false uses the full 68-point net (faceLandmark68Net); true uses tiny net.
 export const USE_TINY_LANDMARKS = false

@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react"
 import * as faceapi from "face-api.js"
 import {
   DETECTION_OPTIONS,
+  VERIFY_DETECTION_OPTIONS,
   SSD_DETECTION_OPTIONS,
   faceModelsStatus,
   loadDeferredModels,
@@ -228,7 +229,10 @@ export function useFaceDetection(options?: UseFaceDetectionOptions): UseFaceDete
             currentCanvas.height = displayHeight
 
             try {
-              const activeOptions = useSsd ? SSD_DETECTION_OPTIONS : DETECTION_OPTIONS
+              const activeOptions =
+                mode === "enrol"
+                  ? (useSsd ? SSD_DETECTION_OPTIONS : DETECTION_OPTIONS)
+                  : VERIFY_DETECTION_OPTIONS
               const baseTask = faceapi.detectAllFaces(
                 currentVideo,
                 activeOptions,

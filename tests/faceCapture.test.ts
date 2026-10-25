@@ -10,6 +10,7 @@ import {
   USE_TINY_LANDMARKS,
   ENROL_DETECTOR,
   SSD_MIN_CONFIDENCE,
+  VERIFY_INPUT_SIZE,
   buildCameraConstraintAttempts,
   isWarmedUp,
   CAMERA_IDEAL_WIDTH,
@@ -77,6 +78,7 @@ test("session distances recording and clearing", () => {
 
 test("pipeline constants match required baseline", () => {
   assert.equal(DETECTOR_INPUT_SIZE, 320)
+  assert.equal(VERIFY_INPUT_SIZE, 416)
   assert.equal(DETECTOR_SCORE_THRESHOLD, 0.4)
   assert.equal(USE_TINY_LANDMARKS, false)
   assert.equal(ENROL_DETECTOR, "ssd")

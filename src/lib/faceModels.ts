@@ -2,6 +2,7 @@ import * as faceapi from "face-api.js"
 import { FACE_MODEL_VERSION } from "@/lib/faceCompare"
 import {
   DETECTOR_INPUT_SIZE,
+  VERIFY_INPUT_SIZE,
   DETECTOR_SCORE_THRESHOLD,
   USE_TINY_LANDMARKS,
   SSD_MIN_CONFIDENCE,
@@ -13,6 +14,11 @@ export const FACE_MODELS_BASE = "/models"
 
 export const DETECTION_OPTIONS = new faceapi.TinyFaceDetectorOptions({
   inputSize: DETECTOR_INPUT_SIZE,
+  scoreThreshold: DETECTOR_SCORE_THRESHOLD,
+})
+
+export const VERIFY_DETECTION_OPTIONS = new faceapi.TinyFaceDetectorOptions({
+  inputSize: VERIFY_INPUT_SIZE,
   scoreThreshold: DETECTOR_SCORE_THRESHOLD,
 })
 

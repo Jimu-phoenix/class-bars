@@ -1,9 +1,13 @@
 import { Loader2 } from "lucide-react"
 import { isModelError } from "@/lib/faceModels"
+import { FACE_MODEL_VERSION } from "@/lib/faceCompare"
 import {
   isFaceDebugEnabled,
   type DistanceSummary,
   type FaceDebugData,
+  USE_TINY_LANDMARKS,
+  ENROL_DETECTOR,
+  VERIFY_INPUT_SIZE,
 } from "@/lib/faceCapture"
 
 export function FaceDebugReadout({
@@ -31,6 +35,12 @@ export function FaceDebugReadout({
     >
       <div className="font-semibold uppercase tracking-wider text-foreground">
         Debug Readout (?facedebug=1)
+      </div>
+      <div className="mt-1 border-b border-border/50 pb-1 text-[10px]">
+        <div>
+          <span className="font-medium text-foreground">Configuration:</span>{" "}
+          landmarks={USE_TINY_LANDMARKS ? "tiny" : "full (68)"} · enrol={ENROL_DETECTOR} · verifySize={VERIFY_INPUT_SIZE} · {FACE_MODEL_VERSION}
+        </div>
       </div>
       <div className="mt-1 grid grid-cols-1 gap-0.5 sm:grid-cols-2">
         <div>
