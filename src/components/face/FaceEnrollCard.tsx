@@ -23,15 +23,16 @@ export default function FaceEnrollCard({
     results,
     debugData,
     isWarmingUp,
-  } = useFaceDetection()
+  } = useFaceDetection({ mode: "enrol" })
 
   const [frozenFace, setFrozenFace] = useState<Float32Array | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
+  const exactlyOneFace = results.length === 1
   const liveFace =
-    recognitionReady && results.length > 0
+    recognitionReady && exactlyOneFace
       ? results[0].detection.descriptor
       : null
   if (liveFace && !frozenFace) {
@@ -86,9 +87,11 @@ export default function FaceEnrollCard({
               ? "Getting camera ready…"
               : descriptorReady
                 ? "Face captured."
-                : results.length > 0
-                  ? "Hold still while the recognizer warms up…"
-                  : "Position your face in view of the camera."}
+                : results.length > 1
+                  ? "Multiple faces detected — please ensure only one face is visible."
+                  : results.length === 1
+                    ? "Hold still while the recognizer warms up…"
+                    : "Position your face in view of the camera."}
           </p>
         )}
       </div>

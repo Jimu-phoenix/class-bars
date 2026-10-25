@@ -8,6 +8,8 @@ import {
   DETECTOR_INPUT_SIZE,
   DETECTOR_SCORE_THRESHOLD,
   USE_TINY_LANDMARKS,
+  ENROL_DETECTOR,
+  SSD_MIN_CONFIDENCE,
   buildCameraConstraintAttempts,
   isWarmedUp,
   CAMERA_IDEAL_WIDTH,
@@ -77,6 +79,8 @@ test("pipeline constants match required baseline", () => {
   assert.equal(DETECTOR_INPUT_SIZE, 320)
   assert.equal(DETECTOR_SCORE_THRESHOLD, 0.4)
   assert.equal(USE_TINY_LANDMARKS, false)
+  assert.equal(ENROL_DETECTOR, "ssd")
+  assert.equal(SSD_MIN_CONFIDENCE, 0.6)
   assert.equal(CAMERA_IDEAL_WIDTH, 1280)
   assert.equal(CAMERA_IDEAL_HEIGHT, 720)
   assert.equal(WARMUP_MS, 800)

@@ -2,15 +2,18 @@ import { useRef, useState, useEffect } from "react"
 import * as faceapi from "face-api.js"
 import {
   DETECTION_OPTIONS,
+  SSD_DETECTION_OPTIONS,
   faceModelsStatus,
   loadDeferredModels,
   loadDetectionModel,
+  loadSsdModel,
   type FaceModelsStatus,
 } from "@/lib/faceModels"
 import {
   isFaceDebugEnabled,
   type FaceDebugData,
   USE_TINY_LANDMARKS,
+  ENROL_DETECTOR,
   buildCameraConstraintAttempts,
   isWarmedUp,
 } from "@/lib/faceCapture"
@@ -120,7 +123,14 @@ function drawFaceLandmarks(
   }
 }
 
-export function useFaceDetection(): UseFaceDetectionReturn {
+export type FaceDetectionMode = "verify" | "enrol"
+
+export type UseFaceDetectionOptions = {
+  mode?: FaceDetectionMode
+}
+
+export function useFaceDetection(options?: UseFaceDetectionOptions): UseFaceDetectionReturn {
+  const mode = options?.mode ?? "verify"
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -154,8 +164,15 @@ export function useFaceDetection(): UseFaceDetectionReturn {
           setError(null)
           setIsLoading(true)
 
-          // Phase 1: load detection model only
-          await loadDetectionModel()
+          let useSsd = false
+          if (mode === "enrol" && ENROL_DETECTOR === "ssd") {
+            useSsd = await loadSsdModel()
+            if (!useSsd) {
+              await loadDetectionModel()
+            }
+          } else {
+            await loadDetectionModel()
+          }
           setModels((m) => ({ ...m, detector: true }))
 
           if (!isMountedRef.current) return
@@ -211,9 +228,10 @@ export function useFaceDetection(): UseFaceDetectionReturn {
             currentCanvas.height = displayHeight
 
             try {
+              const activeOptions = useSsd ? SSD_DETECTION_OPTIONS : DETECTION_OPTIONS
               const baseTask = faceapi.detectAllFaces(
                 currentVideo,
-                DETECTION_OPTIONS,
+                activeOptions,
               )
               const landmarkedTask = landmarksReadyRef.current
                 ? baseTask.withFaceLandmarks(USE_TINY_LANDMARKS)
@@ -358,7 +376,7 @@ export function useFaceDetection(): UseFaceDetectionReturn {
         currentVideo.srcObject = null
       }
     }
-  }, [])
+  }, [mode])
 
   return {
     videoRef,

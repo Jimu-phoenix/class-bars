@@ -7,6 +7,11 @@ export const DETECTOR_SCORE_THRESHOLD = 0.4
 // Landmark model configuration: false uses the full 68-point net (faceLandmark68Net); true uses tiny net.
 export const USE_TINY_LANDMARKS = false
 
+// Detector used for enrolment capture: 'ssd' uses SsdMobilenetv1 with fallback to tiny; 'tiny' uses TinyFaceDetector.
+export type EnrolDetectorType = "ssd" | "tiny"
+export const ENROL_DETECTOR: EnrolDetectorType = "ssd"
+export const SSD_MIN_CONFIDENCE = 0.6
+
 // Camera constraints configuration
 export const CAMERA_IDEAL_WIDTH = 1280
 export const CAMERA_IDEAL_HEIGHT = 720

@@ -4,6 +4,7 @@ import {
   DETECTOR_INPUT_SIZE,
   DETECTOR_SCORE_THRESHOLD,
   USE_TINY_LANDMARKS,
+  SSD_MIN_CONFIDENCE,
 } from "@/lib/faceCapture"
 
 export { FACE_MODEL_VERSION }
@@ -14,6 +15,26 @@ export const DETECTION_OPTIONS = new faceapi.TinyFaceDetectorOptions({
   inputSize: DETECTOR_INPUT_SIZE,
   scoreThreshold: DETECTOR_SCORE_THRESHOLD,
 })
+
+export const SSD_DETECTION_OPTIONS = new faceapi.SsdMobilenetv1Options({
+  minConfidence: SSD_MIN_CONFIDENCE,
+})
+
+let ssdLoadingPromise: Promise<boolean> | null = null
+
+export async function loadSsdModel(): Promise<boolean> {
+  if (faceapi.nets.ssdMobilenetv1.isLoaded) return true
+  if (!ssdLoadingPromise) {
+    ssdLoadingPromise = faceapi.nets.ssdMobilenetv1
+      .loadFromUri(FACE_MODELS_BASE)
+      .then(() => true)
+      .catch((err) => {
+        console.warn("Failed to load SSD MobileNetV1 model, falling back to tiny detector:", err)
+        return false
+      })
+  }
+  return ssdLoadingPromise
+}
 
 export function isModelError(message: string | null): boolean {
   return message?.startsWith("Face models failed to load") ?? false
