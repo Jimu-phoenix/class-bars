@@ -7,6 +7,7 @@ import {
   loadDetectionModel,
   type FaceModelsStatus,
 } from "@/lib/faceModels"
+import { isFaceDebugEnabled, type FaceDebugData } from "@/lib/faceCapture"
 
 type FaceDetectionResult = {
   confidence: number
@@ -43,6 +44,7 @@ type UseFaceDetectionReturn = {
   landmarksReady: boolean
   recognitionReady: boolean
   models: FaceModelsStatus
+  debugData?: FaceDebugData | null
 }
 
 async function setupCamera(video: HTMLVideoElement): Promise<MediaStream> {
@@ -110,6 +112,7 @@ export function useFaceDetection(): UseFaceDetectionReturn {
     landmarks: false,
     recognition: false,
   })
+  const [debugData, setDebugData] = useState<FaceDebugData | null>(null)
 
   const landmarksReadyRef = useRef(false)
   const recognitionReadyRef = useRef(false)
@@ -228,6 +231,35 @@ export function useFaceDetection(): UseFaceDetectionReturn {
               }
 
               setResults(mappedResults)
+
+              if (isFaceDebugEnabled()) {
+                const track = streamRef.current?.getVideoTracks()[0]
+                const trackSettings = track?.getSettings()
+                const d = detections[0]
+                const videoWidth = currentVideo.videoWidth
+                const videoHeight = currentVideo.videoHeight
+                const boxInVideo = d ? d.detection.forSize(videoWidth, videoHeight).box : null
+                const boxWidthPx = boxInVideo ? Math.round(boxInVideo.width) : null
+                const boxWidthPercent =
+                  boxInVideo && videoWidth > 0
+                    ? Number(((boxInVideo.width / videoWidth) * 100).toFixed(1))
+                    : null
+
+                setDebugData({
+                  videoWidth,
+                  videoHeight,
+                  trackSettings: trackSettings
+                    ? {
+                        width: trackSettings.width,
+                        height: trackSettings.height,
+                        frameRate: trackSettings.frameRate,
+                      }
+                    : undefined,
+                  score: d ? Number(d.detection.score.toFixed(3)) : null,
+                  boxWidthPx,
+                  boxWidthPercent,
+                })
+              }
             } catch (detectErr) {
               if (detectionActive) {
                 console.error("face-api detection error:", detectErr)
@@ -296,5 +328,6 @@ export function useFaceDetection(): UseFaceDetectionReturn {
     landmarksReady,
     recognitionReady,
     models,
+    debugData,
   }
 }

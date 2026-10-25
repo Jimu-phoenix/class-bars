@@ -1,11 +1,17 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Loader2, RefreshCw } from "lucide-react"
 import { useFaceDetection } from "@/hooks/useFaceDetection"
 import { euclideanDistance, isMatch } from "@/lib/faceCompare"
+import {
+  recordSessionDistance,
+  getSessionDistances,
+  summariseDistances,
+  type DistanceSummary,
+} from "@/lib/faceCapture"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CardContent } from "@/components/ui/card"
-import FaceCaptureFrame from "@/components/face/FaceCaptureFrame"
+import FaceCaptureFrame, { FaceDebugReadout } from "@/components/face/FaceCaptureFrame"
 
 export type VerifyVerdict = { status: "no-match"; distance: number } | null
 
@@ -37,7 +43,13 @@ export default function FaceVerifyCard({
     error: cameraError,
     recognitionReady,
     results,
+    debugData,
   } = useFaceDetection()
+
+  const [lastDistance, setLastDistance] = useState<number | null>(null)
+  const [distanceSummary, setDistanceSummary] = useState<DistanceSummary>(() =>
+    summariseDistances(getSessionDistances()),
+  )
 
   const liveFace =
     recognitionReady && results.length > 0
@@ -51,10 +63,14 @@ export default function FaceVerifyCard({
     if (!stored || !liveFace) return
     if (capturedRef.current) return
     capturedRef.current = true
+    const distance = euclideanDistance(stored, liveFace)
+    recordSessionDistance(distance)
+    setLastDistance(distance)
+    setDistanceSummary(summariseDistances(getSessionDistances()))
     if (isMatch(stored, liveFace)) {
       onMatch(liveFace)
     } else {
-      onNoMatch(euclideanDistance(stored, liveFace))
+      onNoMatch(distance)
     }
   }, [liveFace, stored, verdict, onMatch, onNoMatch])
 
@@ -76,6 +92,13 @@ export default function FaceVerifyCard({
         canvasRef={canvasRef}
         isLoading={isLoading}
         error={cameraError}
+        debugReadout={
+          <FaceDebugReadout
+            data={debugData}
+            lastDistance={lastDistance}
+            distanceSummary={distanceSummary}
+          />
+        }
       />
 
       {!isLoading && !cameraError && (

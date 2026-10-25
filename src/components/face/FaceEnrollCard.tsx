@@ -3,7 +3,7 @@ import { CheckCircle2, Loader2, Save } from "lucide-react"
 import { useFaceDetection } from "@/hooks/useFaceDetection"
 import { Button } from "@/components/ui/button"
 import { CardContent } from "@/components/ui/card"
-import FaceCaptureFrame from "@/components/face/FaceCaptureFrame"
+import FaceCaptureFrame, { FaceDebugReadout } from "@/components/face/FaceCaptureFrame"
 
 export default function FaceEnrollCard({
   actionLabel = "Save face",
@@ -21,6 +21,7 @@ export default function FaceEnrollCard({
     error: cameraError,
     recognitionReady,
     results,
+    debugData,
   } = useFaceDetection()
 
   const [frozenFace, setFrozenFace] = useState<Float32Array | null>(null)
@@ -76,6 +77,7 @@ export default function FaceEnrollCard({
           canvasRef={canvasRef}
           isLoading={isLoading}
           error={cameraError}
+          debugReadout={<FaceDebugReadout data={debugData} />}
         />
         {!isLoading && !cameraError && (
           <p className="text-center text-xs text-muted-foreground">
