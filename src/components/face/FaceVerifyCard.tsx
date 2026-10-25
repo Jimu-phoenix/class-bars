@@ -44,6 +44,7 @@ export default function FaceVerifyCard({
     recognitionReady,
     results,
     debugData,
+    isWarmingUp,
   } = useFaceDetection()
 
   const [lastDistance, setLastDistance] = useState<number | null>(null)
@@ -59,7 +60,7 @@ export default function FaceVerifyCard({
   const capturedRef = useRef(false)
 
   useEffect(() => {
-    if (verdict !== null) return
+    if (isWarmingUp || verdict !== null) return
     if (!stored || !liveFace) return
     if (capturedRef.current) return
     capturedRef.current = true
@@ -72,7 +73,7 @@ export default function FaceVerifyCard({
     } else {
       onNoMatch(distance)
     }
-  }, [liveFace, stored, verdict, onMatch, onNoMatch])
+  }, [liveFace, stored, verdict, isWarmingUp, onMatch, onNoMatch])
 
   useEffect(() => {
     if (verdict === null) {
@@ -104,7 +105,12 @@ export default function FaceVerifyCard({
       {!isLoading && !cameraError && (
         <div className="flex flex-col items-center gap-2.5">
           <div className="flex items-center justify-center gap-2">
-            {submitting ? (
+            {isWarmingUp ? (
+              <Badge variant="outline" className="gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Getting camera ready…
+              </Badge>
+            ) : submitting ? (
               <Badge variant="outline" className="gap-1.5">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Recording attendance…

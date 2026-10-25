@@ -6,6 +6,66 @@ export const DETECTOR_INPUT_SIZE = 320
 export const DETECTOR_SCORE_THRESHOLD = 0.4
 export const USE_TINY_LANDMARKS = true
 
+// Camera constraints configuration
+export const CAMERA_IDEAL_WIDTH = 1280
+export const CAMERA_IDEAL_HEIGHT = 720
+export const ENABLE_CAMERA_CONSTRAINTS = true
+
+// Camera warm-up configuration (time to ignore frames after stream starts playing)
+export const WARMUP_MS = 800
+export const ENABLE_CAMERA_WARMUP = true
+
+export function buildCameraConstraintAttempts(
+  enabled: boolean = ENABLE_CAMERA_CONSTRAINTS,
+): MediaStreamConstraints[] {
+  if (!enabled) {
+    return [
+      {
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user",
+        },
+        audio: false,
+      },
+    ]
+  }
+
+  return [
+    {
+      video: {
+        width: { ideal: CAMERA_IDEAL_WIDTH },
+        height: { ideal: CAMERA_IDEAL_HEIGHT },
+        facingMode: "user",
+      },
+      audio: false,
+    },
+    {
+      video: {
+        facingMode: "user",
+      },
+      audio: false,
+    },
+    {
+      video: true,
+      audio: false,
+    },
+  ]
+}
+
+export function isWarmedUp(
+  playStartTimeMs: number | null,
+  nowMs: number,
+  hasCurrentData: boolean,
+  warmupMs: number = WARMUP_MS,
+  enabled: boolean = ENABLE_CAMERA_WARMUP,
+): boolean {
+  if (!enabled) return hasCurrentData
+  if (playStartTimeMs === null) return false
+  if (!hasCurrentData) return false
+  return nowMs - playStartTimeMs >= warmupMs
+}
+
 export type DistanceSummary = {
   attempts: number
   min: number | null

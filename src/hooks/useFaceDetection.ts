@@ -11,6 +11,8 @@ import {
   isFaceDebugEnabled,
   type FaceDebugData,
   USE_TINY_LANDMARKS,
+  buildCameraConstraintAttempts,
+  isWarmedUp,
 } from "@/lib/faceCapture"
 
 type FaceDetectionResult = {
@@ -49,21 +51,41 @@ type UseFaceDetectionReturn = {
   recognitionReady: boolean
   models: FaceModelsStatus
   debugData?: FaceDebugData | null
+  isWarmingUp: boolean
 }
 
-async function setupCamera(video: HTMLVideoElement): Promise<MediaStream> {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: {
-      width: { ideal: 640 },
-      height: { ideal: 480 },
-      facingMode: "user",
-    },
-    audio: false,
-  })
-  video.srcObject = stream
+async function setupCamera(
+  video: HTMLVideoElement,
+): Promise<{ stream: MediaStream; playStartTime: number }> {
+  const attempts = buildCameraConstraintAttempts()
+  let stream: MediaStream | null = null
+
+  for (let i = 0; i < attempts.length; i++) {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(attempts[i])
+      break
+    } catch (err) {
+      const isOverconstrained =
+        (typeof OverconstrainedError !== "undefined" && err instanceof OverconstrainedError) ||
+        (err instanceof Error && err.name === "OverconstrainedError")
+      if (!isOverconstrained || i === attempts.length - 1) {
+        throw err
+      }
+    }
+  }
+
+  if (!stream) {
+    throw new Error("Failed to acquire camera stream")
+  }
+
+  const acquiredStream = stream
+  video.srcObject = acquiredStream
   return new Promise((resolve, reject) => {
     video.onloadedmetadata = () => {
-      video.play().then(() => resolve(stream)).catch(reject)
+      video
+        .play()
+        .then(() => resolve({ stream: acquiredStream, playStartTime: performance.now() }))
+        .catch(reject)
     }
     video.onerror = () => reject(new Error("Video element error"))
   })
@@ -116,6 +138,8 @@ export function useFaceDetection(): UseFaceDetectionReturn {
     landmarks: false,
     recognition: false,
   })
+  const [isWarmingUp, setIsWarmingUp] = useState(true)
+  const playStartTimeRef = useRef<number | null>(null)
   const [debugData, setDebugData] = useState<FaceDebugData | null>(null)
 
   const landmarksReadyRef = useRef(false)
@@ -140,8 +164,9 @@ export function useFaceDetection(): UseFaceDetectionReturn {
           if (!video) throw new Error("Video ref not attached")
 
           // Phase 2: start camera
-          const stream = await setupCamera(video)
+          const { stream, playStartTime } = await setupCamera(video)
           streamRef.current = stream
+          playStartTimeRef.current = playStartTime
 
           if (!isMountedRef.current) {
             stream.getTracks().forEach((t) => t.stop())
@@ -158,11 +183,22 @@ export function useFaceDetection(): UseFaceDetectionReturn {
             const currentCanvas = canvasRef.current
             if (!currentVideo || !currentCanvas) return
 
-            if (
-              currentVideo.readyState < 2 ||
-              currentVideo.paused ||
-              currentVideo.ended
-            ) {
+            const hasCurrentData =
+              currentVideo.readyState >= 2 &&
+              !currentVideo.paused &&
+              !currentVideo.ended &&
+              currentVideo.videoWidth > 0 &&
+              currentVideo.videoHeight > 0
+
+            const warmed = isWarmedUp(
+              playStartTimeRef.current,
+              performance.now(),
+              hasCurrentData,
+            )
+
+            setIsWarmingUp(!warmed)
+
+            if (!warmed) {
               return
             }
 
@@ -307,6 +343,8 @@ export function useFaceDetection(): UseFaceDetectionReturn {
     return () => {
       detectionActive = false
       isMountedRef.current = false
+      playStartTimeRef.current = null
+      setIsWarmingUp(true)
 
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
@@ -333,5 +371,6 @@ export function useFaceDetection(): UseFaceDetectionReturn {
     recognitionReady,
     models,
     debugData,
+    isWarmingUp,
   }
 }

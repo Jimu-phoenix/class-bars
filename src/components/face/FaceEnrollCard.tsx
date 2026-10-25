@@ -22,6 +22,7 @@ export default function FaceEnrollCard({
     recognitionReady,
     results,
     debugData,
+    isWarmingUp,
   } = useFaceDetection()
 
   const [frozenFace, setFrozenFace] = useState<Float32Array | null>(null)
@@ -81,11 +82,13 @@ export default function FaceEnrollCard({
         />
         {!isLoading && !cameraError && (
           <p className="text-center text-xs text-muted-foreground">
-            {descriptorReady
-              ? "Face captured."
-              : results.length > 0
-                ? "Hold still while the recognizer warms up…"
-                : "Position your face in view of the camera."}
+            {isWarmingUp
+              ? "Getting camera ready…"
+              : descriptorReady
+                ? "Face captured."
+                : results.length > 0
+                  ? "Hold still while the recognizer warms up…"
+                  : "Position your face in view of the camera."}
           </p>
         )}
       </div>
@@ -94,7 +97,7 @@ export default function FaceEnrollCard({
           className="flex-1"
           size="lg"
           onClick={() => void handleSave()}
-          disabled={busy || !descriptorReady}
+          disabled={busy || !descriptorReady || isWarmingUp}
         >
           {busy ? (
             <Loader2 data-icon="inline-start" className="animate-spin" />

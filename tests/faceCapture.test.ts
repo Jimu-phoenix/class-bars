@@ -8,6 +8,13 @@ import {
   DETECTOR_INPUT_SIZE,
   DETECTOR_SCORE_THRESHOLD,
   USE_TINY_LANDMARKS,
+  buildCameraConstraintAttempts,
+  isWarmedUp,
+  CAMERA_IDEAL_WIDTH,
+  CAMERA_IDEAL_HEIGHT,
+  WARMUP_MS,
+  ENABLE_CAMERA_CONSTRAINTS,
+  ENABLE_CAMERA_WARMUP,
 } from "../src/lib/faceCapture.ts"
 
 test("summariseDistances returns empty stats for empty input", () => {
@@ -70,5 +77,74 @@ test("pipeline constants match required baseline", () => {
   assert.equal(DETECTOR_INPUT_SIZE, 320)
   assert.equal(DETECTOR_SCORE_THRESHOLD, 0.4)
   assert.equal(USE_TINY_LANDMARKS, true)
+  assert.equal(CAMERA_IDEAL_WIDTH, 1280)
+  assert.equal(CAMERA_IDEAL_HEIGHT, 720)
+  assert.equal(WARMUP_MS, 800)
+  assert.equal(ENABLE_CAMERA_CONSTRAINTS, true)
+  assert.equal(ENABLE_CAMERA_WARMUP, true)
+})
+
+test("buildCameraConstraintAttempts returns progressive constraints when enabled", () => {
+  const attempts = buildCameraConstraintAttempts(true)
+  assert.equal(attempts.length, 3)
+
+  // 1st attempt: 1280x720 ideal facingMode user
+  assert.deepEqual(attempts[0], {
+    video: {
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      facingMode: "user",
+    },
+    audio: false,
+  })
+
+  // 2nd attempt: user camera only
+  assert.deepEqual(attempts[1], {
+    video: {
+      facingMode: "user",
+    },
+    audio: false,
+  })
+
+  // 3rd attempt: plain video true
+  assert.deepEqual(attempts[2], {
+    video: true,
+    audio: false,
+  })
+})
+
+test("buildCameraConstraintAttempts returns single fallback when disabled", () => {
+  const attempts = buildCameraConstraintAttempts(false)
+  assert.equal(attempts.length, 1)
+  assert.deepEqual(attempts[0], {
+    video: {
+      width: { ideal: 640 },
+      height: { ideal: 480 },
+      facingMode: "user",
+    },
+    audio: false,
+  })
+})
+
+test("isWarmedUp enforces warmup duration and data readiness", () => {
+  const start = 1000
+
+  // Before stream starts playing
+  assert.equal(isWarmedUp(null, 1500, true), false)
+
+  // Playing but video does not have current data yet
+  assert.equal(isWarmedUp(start, 2000, false), false)
+
+  // Within warmup window (< 800ms elapsed)
+  assert.equal(isWarmedUp(start, start + 500, true), false)
+  assert.equal(isWarmedUp(start, start + 799, true), false)
+
+  // Warmup elapsed and data ready
+  assert.equal(isWarmedUp(start, start + 800, true), true)
+  assert.equal(isWarmedUp(start, start + 1200, true), true)
+
+  // When warm-up is disabled, returns hasCurrentData immediately
+  assert.equal(isWarmedUp(start, start + 100, true, 800, false), true)
+  assert.equal(isWarmedUp(start, start + 100, false, 800, false), false)
 })
 
