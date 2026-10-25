@@ -74,10 +74,10 @@ function formatStartedAt(iso: string) {
 
 function accuracyLabel(accuracy: number) {
   if (accuracy <= GOOD_ACCURACY_M) {
-    return { label: "Good", className: "bg-emerald-500/10 text-emerald-600" }
+    return { label: "Good", className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" }
   }
   if (accuracy <= MAX_ACCURACY_M) {
-    return { label: "Fair", className: "bg-amber-500/10 text-amber-600" }
+    return { label: "Fair", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400" }
   }
   return { label: "Poor", className: "bg-destructive/10 text-destructive" }
 }
@@ -446,51 +446,28 @@ export default function StudentHome() {
         </div>
 
         {locationLoading && !location ? (
-          <div className="mt-4 grid grid-cols-2 gap-2" aria-hidden="true">
-            <div className="h-14 animate-pulse rounded-lg bg-muted" />
-            <div className="h-14 animate-pulse rounded-lg bg-muted" />
-          </div>
+          <div className="mt-3 h-6 w-52 animate-pulse rounded-full bg-muted" aria-hidden="true" />
         ) : locationError ? (
           <p role="alert" className="mt-3 rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
             {locationError}
           </p>
         ) : location && locationAccuracy ? (
-          <>
-            <dl className="mt-4 grid grid-cols-2 gap-2">
-              <div className="rounded-lg bg-muted/50 p-2.5">
-                <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Latitude
-                </dt>
-                <dd className="mt-0.5 truncate font-mono text-sm tabular-nums">
-                  {location.latitude.toFixed(6)}
-                </dd>
-              </div>
-              <div className="rounded-lg bg-muted/50 p-2.5">
-                <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Longitude
-                </dt>
-                <dd className="mt-0.5 truncate font-mono text-sm tabular-nums">
-                  {location.longitude.toFixed(6)}
-                </dd>
-              </div>
-            </dl>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium",
-                  locationAccuracy.className,
-                )}
-              >
-                ±{Math.round(location.accuracy)} m accuracy
-              </span>
-              <span>{locationAccuracy.label}</span>
-              {location.accuracy > MAX_ACCURACY_M && (
-                <span className="text-destructive">
-                  Too poor to check in — move somewhere with a clearer view of the sky.
-                </span>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full px-2.5 py-0.5 font-medium",
+                locationAccuracy.className,
               )}
-            </div>
-          </>
+            >
+              {locationAccuracy.label}
+            </span>
+            <span>±{Math.round(location.accuracy)} m accuracy</span>
+            {location.accuracy > MAX_ACCURACY_M && (
+              <span className="text-destructive">
+                Too poor to check in.
+              </span>
+            )}
+          </div>
         ) : null}
       </section>
 
