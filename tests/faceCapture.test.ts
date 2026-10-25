@@ -5,6 +5,9 @@ import {
   recordSessionDistance,
   getSessionDistances,
   clearSessionDistances,
+  DETECTOR_INPUT_SIZE,
+  DETECTOR_SCORE_THRESHOLD,
+  USE_TINY_LANDMARKS,
 } from "../src/lib/faceCapture.ts"
 
 test("summariseDistances returns empty stats for empty input", () => {
@@ -62,3 +65,10 @@ test("session distances recording and clearing", () => {
   clearSessionDistances()
   assert.deepEqual(getSessionDistances(), [])
 })
+
+test("pipeline constants match required baseline", () => {
+  assert.equal(DETECTOR_INPUT_SIZE, 320)
+  assert.equal(DETECTOR_SCORE_THRESHOLD, 0.4)
+  assert.equal(USE_TINY_LANDMARKS, true)
+})
+

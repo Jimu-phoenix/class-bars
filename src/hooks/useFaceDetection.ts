@@ -7,7 +7,11 @@ import {
   loadDetectionModel,
   type FaceModelsStatus,
 } from "@/lib/faceModels"
-import { isFaceDebugEnabled, type FaceDebugData } from "@/lib/faceCapture"
+import {
+  isFaceDebugEnabled,
+  type FaceDebugData,
+  USE_TINY_LANDMARKS,
+} from "@/lib/faceCapture"
 
 type FaceDetectionResult = {
   confidence: number
@@ -176,7 +180,7 @@ export function useFaceDetection(): UseFaceDetectionReturn {
                 DETECTION_OPTIONS,
               )
               const landmarkedTask = landmarksReadyRef.current
-                ? baseTask.withFaceLandmarks(true)
+                ? baseTask.withFaceLandmarks(USE_TINY_LANDMARKS)
                 : null
               const descriptorTask =
                 landmarkedTask && recognitionReadyRef.current

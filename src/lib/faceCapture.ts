@@ -1,6 +1,11 @@
 // Pure helpers and constants for the face capture pipeline.
 // This file has zero browser/face-api dependencies so it can be tested directly with node:test.
 
+// Pipeline configuration constants: single source of truth for enrolment and verification.
+export const DETECTOR_INPUT_SIZE = 320
+export const DETECTOR_SCORE_THRESHOLD = 0.4
+export const USE_TINY_LANDMARKS = true
+
 export type DistanceSummary = {
   attempts: number
   min: number | null

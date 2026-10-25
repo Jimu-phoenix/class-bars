@@ -1,13 +1,17 @@
 import * as faceapi from "face-api.js"
 import { FACE_MODEL_VERSION } from "@/lib/faceCompare"
+import {
+  DETECTOR_INPUT_SIZE,
+  DETECTOR_SCORE_THRESHOLD,
+} from "@/lib/faceCapture"
 
 export { FACE_MODEL_VERSION }
 
 export const FACE_MODELS_BASE = "/models"
 
 export const DETECTION_OPTIONS = new faceapi.TinyFaceDetectorOptions({
-  inputSize: 320,
-  scoreThreshold: 0.4,
+  inputSize: DETECTOR_INPUT_SIZE,
+  scoreThreshold: DETECTOR_SCORE_THRESHOLD,
 })
 
 export function isModelError(message: string | null): boolean {
