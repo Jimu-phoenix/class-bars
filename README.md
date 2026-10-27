@@ -49,8 +49,10 @@ SQL files are applied manually via Supabase Dashboard -> SQL Editor, **in this o
 10. `migrations/10_staff_email_allowlist.sql` — staff email allowlist
 11. `migrations/11_admin_section_rls.sql` — admin section RLS (required by migration 12)
 12. `migrations/12_geofencing.sql` — PostGIS geofences (circle or class box), hardened check-in RPC, flagged attendance
+13. `migrations/13_set_venue_geofence_security_definer.sql` — admin geofence setup security definer RPC
+14. `migrations/14_face_embeddings_single_row.sql` — single face embedding per student (pruning duplicates & in-place update)
 
-`migrations/03_table_details.sql` is **not** part of the chain — it's a read-only report of your live schema (columns, constraints, RLS policies, triggers) for verification and drift checks. Migrations 08–12 have not been applied to every environment; apply them in order before deploying the matching client.
+`migrations/03_table_details.sql` is **not** part of the chain — it's a read-only report of your live schema (columns, constraints, RLS policies, triggers) for verification and drift checks. Migrations 08–14 have not been applied to every environment; apply them in order before deploying the matching client.
 
 ### Resetting the database
 

@@ -1,14 +1,46 @@
 import * as faceapi from "face-api.js"
 import { FACE_MODEL_VERSION } from "@/lib/faceCompare"
+import {
+  DETECTOR_INPUT_SIZE,
+  VERIFY_INPUT_SIZE,
+  DETECTOR_SCORE_THRESHOLD,
+  USE_TINY_LANDMARKS,
+  SSD_MIN_CONFIDENCE,
+} from "@/lib/faceCapture"
 
 export { FACE_MODEL_VERSION }
 
 export const FACE_MODELS_BASE = "/models"
 
 export const DETECTION_OPTIONS = new faceapi.TinyFaceDetectorOptions({
-  inputSize: 320,
-  scoreThreshold: 0.4,
+  inputSize: DETECTOR_INPUT_SIZE,
+  scoreThreshold: DETECTOR_SCORE_THRESHOLD,
 })
+
+export const VERIFY_DETECTION_OPTIONS = new faceapi.TinyFaceDetectorOptions({
+  inputSize: VERIFY_INPUT_SIZE,
+  scoreThreshold: DETECTOR_SCORE_THRESHOLD,
+})
+
+export const SSD_DETECTION_OPTIONS = new faceapi.SsdMobilenetv1Options({
+  minConfidence: SSD_MIN_CONFIDENCE,
+})
+
+let ssdLoadingPromise: Promise<boolean> | null = null
+
+export async function loadSsdModel(): Promise<boolean> {
+  if (faceapi.nets.ssdMobilenetv1.isLoaded) return true
+  if (!ssdLoadingPromise) {
+    ssdLoadingPromise = faceapi.nets.ssdMobilenetv1
+      .loadFromUri(FACE_MODELS_BASE)
+      .then(() => true)
+      .catch((err) => {
+        console.warn("Failed to load SSD MobileNetV1 model, falling back to tiny detector:", err)
+        return false
+      })
+  }
+  return ssdLoadingPromise
+}
 
 export function isModelError(message: string | null): boolean {
   return message?.startsWith("Face models failed to load") ?? false
@@ -23,7 +55,9 @@ export type FaceModelsStatus = {
 export function faceModelsStatus(): FaceModelsStatus {
   return {
     detector: faceapi.nets.tinyFaceDetector.isLoaded,
-    landmarks: faceapi.nets.faceLandmark68TinyNet.isLoaded,
+    landmarks: USE_TINY_LANDMARKS
+      ? faceapi.nets.faceLandmark68TinyNet.isLoaded
+      : faceapi.nets.faceLandmark68Net.isLoaded,
     recognition: faceapi.nets.faceRecognitionNet.isLoaded,
   }
 }
@@ -38,8 +72,11 @@ export async function loadDeferredModels(
   onError: (err: Error) => void = () => {},
 ): Promise<void> {
   try {
+    const landmarkNet = USE_TINY_LANDMARKS
+      ? faceapi.nets.faceLandmark68TinyNet
+      : faceapi.nets.faceLandmark68Net
     await Promise.all([
-      faceapi.nets.faceLandmark68TinyNet
+      landmarkNet
         .loadFromUri(FACE_MODELS_BASE)
         .then(onLandmarksReady),
       faceapi.nets.faceRecognitionNet
@@ -54,9 +91,12 @@ export async function loadDeferredModels(
 
 export async function warmFaceModels(): Promise<void> {
   try {
+    const landmarkNet = USE_TINY_LANDMARKS
+      ? faceapi.nets.faceLandmark68TinyNet
+      : faceapi.nets.faceLandmark68Net
     await Promise.all([
       loadDetectionModel(),
-      faceapi.nets.faceLandmark68TinyNet.loadFromUri(FACE_MODELS_BASE),
+      landmarkNet.loadFromUri(FACE_MODELS_BASE),
       faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODELS_BASE),
     ])
   } catch (err) {

@@ -1,8 +1,8 @@
 # Class-BARS Progress Report
 
-**Date:** 2026-10-23
+**Date:** 2026-10-25
 **Repo:** `D:\classBars\class-bars`
-**Overall status:** Real (DB-backed) attendance flow built end-to-end and verified by lint/build/tests. Role-based access hardened end-to-end (client guards + server-side `staff_emails` allowlist enforced in the signup trigger). Theme toggle rewritten. Profile UI lives inside each role's dashboard. Auth pages guest-only. Dashboard shell + student pages rebuilt mobile-first. Sandbox untouched. Migrations 06/07 applied to live project; **08, 09 superseded by 10; 10 pending execution; 11 scripted for admin RLS; 12 geofencing revised in place for circle/box fences, scripted and pending execution after 11**. Admin dashboard built (Home, Venues, Users & Roles, System Logs) with magic-link login and no signup; Venues supports circle and four-corner box geofence editing.
+**Overall status:** Real (DB-backed) attendance flow built end-to-end and verified by lint/build/tests. Role-based access hardened end-to-end (client guards + server-side `staff_emails` allowlist enforced in the signup trigger). Theme toggle rewritten. Profile UI lives inside each role's dashboard. Auth pages guest-only. Dashboard shell + student pages rebuilt mobile-first. Student location card streamlined for privacy (raw coordinates removed; accuracy + Good/Fair/Poor flags displayed). Sandbox untouched. **All migrations (01 through 14) applied: 08 (course ownership), 10 (staff email allowlist, superseding 09), 11 (admin section RLS), 12 (PostGIS circle/box geofencing), 13 (admin geofence security definer), and 14 (single-row face embedding in-place update).** Admin dashboard built (Home, Venues, Users & Roles, System Logs) with magic-link login and no signup; Venues supports circle and four-corner box geofence editing.
 
 ---
 
@@ -14,16 +14,19 @@
 | Security/policies (`migrations/01`) | Done | Staff policies, hardened `check_in_attendance`, immutability guards |
 | Real attendance flow (`migrations/06`) | Applied | `face_embeddings` renamed/self-own policy; SECURITY DEFINER RPCs: `upsert_face_embedding`, `clear_face_embedding`, `enroll_self`, `get_session_attendance`; hardening; grants |
 | Real-table GRANTs (`migrations/07`) | **Applied — fixes "permission denied"** | Explicit DML grants to `authenticated`, SELECT to `anon` on real tables + EXECUTE on client RPCs |
-| Course ownership (`migrations/08`) | **Scripted — NOT yet executed** | `courses.lecturer_id` FK + owner-scoped create/update policies |
-| Role enforcement (`migrations/09`) | **Scripted — superseded by 10** | `staff_email_domains` domain allowlist replaced by `staff_emails` exact-email allowlist in migration 10; `handle_new_user` demotes non-allowlisted lecturers; profiles INSERT closed to `role='student'` |
-| Lecturer allowlist (`migrations/10`) | **Scripted — NOT yet executed** | `staff_emails` table (exact email match, replaces `staff_email_domains` domain match); `is_staff_email()` re-pointed; client `rolePolicy.ts` reads the same table |
+| Course ownership (`migrations/08`) | **Applied** | `courses.lecturer_id` FK + owner-scoped create/update policies |
+| Role enforcement (`migrations/09`) | **Superseded by 10** | `staff_email_domains` domain allowlist replaced by `staff_emails` exact-email allowlist in migration 10; `handle_new_user` demotes non-allowlisted lecturers; profiles INSERT closed to `role='student'` |
+| Lecturer allowlist (`migrations/10`) | **Applied** | `staff_emails` table (exact email match, replaces `staff_email_domains` domain match); `is_staff_email()` re-pointed; client `rolePolicy.ts` reads the same table |
+| Admin section RLS (`migrations/11`) | **Applied** | RLS for admin CRUD on staff_emails, venues, audit_logs |
 | Signup | Done | Student/Lecturer toggle + hCaptcha; `AuthContext.signUp` accepts `captchaToken` |
 | Lecturer dashboard | Done | Collapsible sidebar (Overview, Courses, Update profile, Sign out), stat cards, session live page |
-| Student dashboard | Done | Same shell/sidebar, Overview + Courses + Update profile pages, live face check-in |
+| Student dashboard | Done | Same shell/sidebar, Overview + Courses + Update profile pages, live face check-in, privacy-preserving location accuracy card |
 | New session form | Done | "Start now" vs "Schedule for later" + registration duration (5/15/30/60 min) that auto-computes session end |
 | Face pipeline | Done | face-api 0.22.2 (tiny detector/landmarks/recognition, models in `public/models/`), pure math + model-version helpers in `src/lib/faceCompare.ts` |
 | Admin dashboard | Done | Magic-link login, no signup; Home (live stats), Venues (CRUD + circle/box geofence editor), Users & Roles (staff email allowlist), System Logs (audit_logs). Sidebar-driven navigation, all routes AdminRoute-guarded. |
-| Geofencing (`migrations/12`) | **Scripted — NOT yet executed** | PostGIS proximity check in `check_in_attendance`; one `geofences` row per venue (circle 2–50 m or four-corner box); gap-based decision table with small-fence handling; raw coordinates never stored; admin-only fence writes. Depends on 11. |
+| Geofencing (`migrations/12`) | **Applied** | PostGIS proximity check in `check_in_attendance`; one `geofences` row per venue (circle 2–50 m or four-corner box); gap-based decision table with small-fence handling; raw coordinates never stored; admin-only fence writes. |
+| Admin geofence RPC (`migrations/13`) | **Applied** | `set_venue_geofence` made SECURITY DEFINER with explicit admin role check to prevent RLS subquery recursion |
+| Single face embedding (`migrations/14`) | **Applied** | Prunes older/duplicate face embeddings per user and updates in-place, eliminating 409 unique_violation against `idx_face_embeddings_active_user` |
 | Sandbox module | Untouched | Intentionally left as-is per user decision |
 
 ---
@@ -40,7 +43,7 @@
 - **Permission-denied root cause (confirmed):** PostgreSQL checks *privileges* before RLS — the base schema ships zero GRANTs, so real tables silently denied `authenticated`. `migrations/07` fixes it; verified working by the user.
 
 ### 2.2 Course ownership
-- `migrations/08_course_lecturer.sql` (pending execution): adds `courses.lecturer_id uuid references profiles(id)` (+index), replaces the staff-wide course create/update policies with owner-scoped ones (admin exception). Existing rows keep `lecturer_id NULL`; legacy courses won't show in "My courses" until an admin reassigns them.
+- `migrations/08_course_lecturer.sql` (applied): adds `courses.lecturer_id uuid references profiles(id)` (+index), replaces the staff-wide course create/update policies with owner-scoped ones (admin exception). Existing rows keep `lecturer_id NULL`; legacy courses won't show in "My courses" until an admin reassigns them.
 - Client: `LecturerCourses` assigns `lecturer_id = user.id` on create and lists only own courses; `NewSession` course dropdown filters to owned courses.
 
 ### 2.3 Signup rework
@@ -128,6 +131,16 @@
 - `index.css`: tap-highlight transparency, `overscroll-behavior-y: none`, `touch-action: manipulation` on buttons/links/tabs, and a `prefers-reduced-motion` block.
 - Verification: `tsc -b`, `eslint`, `vite build` all clean; tests 73/74 pass (same pre-existing `schema.test.ts` failure).
 
+### 3.7 Student location privacy & accuracy simplification (`current`)
+
+- **StudentHome location card**: Raw latitude and longitude values removed from the card UI. Displaying high-precision coordinate numbers cluttered the interface and contradicted the privacy reassurance note ("Coordinates stay on this device — check-in stores only distance and accuracy").
+- **Accuracy & Quality indicators**: Location card now features a concise status row displaying:
+  - An accuracy quality badge: **Good** (emerald), **Fair** (amber), or **Poor** (destructive), with explicit dark-mode styling (`dark:text-emerald-400`, `dark:text-amber-400`).
+  - Reported device accuracy in metres: `±{accuracy} m accuracy`.
+  - Contextual warning if accuracy exceeds `MAX_ACCURACY_M` (> 100 m).
+- **Loading skeleton**: Replaced the previous 2-card coordinate placeholder with a single matching rounded pill skeleton.
+- **Verification**: Verified clean against ESLint, `tsc -b`, unit tests (`tests/geofence.test.ts`), and the full production Vite build.
+
 ---
 
 ## 4. Earlier phase — sandbox / demo + auth (history)
@@ -166,18 +179,15 @@
 | Drop the 5-arg check-in RPC and revoke direct attendance INSERT | Otherwise the fence is advisory and can be bypassed by calling an old function or inserting directly |
 | Venues without a fence block check-in | Fail closed; admins must explicitly configure a room before it can be used for attendance |
 | Sandbox module left untouched throughout | Explicit user instruction; all new work is on the real tables |
+| Remove raw lat/long coordinates from StudentHome location card; show accuracy and Good/Fair/Poor flag only | Privacy & UX; raw numbers clutter the mobile UI and run counter to privacy reassurance ("Coordinates stay on this device"). Device fix accuracy and the threshold quality flag are all that matter to the student |
 
 ---
 
-## 5. Known issues / follow-ups
+## 6. Known issues / follow-ups
 
-1. **Execute `migrations/08_course_lecturer.sql`** in Supabase SQL Editor (06/07 already applied).
-2. **Execute `migrations/10_staff_email_allowlist.sql`** — required server-side lecturer enforcement.
-3. **Execute `migrations/11_admin_section_rls.sql`** — RLS for admin CRUD on staff_emails/venues/audit_logs.
-4. **Execute `migrations/12_geofencing.sql` after 11** — revised in place (not executed anywhere yet), requires PostGIS. Verify the extension is available in the Supabase project, then run `tests/sql/geofencing_checks.sql` (apply 12 twice first).
-5. **`scripts/reset_supabase_project.sql` is missing migrations 10, 11 and 12** — it still builds base, 01, 02, 04–09. Do not use it to rebuild a project that needs the staff allowlist, admin/geofence policies, or geofencing until it is updated.
-6. **`tests/schema.test.ts` fails** — stale `table_state.json` snapshot; regenerate.
-7. **Camera/GPS/DB verification is manual** — validated via lint + tsc + unit tests only; live PostGIS and real device geolocation are unverified in this environment.
+1. **`scripts/reset_supabase_project.sql` is missing migrations 10, 11 and 12** — it still builds base, 01, 02, 04–09. Do not use it to rebuild a project that needs the staff allowlist, admin/geofence policies, or geofencing until it is updated.
+2. **`tests/schema.test.ts` fails** — stale `table_state.json` snapshot; regenerate against the live applied schema.
+3. **Hardware device verification** — while validated via unit tests, lint, and build, live end-to-end device testing with live PostGIS proximity and mobile camera face-matching should be verified on physical devices.
 
 
 ---
@@ -185,20 +195,21 @@
 ## 7. Files changed in the latest phase
 
 ```
-migrations/10_staff_email_allowlist.sql  # NEW — staff_emails exact-email allowlist (PENDING execution)
-migrations/11_admin_section_rls.sql      # NEW — RLS for admin CRUD (PENDING execution)
-migrations/12_geofencing.sql             # UPDATED IN PLACE — circle/box geofences, gap check, flagged attendance (PENDING execution)
+src/pages/StudentHome.tsx                # UPDATED — removed raw lat/long display, added accuracy + Good/Fair/Poor status badge, dark mode support
+PROGRESS.md                              # UPDATED — refreshed to 2026-10-25, documented location privacy changes & all applied migrations
+migrations/08_course_lecturer.sql        # APPLIED — course owner-scoped policies & lecturer_id FK
+migrations/10_staff_email_allowlist.sql  # APPLIED — staff_emails exact-email allowlist
+migrations/11_admin_section_rls.sql      # APPLIED — RLS for admin CRUD
+migrations/12_geofencing.sql             # APPLIED — PostGIS circle/box geofences, gap check, flagged attendance
 src/lib/geofence.ts                      # UPDATED — bounds, box ordering/validation, half-size, geolocation + block messages
 src/components/admin/VenueGeofenceMap.tsx # UPDATED — circle/box map, draggable corners, live polygon
 src/pages/AdminDashboard.tsx             # UPDATED — circle/box tabs, corners, small-fence notice, RPC save, fence delete
-src/pages/StudentHome.tsx                # UPDATED — location capture + flagged confirmation
 src/pages/SessionLive.tsx                # UPDATED — flag reason on flagged roster rows
 src/lib/realAttendance.ts                # UPDATED — 8-arg check-in RPC with location
 src/types/db.ts                          # UPDATED — GeofenceRow, venue geofence_id, attendance flag/location fields
 tests/geofence.test.ts                   # UPDATED — bounds, box ordering/validation, half-size, pasted pairs
 tests/sql/geofencing_checks.sql          # UPDATED — circle/box schema, RLS, RPC, decision table (rolls back)
 README.md                                # UPDATED — migration order, geofencing, test instructions
-PROGRESS.md                              # UPDATED — this report
 src/contexts/AuthContext.tsx              # UPDATED — signInWithOtp (magic link), signUp captchaToken
 src/lib/guardPolicy.ts                    # UPDATED — homeFor maps admin→/admin; fallbacks /profile→/login
 src/lib/nav.ts                            # UPDATED — ADMIN_NAV (Home, Venues, Users & Roles, System Logs)

@@ -4,7 +4,7 @@ export const MATCH_THRESHOLD = 0.6;
 // Check-in only compares against an active embedding with the same tag, so
 // bumping this (or the underlying recognition net) can never silently
 // mismatch descriptors.
-export const FACE_MODEL_VERSION = "face-api-recognition-tiny-v1";
+export const FACE_MODEL_VERSION = "face-api-recognition-full68-v1";
 
 export function euclideanDistance(a: Float32Array, b: Float32Array): number {
   if (a.length !== b.length) {

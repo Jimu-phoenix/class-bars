@@ -1,11 +1,17 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Loader2, RefreshCw } from "lucide-react"
 import { useFaceDetection } from "@/hooks/useFaceDetection"
 import { euclideanDistance, isMatch } from "@/lib/faceCompare"
+import {
+  recordSessionDistance,
+  getSessionDistances,
+  summariseDistances,
+  type DistanceSummary,
+} from "@/lib/faceCapture"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CardContent } from "@/components/ui/card"
-import FaceCaptureFrame from "@/components/face/FaceCaptureFrame"
+import FaceCaptureFrame, { FaceDebugReadout } from "@/components/face/FaceCaptureFrame"
 
 export type VerifyVerdict = { status: "no-match"; distance: number } | null
 
@@ -37,7 +43,14 @@ export default function FaceVerifyCard({
     error: cameraError,
     recognitionReady,
     results,
+    debugData,
+    isWarmingUp,
   } = useFaceDetection()
+
+  const [lastDistance, setLastDistance] = useState<number | null>(null)
+  const [distanceSummary, setDistanceSummary] = useState<DistanceSummary>(() =>
+    summariseDistances(getSessionDistances()),
+  )
 
   const liveFace =
     recognitionReady && results.length > 0
@@ -47,16 +60,20 @@ export default function FaceVerifyCard({
   const capturedRef = useRef(false)
 
   useEffect(() => {
-    if (verdict !== null) return
+    if (isWarmingUp || verdict !== null) return
     if (!stored || !liveFace) return
     if (capturedRef.current) return
     capturedRef.current = true
+    const distance = euclideanDistance(stored, liveFace)
+    recordSessionDistance(distance)
+    setLastDistance(distance)
+    setDistanceSummary(summariseDistances(getSessionDistances()))
     if (isMatch(stored, liveFace)) {
       onMatch(liveFace)
     } else {
-      onNoMatch(euclideanDistance(stored, liveFace))
+      onNoMatch(distance)
     }
-  }, [liveFace, stored, verdict, onMatch, onNoMatch])
+  }, [liveFace, stored, verdict, isWarmingUp, onMatch, onNoMatch])
 
   useEffect(() => {
     if (verdict === null) {
@@ -76,12 +93,24 @@ export default function FaceVerifyCard({
         canvasRef={canvasRef}
         isLoading={isLoading}
         error={cameraError}
+        debugReadout={
+          <FaceDebugReadout
+            data={debugData}
+            lastDistance={lastDistance}
+            distanceSummary={distanceSummary}
+          />
+        }
       />
 
       {!isLoading && !cameraError && (
         <div className="flex flex-col items-center gap-2.5">
           <div className="flex items-center justify-center gap-2">
-            {submitting ? (
+            {isWarmingUp ? (
+              <Badge variant="outline" className="gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Getting camera ready…
+              </Badge>
+            ) : submitting ? (
               <Badge variant="outline" className="gap-1.5">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Recording attendance…

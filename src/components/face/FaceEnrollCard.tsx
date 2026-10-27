@@ -3,7 +3,7 @@ import { CheckCircle2, Loader2, Save } from "lucide-react"
 import { useFaceDetection } from "@/hooks/useFaceDetection"
 import { Button } from "@/components/ui/button"
 import { CardContent } from "@/components/ui/card"
-import FaceCaptureFrame from "@/components/face/FaceCaptureFrame"
+import FaceCaptureFrame, { FaceDebugReadout } from "@/components/face/FaceCaptureFrame"
 
 export default function FaceEnrollCard({
   actionLabel = "Save face",
@@ -21,15 +21,18 @@ export default function FaceEnrollCard({
     error: cameraError,
     recognitionReady,
     results,
-  } = useFaceDetection()
+    debugData,
+    isWarmingUp,
+  } = useFaceDetection({ mode: "enrol" })
 
   const [frozenFace, setFrozenFace] = useState<Float32Array | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
+  const exactlyOneFace = results.length === 1
   const liveFace =
-    recognitionReady && results.length > 0
+    recognitionReady && exactlyOneFace
       ? results[0].detection.descriptor
       : null
   if (liveFace && !frozenFace) {
@@ -76,14 +79,19 @@ export default function FaceEnrollCard({
           canvasRef={canvasRef}
           isLoading={isLoading}
           error={cameraError}
+          debugReadout={<FaceDebugReadout data={debugData} />}
         />
         {!isLoading && !cameraError && (
           <p className="text-center text-xs text-muted-foreground">
-            {descriptorReady
-              ? "Face captured."
-              : results.length > 0
-                ? "Hold still while the recognizer warms up…"
-                : "Position your face in view of the camera."}
+            {isWarmingUp
+              ? "Getting camera ready…"
+              : descriptorReady
+                ? "Face captured."
+                : results.length > 1
+                  ? "Multiple faces detected — please ensure only one face is visible."
+                  : results.length === 1
+                    ? "Hold still while the recognizer warms up…"
+                    : "Position your face in view of the camera."}
           </p>
         )}
       </div>
@@ -92,7 +100,7 @@ export default function FaceEnrollCard({
           className="flex-1"
           size="lg"
           onClick={() => void handleSave()}
-          disabled={busy || !descriptorReady}
+          disabled={busy || !descriptorReady || isWarmingUp}
         >
           {busy ? (
             <Loader2 data-icon="inline-start" className="animate-spin" />

@@ -5,6 +5,7 @@ import {
   clearFaceEmbedding,
   getActiveFaceEmbedding,
   upsertFaceEmbedding,
+  FACE_MODEL_VERSION,
 } from "@/lib/realAttendance"
 import { fullScreenOnMobile } from "@/lib/dialogClasses"
 import FaceEnrollCard from "@/components/face/FaceEnrollCard"
@@ -106,11 +107,20 @@ export default function FaceBiometricsCard() {
             Checking…
           </p>
         ) : embedding ? (
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Badge>Enrolled</Badge>
-            <span className="text-muted-foreground">
-              {embedding.model_version} · saved {new Date(embedding.updated_at).toLocaleDateString()}
-            </span>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Badge variant={embedding.model_version !== FACE_MODEL_VERSION ? "outline" : "default"}>
+                {embedding.model_version !== FACE_MODEL_VERSION ? "Update required" : "Enrolled"}
+              </Badge>
+              <span className="text-muted-foreground">
+                {embedding.model_version} · saved {new Date(embedding.updated_at).toLocaleDateString()}
+              </span>
+            </div>
+            {embedding.model_version !== FACE_MODEL_VERSION && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Your face template was saved with an older model version. Please update your face to continue checking in.
+              </p>
+            )}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">

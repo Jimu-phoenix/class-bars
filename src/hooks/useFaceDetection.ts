@@ -2,11 +2,22 @@ import { useRef, useState, useEffect } from "react"
 import * as faceapi from "face-api.js"
 import {
   DETECTION_OPTIONS,
+  VERIFY_DETECTION_OPTIONS,
+  SSD_DETECTION_OPTIONS,
   faceModelsStatus,
   loadDeferredModels,
   loadDetectionModel,
+  loadSsdModel,
   type FaceModelsStatus,
 } from "@/lib/faceModels"
+import {
+  isFaceDebugEnabled,
+  type FaceDebugData,
+  USE_TINY_LANDMARKS,
+  ENROL_DETECTOR,
+  buildCameraConstraintAttempts,
+  isWarmedUp,
+} from "@/lib/faceCapture"
 
 type FaceDetectionResult = {
   confidence: number
@@ -43,21 +54,42 @@ type UseFaceDetectionReturn = {
   landmarksReady: boolean
   recognitionReady: boolean
   models: FaceModelsStatus
+  debugData?: FaceDebugData | null
+  isWarmingUp: boolean
 }
 
-async function setupCamera(video: HTMLVideoElement): Promise<MediaStream> {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: {
-      width: { ideal: 640 },
-      height: { ideal: 480 },
-      facingMode: "user",
-    },
-    audio: false,
-  })
-  video.srcObject = stream
+async function setupCamera(
+  video: HTMLVideoElement,
+): Promise<{ stream: MediaStream; playStartTime: number }> {
+  const attempts = buildCameraConstraintAttempts()
+  let stream: MediaStream | null = null
+
+  for (let i = 0; i < attempts.length; i++) {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(attempts[i])
+      break
+    } catch (err) {
+      const isOverconstrained =
+        (typeof OverconstrainedError !== "undefined" && err instanceof OverconstrainedError) ||
+        (err instanceof Error && err.name === "OverconstrainedError")
+      if (!isOverconstrained || i === attempts.length - 1) {
+        throw err
+      }
+    }
+  }
+
+  if (!stream) {
+    throw new Error("Failed to acquire camera stream")
+  }
+
+  const acquiredStream = stream
+  video.srcObject = acquiredStream
   return new Promise((resolve, reject) => {
     video.onloadedmetadata = () => {
-      video.play().then(() => resolve(stream)).catch(reject)
+      video
+        .play()
+        .then(() => resolve({ stream: acquiredStream, playStartTime: performance.now() }))
+        .catch(reject)
     }
     video.onerror = () => reject(new Error("Video element error"))
   })
@@ -92,7 +124,14 @@ function drawFaceLandmarks(
   }
 }
 
-export function useFaceDetection(): UseFaceDetectionReturn {
+export type FaceDetectionMode = "verify" | "enrol"
+
+export type UseFaceDetectionOptions = {
+  mode?: FaceDetectionMode
+}
+
+export function useFaceDetection(options?: UseFaceDetectionOptions): UseFaceDetectionReturn {
+  const mode = options?.mode ?? "verify"
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -110,6 +149,9 @@ export function useFaceDetection(): UseFaceDetectionReturn {
     landmarks: false,
     recognition: false,
   })
+  const [isWarmingUp, setIsWarmingUp] = useState(true)
+  const playStartTimeRef = useRef<number | null>(null)
+  const [debugData, setDebugData] = useState<FaceDebugData | null>(null)
 
   const landmarksReadyRef = useRef(false)
   const recognitionReadyRef = useRef(false)
@@ -123,8 +165,15 @@ export function useFaceDetection(): UseFaceDetectionReturn {
           setError(null)
           setIsLoading(true)
 
-          // Phase 1: load detection model only
-          await loadDetectionModel()
+          let useSsd = false
+          if (mode === "enrol" && ENROL_DETECTOR === "ssd") {
+            useSsd = await loadSsdModel()
+            if (!useSsd) {
+              await loadDetectionModel()
+            }
+          } else {
+            await loadDetectionModel()
+          }
           setModels((m) => ({ ...m, detector: true }))
 
           if (!isMountedRef.current) return
@@ -133,8 +182,9 @@ export function useFaceDetection(): UseFaceDetectionReturn {
           if (!video) throw new Error("Video ref not attached")
 
           // Phase 2: start camera
-          const stream = await setupCamera(video)
+          const { stream, playStartTime } = await setupCamera(video)
           streamRef.current = stream
+          playStartTimeRef.current = playStartTime
 
           if (!isMountedRef.current) {
             stream.getTracks().forEach((t) => t.stop())
@@ -151,11 +201,22 @@ export function useFaceDetection(): UseFaceDetectionReturn {
             const currentCanvas = canvasRef.current
             if (!currentVideo || !currentCanvas) return
 
-            if (
-              currentVideo.readyState < 2 ||
-              currentVideo.paused ||
-              currentVideo.ended
-            ) {
+            const hasCurrentData =
+              currentVideo.readyState >= 2 &&
+              !currentVideo.paused &&
+              !currentVideo.ended &&
+              currentVideo.videoWidth > 0 &&
+              currentVideo.videoHeight > 0
+
+            const warmed = isWarmedUp(
+              playStartTimeRef.current,
+              performance.now(),
+              hasCurrentData,
+            )
+
+            setIsWarmingUp(!warmed)
+
+            if (!warmed) {
               return
             }
 
@@ -168,12 +229,16 @@ export function useFaceDetection(): UseFaceDetectionReturn {
             currentCanvas.height = displayHeight
 
             try {
+              const activeOptions =
+                mode === "enrol"
+                  ? (useSsd ? SSD_DETECTION_OPTIONS : DETECTION_OPTIONS)
+                  : VERIFY_DETECTION_OPTIONS
               const baseTask = faceapi.detectAllFaces(
                 currentVideo,
-                DETECTION_OPTIONS,
+                activeOptions,
               )
               const landmarkedTask = landmarksReadyRef.current
-                ? baseTask.withFaceLandmarks(true)
+                ? baseTask.withFaceLandmarks(USE_TINY_LANDMARKS)
                 : null
               const descriptorTask =
                 landmarkedTask && recognitionReadyRef.current
@@ -228,6 +293,35 @@ export function useFaceDetection(): UseFaceDetectionReturn {
               }
 
               setResults(mappedResults)
+
+              if (isFaceDebugEnabled()) {
+                const track = streamRef.current?.getVideoTracks()[0]
+                const trackSettings = track?.getSettings()
+                const d = detections[0]
+                const videoWidth = currentVideo.videoWidth
+                const videoHeight = currentVideo.videoHeight
+                const boxInVideo = d ? d.detection.forSize(videoWidth, videoHeight).box : null
+                const boxWidthPx = boxInVideo ? Math.round(boxInVideo.width) : null
+                const boxWidthPercent =
+                  boxInVideo && videoWidth > 0
+                    ? Number(((boxInVideo.width / videoWidth) * 100).toFixed(1))
+                    : null
+
+                setDebugData({
+                  videoWidth,
+                  videoHeight,
+                  trackSettings: trackSettings
+                    ? {
+                        width: trackSettings.width,
+                        height: trackSettings.height,
+                        frameRate: trackSettings.frameRate,
+                      }
+                    : undefined,
+                  score: d ? Number(d.detection.score.toFixed(3)) : null,
+                  boxWidthPx,
+                  boxWidthPercent,
+                })
+              }
             } catch (detectErr) {
               if (detectionActive) {
                 console.error("face-api detection error:", detectErr)
@@ -271,6 +365,8 @@ export function useFaceDetection(): UseFaceDetectionReturn {
     return () => {
       detectionActive = false
       isMountedRef.current = false
+      playStartTimeRef.current = null
+      setIsWarmingUp(true)
 
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
@@ -284,7 +380,7 @@ export function useFaceDetection(): UseFaceDetectionReturn {
         currentVideo.srcObject = null
       }
     }
-  }, [])
+  }, [mode])
 
   return {
     videoRef,
@@ -296,5 +392,7 @@ export function useFaceDetection(): UseFaceDetectionReturn {
     landmarksReady,
     recognitionReady,
     models,
+    debugData,
+    isWarmingUp,
   }
 }
