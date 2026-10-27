@@ -6,11 +6,15 @@ import {
   Clock,
   Loader2,
   LocateFixed,
+  MapPin,
   Presentation,
   RefreshCw,
   ScanFace,
   UserRound,
 } from "lucide-react"
+import { Circle, CircleMarker, MapContainer, Polygon, TileLayer, useMap } from "react-leaflet"
+import L from "leaflet"
+import "leaflet/dist/leaflet.css"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
 import {
@@ -46,6 +50,13 @@ import {
 import { cn } from "@/lib/utils"
 import type { AttendanceRecordRow, SessionStatus } from "@/types/db"
 
+delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+})
+
 const POLL_MS = 3000
 
 type LiveSessionListItem = {
@@ -80,7 +91,43 @@ function accuracyLabel(accuracy: number) {
   if (accuracy <= MAX_ACCURACY_M) {
     return { label: "Fair", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400" }
   }
-  return { label: "Poor", className: "bg-destructive/10 text-destructive" }
+  return { label: "Poor", className: "bg-destructive/10 text-destructive"   }
+}
+
+type TempFenceRow = {
+  session_id: string
+  venue_id: string | null
+  venue_name: string | null
+  fence_id: string | null
+  geofence_id?: string | null
+  shape: string | null
+  center_lat: number | null
+  center_lng: number | null
+  radius_m: number | null
+  c1_lat: number | null
+  c1_lng: number | null
+  c2_lat: number | null
+  c2_lng: number | null
+  c3_lat: number | null
+  c3_lng: number | null
+  c4_lat: number | null
+  c4_lng: number | null
+}
+
+function FitBounds({
+  positions,
+}: {
+  positions: [number, number][]
+}) {
+  const map = useMap()
+  useEffect(() => {
+    if (positions.length === 0) return
+    const bounds = L.latLngBounds(positions)
+    if (bounds.isValid()) {
+      map.fitBounds(bounds.pad(0.25))
+    }
+  }, [map, positions])
+  return null
 }
 
 export default function StudentHome() {
@@ -107,6 +154,15 @@ export default function StudentHome() {
   const [location, setLocation] = useState<Coordinates | null>(null)
   const [locationLoading, setLocationLoading] = useState(true)
   const [locationError, setLocationError] = useState("")
+
+  const [checkLocOpen, setCheckLocOpen] = useState(false)
+  const [checkLocSession, setCheckLocSession] = useState<LiveSessionListItem | null>(null)
+  const [fenceLoading, setFenceLoading] = useState(false)
+  const [fenceError, setFenceError] = useState("")
+  const [fenceData, setFenceData] = useState<TempFenceRow | null>(null)
+  const [studentPos, setStudentPos] = useState<Coordinates | null>(null)
+  const [posLoading, setPosLoading] = useState(false)
+  const [posError, setPosError] = useState("")
 
   const loadLocation = useCallback(async () => {
     setLocationLoading(true)
@@ -322,6 +378,59 @@ export default function StudentHome() {
       }
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const openCheckLocation = async (session: LiveSessionListItem) => {
+    setCheckLocSession(session)
+    setCheckLocOpen(true)
+    setFenceError("")
+    setFenceData(null)
+    setStudentPos(null)
+    setPosError("")
+    setFenceLoading(true)
+    setPosLoading(true)
+    try {
+      console.log("calling rpc for", session.id)
+      const rpcRes = await supabase.rpc("get_session_geofence_test", { p_session_id: session.id })
+      console.log("rpcRes", rpcRes)
+      const fence = rpcRes.data
+      const fenceErr = rpcRes.error
+      if (fenceErr) throw fenceErr
+      const raw = Array.isArray(fence) ? fence[0] : fence
+      setFenceData((raw as TempFenceRow) ?? null)
+      const pos = await getCurrentPosition()
+      setStudentPos(pos)
+    } catch (err) {
+      console.log("checkLoc catch", err)
+      setFenceError(err instanceof Error ? err.message : "Failed to load location check")
+      try {
+        const pos = await getCurrentPosition()
+        setStudentPos(pos)
+      } catch (pErr) {
+        setPosError(
+          geolocationErrorMessage(pErr) ??
+            (pErr instanceof Error ? pErr.message : "Could not get your location"),
+        )
+      }
+    } finally {
+      setFenceLoading(false)
+      setPosLoading(false)
+    }
+  }
+
+  const refreshStudentPos = async () => {
+    setPosLoading(true)
+    setPosError("")
+    try {
+      setStudentPos(await getCurrentPosition())
+    } catch (err) {
+      setPosError(
+        geolocationErrorMessage(err) ??
+          (err instanceof Error ? err.message : "Could not get your location"),
+      )
+    } finally {
+      setPosLoading(false)
     }
   }
 
@@ -578,14 +687,24 @@ export default function StudentHome() {
                         You&apos;re registered
                       </p>
                     ) : (
-                      <Button
-                        className="mt-3 h-11 w-full"
-                        onClick={() => void joinSession(s)}
-                        disabled={submitting}
-                      >
-                        <ScanFace data-icon="inline-start" aria-hidden="true" />
-                        Join class
-                      </Button>
+                      <div className="mt-3 grid gap-2">
+                        <Button
+                          className="h-11 w-full"
+                          onClick={() => void joinSession(s)}
+                          disabled={submitting}
+                        >
+                          <ScanFace data-icon="inline-start" aria-hidden="true" />
+                          Join class
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="h-9 w-full"
+                          onClick={() => void openCheckLocation(s)}
+                        >
+                          <MapPin data-icon="inline-start" aria-hidden="true" />
+                          Check location (test)
+                        </Button>
+                      </div>
                     )}
                   </li>
                 )
@@ -622,6 +741,122 @@ export default function StudentHome() {
               onCancel={cancelVerify}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={checkLocOpen} onOpenChange={setCheckLocOpen}>
+        <DialogContent className={fullScreenOnMobile}>
+          <DialogHeader>
+            <DialogTitle>Check location (test)</DialogTitle>
+            <DialogDescription>
+              {checkLocSession?.courses?.course_name ?? checkLocSession?.courses?.course_code ?? "Class"}{" "}
+              {checkLocSession?.venues?.name ? `· ${checkLocSession.venues.name}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {(fenceLoading || posLoading) && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Loading fence and location...
+              </div>
+            )}
+            {fenceError && (
+              <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {fenceError}
+              </p>
+            )}
+            {posError && (
+              <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {posError}
+              </p>
+            )}
+            {fenceData && (
+              <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs">
+                <p className="font-medium">Venue: {fenceData.venue_name || "—"}</p>
+                {fenceData.fence_id ? (
+                  <p className="text-muted-foreground">
+                    Fence: {fenceData.shape} {fenceData.shape === "circle" && fenceData.radius_m ? `(${fenceData.radius_m} m)` : ""}
+                  </p>
+                ) : (
+                  <p className="text-muted-foreground">No geofence set for this venue</p>
+                )}
+              </div>
+            )}
+            {studentPos && (
+              <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs space-y-1">
+                <p className="font-medium">Your location (test)</p>
+                <p className="text-muted-foreground">
+                  Lat: {studentPos.latitude.toFixed(6)}, Lng: {studentPos.longitude.toFixed(6)}
+                </p>
+                <p className="text-muted-foreground">Accuracy: ±{Math.round(studentPos.accuracy)} m</p>
+                <Button size="sm" variant="outline" onClick={() => void refreshStudentPos()} disabled={posLoading}>
+                  <RefreshCw className={cn("size-3.5", posLoading && "animate-spin")} />
+                  Refresh position
+                </Button>
+              </div>
+            )}
+            {fenceData?.fence_id && fenceData.shape === "circle" && fenceData.center_lat != null && fenceData.center_lng != null && fenceData.radius_m != null ? (
+              <div className="overflow-hidden rounded-lg border border-border">
+                <MapContainer
+                  center={[fenceData.center_lat, fenceData.center_lng]}
+                  zoom={18}
+                  maxZoom={22}
+                  scrollWheelZoom={false}
+                  className="h-64 w-full sm:h-80"
+                >
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors' maxZoom={22} />
+                  <Circle
+                    center={[fenceData.center_lat, fenceData.center_lng]}
+                    radius={fenceData.radius_m}
+                    pathOptions={{ color: "#2563eb", weight: 2, fillColor: "#2563eb", fillOpacity: 0.12 }}
+                  />
+                  {studentPos && (
+                    <>
+                      <CircleMarker center={[studentPos.latitude, studentPos.longitude]} radius={6} pathOptions={{ color: "#16a34a", weight: 2, fillColor: "#22c55e", fillOpacity: 0.9 }} />
+                      <Circle center={[studentPos.latitude, studentPos.longitude]} radius={studentPos.accuracy} pathOptions={{ color: "#22c55e", weight: 1, fillColor: "#22c55e", fillOpacity: 0.08 }} />
+                    </>
+                  )}
+                  <FitBounds positions={[[fenceData.center_lat, fenceData.center_lng], ...(studentPos ? [[studentPos.latitude, studentPos.longitude] as [number, number]] : [])]} />
+                </MapContainer>
+              </div>
+            ) : fenceData?.fence_id && fenceData.shape === "box" && [fenceData.c1_lat, fenceData.c1_lng, fenceData.c2_lat, fenceData.c2_lng, fenceData.c3_lat, fenceData.c3_lng, fenceData.c4_lat, fenceData.c4_lng].every((v) => v != null) ? (
+              <div className="overflow-hidden rounded-lg border border-border">
+                <MapContainer
+                  center={[fenceData.c1_lat!, fenceData.c1_lng!]}
+                  zoom={18}
+                  maxZoom={22}
+                  scrollWheelZoom={false}
+                  className="h-64 w-full sm:h-80"
+                >
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors' maxZoom={22} />
+                  <Polygon
+                    positions={[
+                      [fenceData.c1_lat!, fenceData.c1_lng!],
+                      [fenceData.c2_lat!, fenceData.c2_lng!],
+                      [fenceData.c3_lat!, fenceData.c3_lng!],
+                      [fenceData.c4_lat!, fenceData.c4_lng!],
+                    ]}
+                    pathOptions={{ color: "#2563eb", weight: 2, fillColor: "#2563eb", fillOpacity: 0.12 }}
+                  />
+                  {studentPos && (
+                    <>
+                      <CircleMarker center={[studentPos.latitude, studentPos.longitude]} radius={6} pathOptions={{ color: "#16a34a", weight: 2, fillColor: "#22c55e", fillOpacity: 0.9 }} />
+                      <Circle center={[studentPos.latitude, studentPos.longitude]} radius={studentPos.accuracy} pathOptions={{ color: "#22c55e", weight: 1, fillColor: "#22c55e", fillOpacity: 0.08 }} />
+                    </>
+                  )}
+                  <FitBounds positions={[
+                    [fenceData.c1_lat!, fenceData.c1_lng!],
+                    [fenceData.c2_lat!, fenceData.c2_lng!],
+                    [fenceData.c3_lat!, fenceData.c3_lng!],
+                    [fenceData.c4_lat!, fenceData.c4_lng!],
+                    ...(studentPos ? [[studentPos.latitude, studentPos.longitude] as [number, number]] : []),
+                  ]} />
+                </MapContainer>
+              </div>
+            ) : fenceData?.fence_id ? (
+              <p className="text-sm text-muted-foreground">Fence data incomplete for display.</p>
+            ) : null}
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardShell>
