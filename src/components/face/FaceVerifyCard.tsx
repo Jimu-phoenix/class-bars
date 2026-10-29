@@ -128,7 +128,7 @@ export default function FaceVerifyCard({
               </Badge>
             ) : verdict ? (
               <>
-                <Badge variant="destructive">NO MATCH</Badge>
+                <Badge variant="destructive">NO MATCH - Face not recognized</Badge>
                 <Badge variant="outline" className="font-mono text-xs">
                   distance {verdict.distance.toFixed(4)}
                 </Badge>
@@ -188,9 +188,9 @@ export default function FaceVerifyCard({
                   )}
                 </div>
                 {attempts >= maxAttempts && (
-                  <p className="text-center text-xs text-muted-foreground">
-                    Too many failed attempts. Use OTP to check in.
-                  </p>
+                <p className="text-center text-xs text-muted-foreground">
+                  No match on face - too many failed attempts. Use OTP to check in.
+                </p>
                 )}
               </>
             )}

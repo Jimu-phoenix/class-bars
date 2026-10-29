@@ -136,7 +136,7 @@ export default function OtpFallbackCard({
           setError(err.message)
         }
       } else {
-        setError("Check-in failed")
+        setError("Check in failed - verification error")
       }
     } finally {
       setVerifyLoading(false)

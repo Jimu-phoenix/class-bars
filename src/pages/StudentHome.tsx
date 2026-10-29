@@ -354,12 +354,47 @@ export default function StudentHome() {
       setTotalCheckins((n) => n + 1)
       setConfirmedCheckin(row)
       setStage("confirmed")
-    } catch (err) {
-      const message =
-        geolocationErrorMessage(err) ??
-        checkInBlockMessage(err) ??
-        (err instanceof Error ? err.message : "Check-in failed")
-      if (/already recorded/i.test(message)) {
+    } catch (err: any) {
+      let rawMessage: string
+      if (err instanceof Error) {
+        rawMessage = err.message
+      } else if (typeof err === "string") {
+        rawMessage = err
+      } else if (err && typeof err.message === "string") {
+        rawMessage = err.message
+      } else if (err && typeof err.details === "string") {
+        rawMessage = err.details
+      } else {
+        rawMessage = ""
+      }
+      
+      const mapped = geolocationErrorMessage(err) ?? checkInBlockMessage(err)
+      if (mapped) rawMessage = mapped
+      
+      const lower = rawMessage.toLowerCase()
+      
+      let specificMessage: string
+      if (lower.includes("accuracy") || lower.includes("no_location") || lower.includes("poor")) {
+        specificMessage = "Poor accuracy - check in failed"
+      } else if (lower.includes("outside") || lower.includes("geofence") || lower.includes("room")) {
+        if (location && location.accuracy <= MAX_ACCURACY_M) {
+          specificMessage = "Good accuracy but outside geofence - check in failed"
+        } else {
+          specificMessage = "Outside geofence - check in failed"
+        }
+      } else if (lower.includes("no_geofence")) {
+        specificMessage = "No geofence set for this venue - check in failed"
+      } else if (lower.includes("already recorded")) {
+        specificMessage = rawMessage
+      } else if (/no match|not match|face.*match/i.test(rawMessage)) {
+        specificMessage = "No match on face - check in failed"
+      } else if (rawMessage && rawMessage !== "[object Object]") {
+        specificMessage = `${rawMessage} - check in failed`
+      } else {
+        specificMessage = "Check in failed - unknown reason"
+      }
+      
+      if (/already recorded/i.test(specificMessage) || /already recorded/i.test(rawMessage)) {
         const { data } = await supabase
           .from("attendance_records")
           .select("*")
@@ -374,10 +409,10 @@ export default function StudentHome() {
           setConfirmedCheckin(data as AttendanceRecordRow)
           setStage("confirmed")
         } else {
-          setError(message)
+          setError(specificMessage)
         }
       } else {
-        setError(message)
+        setError(specificMessage)
         setVerifyResult(null)
       }
     } finally {
