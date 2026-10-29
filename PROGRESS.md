@@ -1,8 +1,8 @@
 # Class-BARS Progress Report
 
-**Date:** 2026-10-25
+**Date:** 2026-10-29
 **Repo:** `D:\classBars\class-bars`
-**Overall status:** Real (DB-backed) attendance flow built end-to-end and verified by lint/build/tests. Role-based access hardened end-to-end (client guards + server-side `staff_emails` allowlist enforced in the signup trigger). Theme toggle rewritten. Profile UI lives inside each role's dashboard. Auth pages guest-only. Dashboard shell + student pages rebuilt mobile-first. Student location card streamlined for privacy (raw coordinates removed; accuracy + Good/Fair/Poor flags displayed). Sandbox untouched. **All migrations (01 through 14) applied: 08 (course ownership), 10 (staff email allowlist, superseding 09), 11 (admin section RLS), 12 (PostGIS circle/box geofencing), 13 (admin geofence security definer), and 14 (single-row face embedding in-place update).** Admin dashboard built (Home, Venues, Users & Roles, System Logs) with magic-link login and no signup; Venues supports circle and four-corner box geofence editing.
+**Overall status:** Real (DB-backed) attendance flow built end-to-end and verified by lint/build/tests. Role-based access hardened end-to-end (client guards + server-side `staff_emails` allowlist enforced in the signup trigger). Theme toggle rewritten. Profile UI lives inside each role's dashboard. Auth pages guest-only. Dashboard shell + student pages rebuilt mobile-first. Student location card streamlined for privacy (raw coordinates removed; accuracy + Good/Fair/Poor flags displayed). Lecturer attendance-register PDF export added: per-course month/session picker, 2–8 ended sessions, browser-generated landscape A4 PDF, and a lecturer-only SECURITY DEFINER data RPC. OTP fallback added for student check-in. Face verification errors made specific (no match, accuracy/geofence reasons). Fixed login 500 by correcting profiles RLS (SECURITY DEFINER functions, no recursion). Fixed attendance RPC to remove devices dependency and drop device_id column. Sandbox untouched. **All existing migrations applied through 29; migrations 30 (200 m accuracy ceiling) and 31 (box geofence `ST_Covers`/area fix) built and must be applied.** Admin dashboard built (Home, Venues, Users & Roles, System Logs) with magic-link login and no signup; Venues supports circle and four-corner box geofence editing.
 
 ---
 
@@ -20,13 +20,18 @@
 | Admin section RLS (`migrations/11`) | **Applied** | RLS for admin CRUD on staff_emails, venues, audit_logs |
 | Signup | Done | Student/Lecturer toggle + hCaptcha; `AuthContext.signUp` accepts `captchaToken` |
 | Lecturer dashboard | Done | Collapsible sidebar (Overview, Courses, Update profile, Sign out), stat cards, session live page |
-| Student dashboard | Done | Same shell/sidebar, Overview + Courses + Update profile pages, live face check-in, privacy-preserving location accuracy card |
+| Student dashboard | Done | Same shell/sidebar, Overview + Courses + Update profile pages, live face check-in, privacy-preserving location accuracy card, OTP fallback |
 | New session form | Done | "Start now" vs "Schedule for later" + registration duration (5/15/30/60 min) that auto-computes session end |
 | Face pipeline | Done | face-api 0.22.2 (tiny detector/landmarks/recognition, models in `public/models/`), pure math + model-version helpers in `src/lib/faceCompare.ts` |
 | Admin dashboard | Done | Magic-link login, no signup; Home (live stats), Venues (CRUD + circle/box geofence editor), Users & Roles (staff email allowlist), System Logs (audit_logs). Sidebar-driven navigation, all routes AdminRoute-guarded. |
 | Geofencing (`migrations/12`) | **Applied** | PostGIS proximity check in `check_in_attendance`; one `geofences` row per venue (circle 2–50 m or four-corner box); gap-based decision table with small-fence handling; raw coordinates never stored; admin-only fence writes. |
 | Admin geofence RPC (`migrations/13`) | **Applied** | `set_venue_geofence` made SECURITY DEFINER with explicit admin role check to prevent RLS subquery recursion |
 | Single face embedding (`migrations/14`) | **Applied** | Prunes older/duplicate face embeddings per user and updates in-place, eliminating 409 unique_violation against `idx_face_embeddings_active_user` |
+| Attendance register export (`migrations/15` + app) | **Built — migration 15 not applied** | Lecturer-owned course RPC for 2–8 completed sessions; pure register matrix builder; lazy landscape A4 PDF renderer; per-course export dialog with month/session selection |
+| Profiles RLS fix (`migrations/26-27`) | **Built — apply in SQL Editor** | SECURITY DEFINER functions for role checks, no recursion; proper access for students/lecturers/admins |
+| Attendance RPC fix (`migration 29`) | **Built — apply in SQL Editor** | Remove devices table dependency, drop `device_id` from attendance_records, keep compatible signature |
+| OTP fallback | Done | `src/lib/attendanceOtp.ts`, `OtpFallbackCard`, integrated in StudentHome with quota/attempt logic |
+| Specific error messages | Done | Face verification shows "No match on face", check-in failures specify poor accuracy/outside geofence/no geofence |
 | Sandbox module | Untouched | Intentionally left as-is per user decision |
 
 ---
@@ -41,6 +46,10 @@
 - `check_in_attendance` hardened against impersonation; duplicate check-ins surface a stable "already recorded" error the client resolves gracefully.
 - Data layer: `src/lib/realAttendance.ts` (get/upsert/clear embedding, enroll, roster, check-in) + `src/lib/faceCompare.ts` (pure: `MATCH_THRESHOLD=0.6`, `euclideanDistance`, `isMatch`, `FACE_MODEL_VERSION`, `parseEmbedding`, `faceConfidence`). `faceModels.ts` re-exports the model version.
 - **Permission-denied root cause (confirmed):** PostgreSQL checks *privileges* before RLS — the base schema ships zero GRANTs, so real tables silently denied `authenticated`. `migrations/07` fixes it; verified working by the user.
+- **Login 500 fix:** Recursive RLS on profiles caused 500 errors after migration 20. Fixed with SECURITY DEFINER functions (`current_user_role`, `is_admin_user`, `is_lecturer_user`) in migrations 26-27, no recursion.
+- **Attendance devices error:** `check_in_attendance` referenced non-existent `devices` table. Migration 29 removes the check and drops `attendance_records.device_id`. Client passes `p_device_id: null` (compatible).
+- **OTP fallback:** Added OTP API layer and UI for students when face verification fails repeatedly or on demand. Integrates with `send-attendance-otp`/`verify-attendance-otp` edge functions.
+- **Specific errors:** Face no-match shows "No match on face", check-in errors specify poor accuracy/outside geofence/no geofence/unknown reasons.
 
 ### 2.2 Course ownership
 - `migrations/08_course_lecturer.sql` (applied): adds `courses.lecturer_id uuid references profiles(id)` (+index), replaces the staff-wide course create/update policies with owner-scoped ones (admin exception). Existing rows keep `lecturer_id NULL`; legacy courses won't show in "My courses" until an admin reassigns them.
@@ -77,10 +86,19 @@
 
 - `migrations/12_geofencing.sql` adds PostGIS, a `geofences` table (circle or four-corner box; circles 2–50 m, boxes valid/≥4 m²/every corner ≤50 m from the centre), `venues.geofence_id` (unique, `ON DELETE SET NULL`), an `AFTER DELETE` trigger that removes a deleted venue's fence, attendance `flag_reason` + `location_distance_m` + `location_accuracy_m`, and restrictive admin-only venue INSERT/UPDATE/DELETE policies over migration 11's permissive ones. The old inline venue lat/lng/radius columns were dropped; migration 12 was edited in place because it had not been executed.
 - The direct `attendance_records` INSERT path (`Students insert own attendance` + 07 grant) is revoked, so all writes must go through the SECURITY DEFINER check-in RPC. The old 5-argument `check_in_attendance` is dropped; the new 8-argument version requires lat/lng/accuracy. `set_venue_geofence` is SECURITY INVOKER so the admin RLS policies still apply.
-- Decision table (gap = distance from the fence, 0 inside/on the edge; half_size = radius or sqrt(box area)/2; good_limit = min(10, half_size)): invalid/null/NaN/accuracy > 100 → `no_location`; venue without fence → `no_geofence`; gap = 0 → normal; gap > accuracy → `outside`; 0 < gap ≤ accuracy and accuracy ≤ good_limit → `outside_good_accuracy`; same band with accuracy > good_limit → allowed, status `flagged`, reason `low_accuracy_overlap`. Only the gap and reported accuracy are stored for flagged records (DPA minimisation). Browser accuracy is roughly a 68% confidence radius, so honest students near an edge may occasionally be blocked and retry.
+- Decision table (gap = distance from the fence, 0 inside/on the edge; half_size = radius or sqrt(box area)/2; good_limit = min(10, half_size)): invalid/null/NaN/accuracy > 200 → `no_location` (exactly 200 is usable); venue without fence → `no_geofence`; gap = 0 → normal; gap > accuracy → `outside`; 0 < gap ≤ accuracy and accuracy ≤ good_limit → `outside_good_accuracy`; same band with accuracy > good_limit → allowed, status `flagged`, reason `low_accuracy_overlap`. Only the gap and reported accuracy are stored for flagged records (DPA minimisation). Browser accuracy is roughly a 68% confidence radius, so honest students near an edge may occasionally be blocked and retry.
 - Client: `src/lib/geofence.ts` (pure validation, box corner ordering/area/validation, small-fence half-size, coordinate parsing, geolocation wrapper, block messages) + Node tests. `StudentHome` captures a fresh high-accuracy fix before check-in and shows a distinct amber flagged confirmation. `SessionLive` shows the flag reason with the amber status badge.
 - Admin Venues: list shows `Circle, 12 m`, `Box`, or `Not set`; the edit dialog lazy-loads a Leaflet map (`VenueGeofenceMap`) with Circle/Class box tabs, a 2–50 m radius slider (step 0.5), four draggable numbered corners with a live polygon, map click to place the next empty corner, pasted `"lat, lng"` rows, "use my current location" (next empty corner for boxes, reporting each accuracy), a live small-fence notice, zoom up to 22, and a confirm step that deletes the geofence row. Saves go through `set_venue_geofence`; FK (23503) and unique (23505) errors are mapped to clear messages.
 - Manual verification: `tests/sql/geofencing_checks.sql` (run migration 12 twice first) covers schema/function privileges, radius 2/50 and box valid/crossed/collinear/tiny/oversized geometry, admin/lecturer/student RLS, unique sharing, venue cascade deletion, closed direct insert, the full decision table for circles and boxes (including gap = accuracy), clockwise/anticlockwise equality, and small-fence cases.
+
+### 2.9 Lecturer attendance register PDF export (`current`)
+
+- **Server data contract:** `migrations/15_course_register_data.sql` adds `get_register_data(p_course_id uuid, p_session_ids uuid[])`, a `STABLE SECURITY DEFINER` RPC with a fixed `search_path`. It requires an authenticated `lecturer` profile, `courses.lecturer_id = auth.uid()`, and 2–8 distinct sessions that all belong to the course and are `completed`. Public/anon execute is revoked; authenticated is granted. The roster is the course's enrollments left-joined to final `attendance_records`, so each session/student pair is unique.
+- **Data minimisation:** the RPC returns only `session_id`, `session_start`, `full_name`, `registration_number` (aliased from `profiles.student_number`) and final `status`. No face embeddings, confidence scores, coordinates, distance, accuracy or unrelated profile fields are exposed, and real-table RLS is unchanged.
+- **Pure matrix builder:** `src/lib/registerPdf/buildRegisterMatrix.ts` sorts sessions by start time/id and students by natural registration-number order (unnamed/unregistered last), rejects anything outside 2–8 unique sessions, and marks missing attendance rows as `ab`. Status mapping: `present`/`late` → `pr`, `flagged` → `prf`, `absent`/missing → `ab`; the final DB status wins over any earlier duplicate row. Empty rosters survive because the RPC emits per-session sentinel rows and the PDF still renders the table header.
+- **PDF renderer:** `src/lib/registerPdf/renderRegisterPdf.ts` uses `jspdf` + `jspdf-autotable` in landscape A4. It includes course code/name, lecturer, month, generated timestamp, session date headers (time added when two sessions share a date), a repeated header row on every page, `avoid` row page breaks, a B&W status legend and `Page x of y` footers. Filename: sanitised `<course-code>_register_<YYYY-MM>.pdf`.
+- **Lazy loading + UX:** the per-course **Export register** button lives in `src/pages/LecturerCourses.tsx`; `jspdf`/`jspdf-autotable` are imported dynamically only after the lecturer clicks Export, so the 432 kB renderer chunk is not part of the main bundle. The dialog loads completed sessions, defaults to the latest month with ended sessions and the first up-to-8 sessions, lets the lecturer switch months/select sessions, blocks a ninth selection, and shows loading/error/`Generating…` states. A reserved `onRegisterExported()` hook is called after a successful download for a future audit event.
+- **Verification:** `tsc -b`, ESLint on changed files, 8/8 `tests/registerPdf.test.ts`, and the Vite production build pass. A 60-student × 8-session smoke PDF rendered as 3 pages with repeated headers and correct page numbers; an empty-roster PDF rendered its header and legend. **Migration 15 has not been applied**, so live RPC/export remains to be verified in Supabase.
 
 ---
 
@@ -137,7 +155,7 @@
 - **Accuracy & Quality indicators**: Location card now features a concise status row displaying:
   - An accuracy quality badge: **Good** (emerald), **Fair** (amber), or **Poor** (destructive), with explicit dark-mode styling (`dark:text-emerald-400`, `dark:text-amber-400`).
   - Reported device accuracy in metres: `±{accuracy} m accuracy`.
-  - Contextual warning if accuracy exceeds `MAX_ACCURACY_M` (> 100 m).
+  - Contextual warning if accuracy exceeds `MAX_ACCURACY_M` (> 200 m).
 - **Loading skeleton**: Replaced the previous 2-card coordinate placeholder with a single matching rounded pill skeleton.
 - **Verification**: Verified clean against ESLint, `tsc -b`, unit tests (`tests/geofence.test.ts`), and the full production Vite build.
 
@@ -178,25 +196,48 @@
 | Add RESTRICTIVE admin-only venue write policies in 12 | Migration 11's permissive venue policies accepted any signed-in user; the fence must not be movable by students |
 | Drop the 5-arg check-in RPC and revoke direct attendance INSERT | Otherwise the fence is advisory and can be bypassed by calling an old function or inserting directly |
 | Venues without a fence block check-in | Fail closed; admins must explicitly configure a room before it can be used for attendance |
+| Register data goes through one lecturer-checked SECURITY DEFINER RPC, not broader table SELECT | Keeps the PDF contract to the minimum fields and validates ownership, completed-session state and the 2–8 limit server-side |
+| Register PDF is generated entirely in the browser and never stored/logged | Avoids creating a second copy of attendance data and keeps export available without a server job |
+| Register marks `late` as present (`pr`) and missing rows as absent (`ab`) | The lecturer register uses the four existing final statuses; `prf` is reserved for geofence-flagged check-ins |
+| A ninth session is blocked in both the UI and the RPC | Prevent oversized tables and make the server the final authority on the 2–8 contract |
 | Sandbox module left untouched throughout | Explicit user instruction; all new work is on the real tables |
 | Remove raw lat/long coordinates from StudentHome location card; show accuracy and Good/Fair/Poor flag only | Privacy & UX; raw numbers clutter the mobile UI and run counter to privacy reassurance ("Coordinates stay on this device"). Device fix accuracy and the threshold quality flag are all that matter to the student |
+| Use SECURITY DEFINER for role checks in RLS | Avoid recursion when policies query profiles/courses; restore proper access for all roles |
+| Remove devices dependency from check-in | Table doesn't exist; simplify RPC and drop unused column |
+| Make face/attendance errors specific | Better UX - students know why check-in failed (face no-match, accuracy, geofence) |
 
 ---
 
 ## 6. Known issues / follow-ups
 
-1. **`scripts/reset_supabase_project.sql` is missing migrations 10, 11 and 12** — it still builds base, 01, 02, 04–09. Do not use it to rebuild a project that needs the staff allowlist, admin/geofence policies, or geofencing until it is updated.
-2. **`tests/schema.test.ts` fails** — stale `table_state.json` snapshot; regenerate against the live applied schema.
-3. **Hardware device verification** — while validated via unit tests, lint, and build, live end-to-end device testing with live PostGIS proximity and mobile camera face-matching should be verified on physical devices.
+1. **Migration 15 is not applied** — `migrations/15_course_register_data.sql` must be run before live export works. The UI will surface the RPC error until then.
+2. **`scripts/reset_supabase_project.sql` is missing migrations 10–15** — it still builds base, 01, 02, 04–09. Do not use it to rebuild a project that needs the staff allowlist, admin/geofence policies, geofencing, or register export until it is updated.
+3. **`tests/schema.test.ts` fails** — stale `table_state.json` snapshot; regenerate against the live applied schema. The full `node --test tests/*.test.ts` run also reports the pre-existing `rolePolicy` fixture/env failures; the targeted register tests pass.
+4. **Hardware device verification** — while validated via unit tests, lint, and build, live end-to-end device testing with live PostGIS proximity and mobile camera face-matching should be verified on physical devices. The browser PDF download should be spot-checked on a real lecturer account after migration 15 is applied.
 
 
 ---
 
-## 7. Files changed in the latest phase
+## 7. Files changed in recent phases
+
+### 7.1 Attendance register export (`current`)
+
+```
+migrations/15_course_register_data.sql    # NEW — NOT APPLIED — lecturer-only 2–8 session register RPC
+src/lib/registerPdf/buildRegisterMatrix.ts # NEW — status mapping, sorting, missing-row handling, 2–8 validation
+src/lib/registerPdf/renderRegisterPdf.ts  # NEW — lazy landscape A4 jsPDF/autotable register + filename
+src/pages/LecturerCourses.tsx             # UPDATED — per-course Export register dialog, month/session selection
+tests/registerPdf.test.ts                 # NEW — 8 matrix builder tests
+package.json                              # UPDATED — jspdf + jspdf-autotable
+package-lock.json                         # UPDATED — PDF dependency tree
+PROGRESS.md                               # UPDATED — documented register export, verification and migration 15 pending
+```
+
+### 7.2 Earlier geofencing / location privacy phase
 
 ```
 src/pages/StudentHome.tsx                # UPDATED — removed raw lat/long display, added accuracy + Good/Fair/Poor status badge, dark mode support
-PROGRESS.md                              # UPDATED — refreshed to 2026-10-25, documented location privacy changes & all applied migrations
+PROGRESS.md                              # UPDATED — prior phase refresh (2026-10-25), location privacy & applied migrations
 migrations/08_course_lecturer.sql        # APPLIED — course owner-scoped policies & lecturer_id FK
 migrations/10_staff_email_allowlist.sql  # APPLIED — staff_emails exact-email allowlist
 migrations/11_admin_section_rls.sql      # APPLIED — RLS for admin CRUD

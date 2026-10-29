@@ -11,8 +11,9 @@ export type ProfileRow = {
   full_name: string
   role: UserRole
   student_number: string | null
-  staff_number: string | null
   phone_number: string | null
+  created_at: string
+  updated_at: string
 }
 
 export type EnrollmentRow = {
