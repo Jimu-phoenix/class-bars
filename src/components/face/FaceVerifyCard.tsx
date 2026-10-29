@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Loader2, RefreshCw } from "lucide-react"
+import { KeyRound, Loader2, RefreshCw } from "lucide-react"
 import { useFaceDetection } from "@/hooks/useFaceDetection"
 import { euclideanDistance, isMatch } from "@/lib/faceCompare"
 import {
@@ -25,6 +25,8 @@ export default function FaceVerifyCard({
   onNoMatch,
   onRetry,
   onCancel,
+  onUseOtp,
+  maxAttempts = 3,
 }: {
   verifyLabel: string
   stored: Float32Array
@@ -35,6 +37,8 @@ export default function FaceVerifyCard({
   onNoMatch: (distance: number) => void
   onRetry: () => void
   onCancel: () => void
+  onUseOtp?: () => void
+  maxAttempts?: number
 }) {
   const {
     videoRef,
@@ -51,6 +55,7 @@ export default function FaceVerifyCard({
   const [distanceSummary, setDistanceSummary] = useState<DistanceSummary>(() =>
     summariseDistances(getSessionDistances()),
   )
+  const [attempts, setAttempts] = useState(0)
 
   const liveFace =
     recognitionReady && results.length > 0
@@ -58,6 +63,11 @@ export default function FaceVerifyCard({
       : null
 
   const capturedRef = useRef(false)
+
+  useEffect(() => {
+    setAttempts(0)
+    capturedRef.current = false
+  }, [stored])
 
   useEffect(() => {
     if (isWarmingUp || verdict !== null) return
@@ -71,6 +81,7 @@ export default function FaceVerifyCard({
     if (isMatch(stored, liveFace)) {
       onMatch(liveFace)
     } else {
+      setAttempts((prev) => prev + 1)
       onNoMatch(distance)
     }
   }, [liveFace, stored, verdict, isWarmingUp, onMatch, onNoMatch])
@@ -126,17 +137,64 @@ export default function FaceVerifyCard({
               <Badge variant="outline">Looking for face…</Badge>
             )}
           </div>
-          {verdict && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onRetry}
-              disabled={submitting}
-            >
-              <RefreshCw data-icon="inline-start" />
-              Try again
-            </Button>
-          )}
+          <div className="flex flex-col items-center gap-2">
+            {!verdict && !isWarmingUp && !submitting && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onRetry}
+                disabled={submitting}
+              >
+                <RefreshCw data-icon="inline-start" />
+                Try again
+              </Button>
+            )}
+            {verdict && (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Attempt {attempts} of {maxAttempts}
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={onRetry}
+                    disabled={submitting || attempts >= maxAttempts}
+                  >
+                    <RefreshCw data-icon="inline-start" />
+                    Try again
+                  </Button>
+                  {(onUseOtp && (attempts >= maxAttempts || attempts >= 2)) && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={onUseOtp}
+                      disabled={submitting}
+                    >
+                      <KeyRound data-icon="inline-start" />
+                      Use OTP
+                    </Button>
+                  )}
+                  {onUseOtp && attempts < maxAttempts && attempts < 2 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={onUseOtp}
+                      disabled={submitting}
+                    >
+                      <KeyRound data-icon="inline-start" />
+                      Use OTP
+                    </Button>
+                  )}
+                </div>
+                {attempts >= maxAttempts && (
+                  <p className="text-center text-xs text-muted-foreground">
+                    Too many failed attempts. Use OTP to check in.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
 

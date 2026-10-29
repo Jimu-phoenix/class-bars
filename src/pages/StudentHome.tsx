@@ -38,6 +38,7 @@ import { usePoll } from "@/hooks/usePoll"
 import DashboardShell from "@/components/DashboardShell"
 import StatCard from "@/components/dashboard/StatCard"
 import FaceVerifyCard, { type VerifyVerdict } from "@/components/face/FaceVerifyCard"
+import OtpFallbackCard from "@/components/face/OtpFallbackCard"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -154,6 +155,7 @@ export default function StudentHome() {
   const [location, setLocation] = useState<Coordinates | null>(null)
   const [locationLoading, setLocationLoading] = useState(true)
   const [locationError, setLocationError] = useState("")
+  const [verifyMode, setVerifyMode] = useState<"face" | "otp">("face")
 
   const [checkLocOpen, setCheckLocOpen] = useState(false)
   const [checkLocSession, setCheckLocSession] = useState<LiveSessionListItem | null>(null)
@@ -291,6 +293,7 @@ export default function StudentHome() {
     if (!user) return
     setError("")
     setVerifyResult(null)
+    setVerifyMode("face")
     try {
       const row = await getActiveFaceEmbedding(user.id)
       if (!row) {
@@ -320,6 +323,7 @@ export default function StudentHome() {
     setStoredDescriptor(null)
     setSelectedSession(null)
     setStage("select")
+    setVerifyMode("face")
   }
 
   const checkIn = async (descriptor: Float32Array) => {
@@ -440,7 +444,47 @@ export default function StudentHome() {
     setStoredDescriptor(null)
     setSelectedSession(null)
     setStage("select")
+    setVerifyMode("face")
     void loadStats()
+  }
+
+  const handleOtpSuccess = async (result: { flagged: boolean }) => {
+    if (!selectedSession || !user) return
+    try {
+      const { data } = await supabase
+        .from("attendance_records")
+        .select("*")
+        .eq("session_id", selectedSession.id)
+        .eq("student_id", user.id)
+        .maybeSingle()
+      if (data) {
+        setCheckedInBySession((m) => ({ ...m, [selectedSession.id]: data as AttendanceRecordRow }))
+        setCheckedToday((n) => n + 1)
+        setTotalCheckins((n) => n + 1)
+        setConfirmedCheckin(data as AttendanceRecordRow)
+        setStage("confirmed")
+        setVerifyMode("face")
+        setError("")
+        setVerifyResult(null)
+      } else {
+        // Fallback if record not immediately visible
+        setError(result.flagged ? FLAGGED_CHECKIN_MESSAGE : "Checked in successfully")
+        setVerifyMode("face")
+        setStoredDescriptor(null)
+        setSelectedSession(null)
+        setStage("select")
+        void refresh()
+        void loadStats()
+      }
+    } catch {
+      setError(result.flagged ? FLAGGED_CHECKIN_MESSAGE : "Checked in successfully")
+      setVerifyMode("face")
+      setStoredDescriptor(null)
+      setSelectedSession(null)
+      setStage("select")
+      void refresh()
+      void loadStats()
+    }
   }
 
   if (authLoading || !user) {
@@ -716,19 +760,22 @@ export default function StudentHome() {
 
       {/* Face verification: full-screen on phones, centered dialog on larger screens */}
       <Dialog
-        open={stage === "verifying" && !!selectedSession && !!storedDescriptor}
+        open={stage === "verifying" && !!selectedSession}
         onOpenChange={(open) => {
-          if (!open && !submitting) cancelVerify()
+          if (!open && !submitting && verifyMode === "face") cancelVerify()
+          else if (!open && verifyMode === "otp") cancelVerify()
         }}
       >
         <DialogContent className={fullScreenOnMobile}>
           <DialogHeader>
             <DialogTitle>{selectedName}</DialogTitle>
             <DialogDescription>
-              Look at the camera. Your attendance is recorded automatically on a match.
+              {verifyMode === "face"
+                ? "Look at the camera. Your attendance is recorded automatically on a match."
+                : "Enter the code sent to your email to check in."}
             </DialogDescription>
           </DialogHeader>
-          {selectedSession && storedDescriptor && (
+          {selectedSession && verifyMode === "face" && storedDescriptor && (
             <FaceVerifyCard
               verifyLabel={`Matching your face against your enrolled template. This registers you in ${selectedName}.`}
               stored={storedDescriptor}
@@ -738,6 +785,23 @@ export default function StudentHome() {
               onMatch={(d) => void checkIn(d)}
               onNoMatch={(distance) => setVerifyResult({ status: "no-match", distance })}
               onRetry={() => setVerifyResult(null)}
+              onCancel={cancelVerify}
+              onUseOtp={() => {
+                setVerifyMode("otp")
+                setError("")
+                setVerifyResult(null)
+              }}
+            />
+          )}
+          {selectedSession && verifyMode === "otp" && (
+            <OtpFallbackCard
+              sessionId={selectedSession.id}
+              getLocation={getCurrentPosition}
+              onSuccess={(result) => void handleOtpSuccess(result)}
+              onBackToFace={() => {
+                setVerifyMode("face")
+                setError("")
+              }}
               onCancel={cancelVerify}
             />
           )}
