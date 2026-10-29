@@ -85,6 +85,8 @@ function formatStartedAt(iso: string) {
   })
 }
 
+// Matches the server rules: <=10 m is good, >10 m up to 200 m may be flagged
+// for review, and >200 m is rejected as no location.
 function accuracyLabel(accuracy: number) {
   if (accuracy <= GOOD_ACCURACY_M) {
     return { label: "Good", className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" }

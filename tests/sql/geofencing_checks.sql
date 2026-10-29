@@ -7,6 +7,8 @@
 --   1. Apply migrations/12_geofencing.sql.
 --   2. Apply migrations/12_geofencing.sql AGAIN.
 --      Both runs must succeed; the migration is re-runnable.
+--   3. Apply migrations/30_raise_max_accuracy_200.sql.
+--   4. Apply migrations/31_fix_box_geofence_contains.sql.
 --
 -- This script creates temporary fixtures, exercises the schema, RPC and
 -- decision table, then rolls everything back. It leaves no rows behind.
@@ -1011,14 +1013,35 @@ begin
       v_record.location_distance_m;
   end if;
 
-  -- Invalid location: NULL, NaN and accuracy above 100.
+  -- Accuracy ceiling: exactly 200 m is usable; 200.01 m is no_location.
+  v_session := pg_temp.new_session(v_course, v_lecturer, v_main);
+  perform pg_temp.expect_checkin(
+    v_session, v_lat, v_lng, 200, 'ok:present:', 'accuracy 200 usable'
+  );
+  v_session := pg_temp.new_session(v_course, v_lecturer, v_main);
+  v_point := pg_temp.point_at(v_lat, v_lng, 1, radians(90));
+  perform pg_temp.expect_checkin(
+    v_session, v_point[1], v_point[2], 200.01,
+    'err:no_location', 'accuracy 200.01'
+  );
+
+  -- Good/poor boundary: gap ~4 m, good_limit = 10 (circle radius 10).
+  v_point := pg_temp.point_at(v_lat, v_lng, 14, radians(90));
+  v_session := pg_temp.new_session(v_course, v_lecturer, v_main);
+  perform pg_temp.expect_checkin(
+    v_session, v_point[1], v_point[2], 10,
+    'err:outside_good_accuracy', 'accuracy 10 boundary blocked'
+  );
+  v_session := pg_temp.new_session(v_course, v_lecturer, v_main);
+  perform pg_temp.expect_checkin(
+    v_session, v_point[1], v_point[2], 10.1,
+    'ok:flagged:low_accuracy_overlap', 'accuracy 10.1 boundary flagged'
+  );
+
+  -- Invalid location: NULL and NaN.
   v_session := pg_temp.new_session(v_course, v_lecturer, v_main);
   perform pg_temp.expect_checkin(
     v_session, null, null, 10, 'err:no_location', 'NULL location'
-  );
-  v_point := pg_temp.point_at(v_lat, v_lng, 1, radians(90));
-  perform pg_temp.expect_checkin(
-    v_session, v_point[1], v_point[2], 101, 'err:no_location', 'accuracy 101'
   );
   perform pg_temp.expect_checkin(
     v_session, 'NaN'::double precision, v_point[2], 10,

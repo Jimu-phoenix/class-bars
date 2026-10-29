@@ -2,7 +2,9 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import {
   ACCURACY_TOO_POOR_MESSAGE,
+  GOOD_ACCURACY_M,
   LocationError,
+  MAX_ACCURACY_M,
   MAX_RADIUS_M,
   MIN_RADIUS_M,
   NO_GEOFENCE_MESSAGE,
@@ -71,6 +73,20 @@ test("coordinate and radius validation boundaries", () => {
   assert.equal(isValidRadius(50), true)
   assert.equal(isValidRadius(1.9), false)
   assert.equal(isValidRadius(50.1), false)
+})
+
+test("accuracy ceilings match the server rules", () => {
+  assert.equal(GOOD_ACCURACY_M, 10)
+  assert.equal(MAX_ACCURACY_M, 200)
+
+  // Exactly 200 m is usable; anything above it is no location.
+  assert.ok(200 <= MAX_ACCURACY_M)
+  assert.ok(200.01 > MAX_ACCURACY_M)
+
+  // Exactly 10 m is still good; 10.1 m is poor (may be flagged for review).
+  assert.ok(10 <= GOOD_ACCURACY_M)
+  assert.ok(10.1 > GOOD_ACCURACY_M)
+  assert.ok(10.1 <= MAX_ACCURACY_M)
 })
 
 test("validateGeofence returns a message for each invalid circle field", () => {

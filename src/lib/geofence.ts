@@ -1,6 +1,9 @@
 export const MIN_RADIUS_M = 2
 export const MAX_RADIUS_M = 50
-export const MAX_ACCURACY_M = 100
+// Mirrors MAX_USABLE_ACCURACY_M in the SQL check_in_attendance function
+// (migrations/30_raise_max_accuracy_200.sql). Accuracy above this is
+// treated as no location and rejected server-side.
+export const MAX_ACCURACY_M = 200
 export const GOOD_ACCURACY_M = 10
 export const SMALL_FENCE_THRESHOLD_M = 10
 
