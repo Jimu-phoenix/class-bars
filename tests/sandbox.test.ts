@@ -2,6 +2,13 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import type { User } from "@supabase/supabase-js"
 
+const VALID_EMBEDDING = JSON.stringify(
+  Array.from({ length: 128 }, (_, i) => (i + 1) / 128),
+)
+const OTHER_EMBEDDING = JSON.stringify(
+  Array.from({ length: 128 }, (_, i) => (i + 2) / 128),
+)
+
 type Session = { user: Partial<User> } | null
 
 type MockState = {
@@ -205,16 +212,16 @@ test("getSandboxParticipant returns null when no profile exists", async () => {
 
 test("getSandboxParticipant returns the matching participant", async () => {
   state.participants = [
-    { participant_id: "anon-1", display_name: "Alice", embedding: "[1,2]" },
+    { participant_id: "anon-1", display_name: "Alice", embedding: VALID_EMBEDDING },
   ]
   const p = await getSandboxParticipant("anon-1")
   assert.equal(p?.display_name, "Alice")
-  assert.equal(p?.embedding, "[1,2]")
+  assert.equal(p?.embedding, VALID_EMBEDDING)
 })
 
 test("getSandboxParticipant ignores other participants", async () => {
   state.participants = [
-    { participant_id: "anon-other", display_name: "Bob", embedding: "[9]" },
+    { participant_id: "anon-other", display_name: "Bob", embedding: OTHER_EMBEDDING },
   ]
   const p = await getSandboxParticipant("anon-1")
   assert.equal(p, null)
@@ -222,25 +229,32 @@ test("getSandboxParticipant ignores other participants", async () => {
 
 test("upsertSandboxParticipant inserts a new participant", async () => {
   state.participants = []
-  const p = await upsertSandboxParticipant("anon-1", "Alice", "[1,2,3]")
+  const p = await upsertSandboxParticipant("anon-1", "Alice", VALID_EMBEDDING)
   assert.equal(p?.participant_id, "anon-1")
   assert.equal(state.participants.length, 1)
 })
 
+test("upsertSandboxParticipant rejects an invalid descriptor", async () => {
+  await assert.rejects(
+    () => upsertSandboxParticipant("anon-1", "Alice", "[1,2,3]"),
+    /Invalid face descriptor/,
+  )
+})
+
 test("upsertSandboxParticipant updates an existing participant", async () => {
   state.participants = [
-    { participant_id: "anon-1", display_name: "Old", embedding: "[0]" },
+    { participant_id: "anon-1", display_name: "Old", embedding: OTHER_EMBEDDING },
   ]
-  await upsertSandboxParticipant("anon-1", "Alice", "[1,2,3]")
+  await upsertSandboxParticipant("anon-1", "Alice", VALID_EMBEDDING)
   assert.equal(state.participants.length, 1)
   assert.equal(state.participants[0].display_name, "Alice")
-  assert.equal(state.participants[0].embedding, "[1,2,3]")
+  assert.equal(state.participants[0].embedding, VALID_EMBEDDING)
 })
 
 test("deleteSandboxParticipant removes only the target participant", async () => {
   state.participants = [
-    { participant_id: "anon-1", display_name: "Alice", embedding: "[1]" },
-    { participant_id: "anon-2", display_name: "Bob", embedding: "[2]" },
+    { participant_id: "anon-1", display_name: "Alice", embedding: VALID_EMBEDDING },
+    { participant_id: "anon-2", display_name: "Bob", embedding: OTHER_EMBEDDING },
   ]
   await deleteSandboxParticipant("anon-1")
   assert.deepEqual(state.participants.map((p) => p.participant_id), ["anon-2"])

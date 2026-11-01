@@ -14,6 +14,13 @@ test("parseEmbedding returns null for a wrong-length array", () => {
   assert.equal(parseEmbedding(JSON.stringify([1, 2, 3])), null)
 })
 
+test("parseEmbedding returns null for a zero-norm descriptor", () => {
+  assert.equal(
+    parseEmbedding(JSON.stringify(Array.from({ length: 128 }, () => 0))),
+    null,
+  )
+})
+
 test("parseEmbedding returns null for malformed JSON", () => {
   assert.equal(parseEmbedding("{not json"), null)
 })

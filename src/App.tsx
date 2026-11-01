@@ -153,17 +153,17 @@ function App() {
         <Route
           path="/face-test"
           element={
-            <ProtectedRoute>
+            <AdminRoute>
               <FaceTest />
-            </ProtectedRoute>
+            </AdminRoute>
           }
         />
         <Route
           path="/face-verify"
           element={
-            <ProtectedRoute>
+            <AdminRoute>
               <FaceVerify />
-            </ProtectedRoute>
+            </AdminRoute>
           }
         />
         <Route path="*" element={<NotFound />} />

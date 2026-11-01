@@ -63,3 +63,21 @@ test("table_state.json is a parseable schema snapshot", async () => {
     assert.ok(key in rows[0], `snapshot rows should include ${key}`)
   }
 })
+
+test("face descriptor migration adds NOT VALID descriptor constraints", async () => {
+  const sql = await read("migrations/32_face_descriptor_validation.sql")
+  assert.match(sql, /is_valid_face_descriptor_text/i)
+  assert.match(sql, /jsonb_typeof/i)
+  assert.match(sql, /jsonb_array_length/i)
+  assert.match(sql, /not valid/i)
+  assert.match(sql, /immutable/i)
+  assert.match(sql, /parallel safe/i)
+  assert.match(sql, /set search_path = ''/i)
+  for (const constraint of [
+    "face_embeddings_embedding_json_valid",
+    "sandbox_participants_embedding_valid",
+    "sandbox_checkins_embedding_valid",
+  ]) {
+    assert.match(sql, new RegExp(constraint))
+  }
+})

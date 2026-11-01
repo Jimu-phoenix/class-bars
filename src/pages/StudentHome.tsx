@@ -23,7 +23,7 @@ import {
   parseEmbedding,
   FACE_MODEL_VERSION,
 } from "@/lib/realAttendance"
-import { euclideanDistance } from "@/lib/faceCompare"
+import { isValidDescriptor } from "@/lib/faceCompare"
 import {
   FLAGGED_CHECKIN_MESSAGE,
   GOOD_ACCURACY_M,
@@ -154,6 +154,7 @@ export default function StudentHome() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [verifyResult, setVerifyResult] = useState<VerifyVerdict>(null)
+  const [verifyAttempts, setVerifyAttempts] = useState(0)
   const [location, setLocation] = useState<Coordinates | null>(null)
   const [locationLoading, setLocationLoading] = useState(true)
   const [locationError, setLocationError] = useState("")
@@ -295,6 +296,7 @@ export default function StudentHome() {
     if (!user) return
     setError("")
     setVerifyResult(null)
+    setVerifyAttempts(0)
     setVerifyMode("face")
     try {
       const row = await getActiveFaceEmbedding(user.id)
@@ -322,14 +324,20 @@ export default function StudentHome() {
   const cancelVerify = () => {
     setError("")
     setVerifyResult(null)
+    setVerifyAttempts(0)
     setStoredDescriptor(null)
     setSelectedSession(null)
     setStage("select")
     setVerifyMode("face")
   }
 
-  const checkIn = async (descriptor: Float32Array) => {
+  const checkIn = async (descriptor: Float32Array, distance: number) => {
     if (!user || !selectedSession || !storedDescriptor) return
+    if (!isValidDescriptor(descriptor) || !Number.isFinite(distance)) {
+      setError("Face capture was invalid. Try again.")
+      setVerifyResult(null)
+      return
+    }
     if (!liveSessions.some((s) => s.id === selectedSession.id)) {
       setSelectedSession(null)
       setStoredDescriptor(null)
@@ -344,7 +352,6 @@ export default function StudentHome() {
       const location = await getCurrentPosition()
       setLocation(location)
       setLocationError("")
-      const distance = euclideanDistance(storedDescriptor, descriptor)
       const row = await checkInFace(
         selectedSession.id,
         user.id,
@@ -356,15 +363,25 @@ export default function StudentHome() {
       setTotalCheckins((n) => n + 1)
       setConfirmedCheckin(row)
       setStage("confirmed")
-    } catch (err: any) {
+    } catch (err: unknown) {
       let rawMessage: string
       if (err instanceof Error) {
         rawMessage = err.message
       } else if (typeof err === "string") {
         rawMessage = err
-      } else if (err && typeof err.message === "string") {
+      } else if (
+        err !== null &&
+        typeof err === "object" &&
+        "message" in err &&
+        typeof err.message === "string"
+      ) {
         rawMessage = err.message
-      } else if (err && typeof err.details === "string") {
+      } else if (
+        err !== null &&
+        typeof err === "object" &&
+        "details" in err &&
+        typeof err.details === "string"
+      ) {
         rawMessage = err.details
       } else {
         rawMessage = ""
@@ -819,9 +836,16 @@ export default function StudentHome() {
               submitting={submitting}
               error={error}
               verdict={verifyResult}
-              onMatch={(d) => void checkIn(d)}
-              onNoMatch={(distance) => setVerifyResult({ status: "no-match", distance })}
-              onRetry={() => setVerifyResult(null)}
+              onMatch={(d, distance) => void checkIn(d, distance)}
+              onNoMatch={(distance) => {
+                setVerifyAttempts((n) => n + 1)
+                setVerifyResult({ status: "no-match", distance })
+              }}
+              onRetry={() => {
+                setVerifyAttempts(0)
+                setVerifyResult(null)
+              }}
+              attempts={verifyAttempts}
               onCancel={cancelVerify}
               onUseOtp={() => {
                 setVerifyMode("otp")

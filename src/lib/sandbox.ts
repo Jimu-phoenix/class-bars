@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { isValidDescriptor, parseEmbedding } from "@/lib/faceCompare"
 import type { User } from "@supabase/supabase-js"
 import type { SandboxParticipantRow } from "@/types/db"
 
@@ -79,6 +80,10 @@ export async function upsertSandboxParticipant(
   displayName: string,
   embedding: string,
 ): Promise<SandboxParticipantRow | null> {
+  const parsed = parseEmbedding(embedding)
+  if (!parsed || !isValidDescriptor(parsed)) {
+    throw new Error("Invalid face descriptor")
+  }
   const { data, error } = await supabase
     .from("sandbox_participants")
     .upsert(

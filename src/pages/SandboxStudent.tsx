@@ -18,8 +18,10 @@ import {
   upsertSandboxParticipant,
 } from "@/lib/sandbox"
 import { usePoll } from "@/hooks/usePoll"
-import { useFaceDetection } from "@/hooks/useFaceDetection"
-import { euclideanDistance, isMatch } from "@/lib/faceCompare"
+import { useFaceDetection, type CapturePhase } from "@/hooks/useFaceDetection"
+import { isDistanceMatch, isValidDescriptor, parseEmbedding } from "@/lib/faceCompare"
+import { captureStatusMessage } from "@/lib/faceCapture"
+import type { BurstResult } from "@/lib/faceBurst"
 import { cn } from "@/lib/utils"
 import {
   Card,
@@ -32,6 +34,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Navbar from "@/components/Navbar"
 import Footer from "@/components/Footer"
+import FaceCaptureFrame, { FaceDebugReadout } from "@/components/face/FaceCaptureFrame"
 import type {
   SandboxCheckinRow,
   SandboxParticipantRow,
@@ -54,8 +57,21 @@ function formatStartedAt(iso: string) {
   })
 }
 
-function isModelError(message: string | null): boolean {
-  return message?.startsWith("Face models failed to load") ?? false
+function statusMessage(
+  phase: CapturePhase,
+  isWarmingUp: boolean,
+  burst: BurstResult | null,
+  isLoading: boolean,
+  error: string | null,
+): string | null {
+  if (isLoading || error) return null
+  if (isWarmingUp) return "Getting camera ready…"
+  if (phase === "starting") return "Starting camera…"
+  if (phase === "capturing") return "Capturing a clear frame…"
+  if (phase === "paused") return "Camera paused. Try again to resume."
+  if (burst?.ok) return "Face captured."
+  if (burst && !burst.ok) return captureStatusMessage(burst.reason)
+  return "Position your face in the oval."
 }
 
 function OnboardingStep({
@@ -69,24 +85,27 @@ function OnboardingStep({
 }) {
   const {
     videoRef,
-    canvasRef,
     isLoading,
     error: cameraError,
-    recognitionReady,
-    results,
+    burst,
+    equivalence,
+    phase,
+    isWarmingUp,
+    retry,
   } = useFaceDetection()
   const [name, setName] = useState("")
-  const [frozenFace, setFrozenFace] = useState<Float32Array | null>(null)
+  const descriptor = burst?.ok ? burst.descriptor : null
+  const descriptorReady = isValidDescriptor(descriptor)
+  const canRetry =
+    !isLoading &&
+    !cameraError &&
+    !submitting &&
+    (phase === "failed" || phase === "paused")
 
-  const liveFace =
-    recognitionReady && results.length > 0
-      ? results[0].detection.descriptor
-      : null
-  if (liveFace && !frozenFace) {
-    setFrozenFace(liveFace)
+  const handleSubmit = () => {
+    if (!isValidDescriptor(descriptor) || !name.trim()) return
+    onSubmit(name.trim(), descriptor)
   }
-  const face = frozenFace ?? liveFace
-  const descriptorReady = face !== null && face.length === 128
 
   return (
     <CardContent className="flex flex-col gap-5">
@@ -95,45 +114,13 @@ function OnboardingStep({
           {error}
         </p>
       )}
-      <div className="flex flex-col gap-2">
-        <div className="relative overflow-hidden rounded-md border bg-black">
-          <video ref={videoRef} autoPlay playsInline muted className="block w-full" />
-          <canvas
-            ref={canvasRef}
-            className="pointer-events-none absolute inset-0 h-full w-full"
-          />
-          {(isLoading || cameraError) && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/85 px-6 text-center">
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <p className="text-sm text-muted-foreground">
-                    Starting camera and detectors…
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="font-medium">
-                    {isModelError(cameraError)
-                      ? "Face models unavailable"
-                      : "Camera unavailable"}
-                  </p>
-                  <p className="text-sm text-muted-foreground">{cameraError}</p>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-        {!isLoading && !cameraError && (
-          <p className="text-center text-xs text-muted-foreground">
-            {descriptorReady
-              ? "Face captured."
-              : results.length > 0
-                ? "Hold still while the recognizer warms up…"
-                : "Position your face in view of the camera."}
-          </p>
-        )}
-      </div>
+      <FaceCaptureFrame
+        videoRef={videoRef}
+        isLoading={isLoading}
+        error={cameraError}
+        status={statusMessage(phase, isWarmingUp, burst, isLoading, cameraError)}
+        debugReadout={<FaceDebugReadout burst={burst} equivalence={equivalence} />}
+      />
       <div className="flex flex-col gap-1.5">
         <label htmlFor="display_name" className="text-sm font-medium">
           Display name
@@ -148,14 +135,23 @@ function OnboardingStep({
           className={inputClass}
         />
       </div>
-      <Button
-        size="lg"
-        onClick={() => name.trim() && descriptorReady && onSubmit(name.trim(), face as Float32Array)}
-        disabled={submitting || !descriptorReady || !name.trim()}
-      >
-        {submitting && <Loader2 data-icon="inline-start" className="animate-spin" />}
-        Save & continue
-      </Button>
+      <div className="flex gap-3">
+        <Button
+          className="flex-1"
+          size="lg"
+          onClick={handleSubmit}
+          disabled={submitting || !descriptorReady || !name.trim()}
+        >
+          {submitting && <Loader2 data-icon="inline-start" className="animate-spin" />}
+          Save & continue
+        </Button>
+        {canRetry && (
+          <Button variant="outline" size="lg" onClick={retry} disabled={submitting}>
+            <RefreshCw data-icon="inline-start" />
+            Try again
+          </Button>
+        )}
+      </div>
     </CardContent>
   )
 }
@@ -176,53 +172,65 @@ function VerifyStep({
   submitting: boolean
   error: string
   verdict: VerifyVerdict
-  onMatch: (descriptor: Float32Array) => void
+  onMatch: (descriptor: Float32Array, distance: number) => void
   onNoMatch: (distance: number) => void
   onRetry: () => void
   onCancel: () => void
 }) {
-  const {
-    videoRef,
-    canvasRef,
-    isLoading,
-    error: cameraError,
-    recognitionReady,
-    results,
-  } = useFaceDetection()
-
-  const stored: Float32Array | null = (() => {
-    try {
-      const arr = JSON.parse(participant.embedding) as number[]
-      return arr.length === 128 ? new Float32Array(arr) : null
-    } catch {
-      return null
-    }
+  const stored = (() => {
+    const parsed = parseEmbedding(participant.embedding)
+    return parsed && isValidDescriptor(parsed) ? parsed : null
   })()
 
-  const liveFace =
-    recognitionReady && results.length > 0
-      ? results[0].detection.descriptor
-      : null
-
-  const capturedRef = useRef(false)
+  const {
+    videoRef,
+    isLoading,
+    error: cameraError,
+    burst,
+    equivalence,
+    phase,
+    isWarmingUp,
+    retry,
+  } = useFaceDetection({ referenceDescriptor: stored })
+  const handledBurstRef = useRef<BurstResult | null>(null)
 
   useEffect(() => {
-    if (verdict !== null) return
-    if (!stored || !liveFace) return
-    if (capturedRef.current) return
-    capturedRef.current = true
-    if (isMatch(stored, liveFace)) {
-      onMatch(liveFace)
+    if (!burst || handledBurstRef.current === burst) return
+    handledBurstRef.current = burst
+    if (!burst.ok) return
+    const distance = burst.combinedDistance
+    if (distance === null || !Number.isFinite(distance)) return
+    if (!isValidDescriptor(burst.descriptor)) return
+    if (isDistanceMatch(distance)) {
+      onMatch(burst.descriptor, distance)
     } else {
-      onNoMatch(euclideanDistance(stored, liveFace))
+      onNoMatch(distance)
     }
-  }, [liveFace, stored, verdict, onMatch, onNoMatch])
+  }, [burst, onMatch, onNoMatch])
 
-  useEffect(() => {
-    if (verdict === null) {
-      capturedRef.current = false
-    }
-  }, [verdict])
+  if (!stored) {
+    return (
+      <CardContent className="flex flex-col gap-4">
+        <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          Your stored sandbox face template is invalid. Re-do onboarding to continue.
+        </p>
+        <Button variant="outline" onClick={onCancel} disabled={submitting}>
+          Back to classes
+        </Button>
+      </CardContent>
+    )
+  }
+
+  const captureFailed = burst !== null && !burst.ok
+  const canRetry =
+    !isLoading &&
+    !cameraError &&
+    !submitting &&
+    (verdict !== null || captureFailed || phase === "paused")
+  const handleRetry = () => {
+    onRetry()
+    retry()
+  }
 
   return (
     <CardContent className="flex flex-col gap-5">
@@ -231,36 +239,13 @@ function VerifyStep({
           {error}
         </p>
       )}
-      <div className="flex flex-col gap-2">
-        <div className="relative overflow-hidden rounded-md border bg-black">
-          <video ref={videoRef} autoPlay playsInline muted className="block w-full" />
-          <canvas
-            ref={canvasRef}
-            className="pointer-events-none absolute inset-0 h-full w-full"
-          />
-          {(isLoading || cameraError) && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/85 px-6 text-center">
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <p className="text-sm text-muted-foreground">
-                    Starting camera and detectors…
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="font-medium">
-                    {isModelError(cameraError)
-                      ? "Face models unavailable"
-                      : "Camera unavailable"}
-                  </p>
-                  <p className="text-sm text-muted-foreground">{cameraError}</p>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      <FaceCaptureFrame
+        videoRef={videoRef}
+        isLoading={isLoading}
+        error={cameraError}
+        status={verdict ? null : statusMessage(phase, isWarmingUp, burst, isLoading, cameraError)}
+        debugReadout={<FaceDebugReadout burst={burst} equivalence={equivalence} />}
+      />
 
       {!isLoading && !cameraError && (
         <div className="flex flex-col items-center gap-2.5">
@@ -277,15 +262,17 @@ function VerifyStep({
                   distance {verdict.distance.toFixed(4)}
                 </Badge>
               </>
+            ) : captureFailed ? (
+              <Badge variant="outline">Capture failed</Badge>
             ) : (
               <Badge variant="outline">Looking for face…</Badge>
             )}
           </div>
-          {verdict && (
+          {canRetry && (
             <Button
               size="sm"
               variant="outline"
-              onClick={onRetry}
+              onClick={handleRetry}
               disabled={submitting}
             >
               <RefreshCw data-icon="inline-start" />
@@ -378,6 +365,10 @@ export default function SandboxStudent() {
 
   const saveOnboarding = async (displayName: string, descriptor: Float32Array) => {
     if (!user) return
+    if (!isValidDescriptor(descriptor)) {
+      setError("Face capture was invalid. Try again.")
+      return
+    }
     setSubmitting(true)
     setError("")
     try {
@@ -409,8 +400,13 @@ export default function SandboxStudent() {
     setStage("select")
   }
 
-  const checkIn = async (descriptor: Float32Array) => {
+  const checkIn = async (descriptor: Float32Array, distance: number) => {
     if (!user || !selectedSession) return
+    if (!isValidDescriptor(descriptor) || !Number.isFinite(distance)) {
+      setError("Face capture was invalid. Try again.")
+      setVerifyResult(null)
+      return
+    }
     if (!liveSessions.some((s) => s.id === selectedSession.id)) {
       setSelectedSession(null)
       setVerifyResult(null)
@@ -639,7 +635,7 @@ export default function SandboxStudent() {
                     submitting={submitting}
                     error={error}
                     verdict={verifyResult}
-                    onMatch={(d) => void checkIn(d)}
+                    onMatch={(d, distance) => void checkIn(d, distance)}
                     onNoMatch={(distance) => setVerifyResult({ status: "no-match", distance })}
                     onRetry={() => setVerifyResult(null)}
                     onCancel={cancelVerify}

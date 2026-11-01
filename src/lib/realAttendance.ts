@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase"
 import {
   FACE_MODEL_VERSION,
   faceConfidence,
+  isValidDescriptor,
   parseEmbedding,
 } from "@/lib/faceCompare"
 import type { Coordinates } from "@/lib/geofence"
@@ -36,6 +37,9 @@ export async function getActiveFaceEmbedding(
 export async function upsertFaceEmbedding(
   descriptor: Float32Array,
 ): Promise<FaceEmbeddingRow> {
+  if (!isValidDescriptor(descriptor)) {
+    throw new Error("Invalid face descriptor")
+  }
   const { data, error } = await supabase.rpc("upsert_face_embedding", {
     p_embedding: Array.from(descriptor),
     p_model_version: FACE_MODEL_VERSION,
@@ -94,6 +98,9 @@ export async function checkInFace(
   distance: number,
   location: Coordinates,
 ): Promise<AttendanceRecordRow> {
+  if (!Number.isFinite(distance)) {
+    throw new Error("Invalid face distance")
+  }
   const confidence = faceConfidence(distance)
   const { data, error } = await supabase.rpc("check_in_attendance", {
     p_session_id: sessionId,

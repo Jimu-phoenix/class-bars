@@ -50,8 +50,22 @@ export default function OtpFallbackCard({
   }
 
   useEffect(() => {
-    void loadQuota()
+    let cancelled = false
+    void getOtpQuota(sessionId)
+      .then((q) => {
+        if (!cancelled) setQuota(q)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setQuotaError(
+          err instanceof OtpApiError ? err.message : "Failed to load OTP quota",
+        )
+      })
+      .finally(() => {
+        if (!cancelled) setQuotaLoading(false)
+      })
     return () => {
+      cancelled = true
       if (timerRef.current) {
         window.clearInterval(timerRef.current)
       }

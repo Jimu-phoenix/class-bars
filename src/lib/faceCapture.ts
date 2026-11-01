@@ -22,6 +22,85 @@ export const ENABLE_CAMERA_CONSTRAINTS = true
 export const WARMUP_MS = 800
 export const ENABLE_CAMERA_WARMUP = true
 
+// Burst capture configuration. These values are PROVISIONAL and need on-device calibration.
+export const CAPTURE_FRAME_COUNT = 3
+export const CAPTURE_MIN_INTERVAL_MS = 250
+export const CAPTURE_MAX_INTERVAL_MS = 400
+export const CAPTURE_TIMEOUT_MS = 10_000
+export const CAPTURE_INACTIVITY_STOP_MS = 60_000
+
+// Quality gate configuration. Sharpness is the variance of the Laplacian on 0-255 grayscale.
+export const QUALITY_MIN_DETECTION_SCORE = 0.6
+export const QUALITY_MIN_FACE_FRACTION = 0.25
+export const QUALITY_MAX_POSE_DEG = 20
+export const QUALITY_MIN_SHARPNESS = 100
+export const QUALITY_BRIGHTNESS_MIN = 50
+export const QUALITY_BRIGHTNESS_MAX = 210
+export const QUALITY_SAMPLE_STEP = 2
+
+export type CaptureFailureReason =
+  | "no_face"
+  | "multiple_faces"
+  | "low_score"
+  | "face_too_small"
+  | "landmarks_missing"
+  | "pose"
+  | "blurry"
+  | "too_dark"
+  | "too_bright"
+  | "invalid_descriptor"
+  | "timeout"
+  | "camera_error"
+  | "model_error"
+  | "cancelled"
+
+export function nextCaptureIntervalMs(
+  minMs: number = CAPTURE_MIN_INTERVAL_MS,
+  maxMs: number = CAPTURE_MAX_INTERVAL_MS,
+  random: () => number = Math.random,
+): number {
+  if (maxMs <= minMs) return minMs
+  return Math.round(minMs + random() * (maxMs - minMs))
+}
+
+export function captureStatusMessage(
+  reason: CaptureFailureReason | null,
+  fallback = "Position your face in the oval.",
+): string {
+  switch (reason) {
+    case "no_face":
+      return "No face detected. Center your face in the oval."
+    case "multiple_faces":
+      return "Multiple faces detected. Only one person should be in view."
+    case "low_score":
+      return "Face not clear enough. Face the camera and improve the lighting."
+    case "face_too_small":
+      return "Move closer to the camera."
+    case "landmarks_missing":
+      return "Could not read your facial landmarks. Hold still and face the camera."
+    case "pose":
+      return "Face the camera straight on."
+    case "blurry":
+      return "The image is blurry. Hold still and try again."
+    case "too_dark":
+      return "Too dark. Find better lighting."
+    case "too_bright":
+      return "Too bright. Reduce glare or move away from the light."
+    case "invalid_descriptor":
+      return "Could not create a valid face template. Try again."
+    case "timeout":
+      return "Could not capture a clear face in time. Try again."
+    case "camera_error":
+      return "Camera unavailable."
+    case "model_error":
+      return "Face models unavailable."
+    case "cancelled":
+      return "Capture cancelled."
+    default:
+      return fallback
+  }
+}
+
 export function buildCameraConstraintAttempts(
   enabled: boolean = ENABLE_CAMERA_CONSTRAINTS,
 ): MediaStreamConstraints[] {

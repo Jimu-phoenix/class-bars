@@ -128,12 +128,6 @@ export default function Home() {
                     </Link>
                   </>
                 )}
-                <Link
-                  to="/face-test"
-                  className="inline-flex h-11 items-center gap-2 rounded-md px-4 text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
-                >
-                  Technical Docs
-                </Link>
               </div>
             </div>
           </div>

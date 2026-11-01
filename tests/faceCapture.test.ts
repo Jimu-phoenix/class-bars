@@ -18,6 +18,19 @@ import {
   WARMUP_MS,
   ENABLE_CAMERA_CONSTRAINTS,
   ENABLE_CAMERA_WARMUP,
+  CAPTURE_FRAME_COUNT,
+  CAPTURE_MIN_INTERVAL_MS,
+  CAPTURE_MAX_INTERVAL_MS,
+  CAPTURE_TIMEOUT_MS,
+  CAPTURE_INACTIVITY_STOP_MS,
+  QUALITY_MIN_DETECTION_SCORE,
+  QUALITY_MIN_FACE_FRACTION,
+  QUALITY_MAX_POSE_DEG,
+  QUALITY_MIN_SHARPNESS,
+  QUALITY_BRIGHTNESS_MIN,
+  QUALITY_BRIGHTNESS_MAX,
+  nextCaptureIntervalMs,
+  captureStatusMessage,
 } from "../src/lib/faceCapture.ts"
 
 test("summariseDistances returns empty stats for empty input", () => {
@@ -154,3 +167,35 @@ test("isWarmedUp enforces warmup duration and data readiness", () => {
   assert.equal(isWarmedUp(start, start + 100, false, 800, false), false)
 })
 
+
+test("burst constants match the approved capture settings", () => {
+  assert.equal(CAPTURE_FRAME_COUNT, 3)
+  assert.equal(CAPTURE_MIN_INTERVAL_MS, 250)
+  assert.equal(CAPTURE_MAX_INTERVAL_MS, 400)
+  assert.equal(CAPTURE_TIMEOUT_MS, 10_000)
+  assert.equal(CAPTURE_INACTIVITY_STOP_MS, 60_000)
+  assert.equal(QUALITY_MIN_DETECTION_SCORE, 0.6)
+  assert.equal(QUALITY_MIN_FACE_FRACTION, 0.25)
+  assert.equal(QUALITY_MAX_POSE_DEG, 20)
+  assert.equal(QUALITY_MIN_SHARPNESS, 100)
+  assert.equal(QUALITY_BRIGHTNESS_MIN, 50)
+  assert.equal(QUALITY_BRIGHTNESS_MAX, 210)
+})
+
+test("nextCaptureIntervalMs stays within the configured range", () => {
+  assert.equal(nextCaptureIntervalMs(250, 400, () => 0), 250)
+  assert.equal(nextCaptureIntervalMs(250, 400, () => 1), 400)
+  assert.equal(nextCaptureIntervalMs(250, 400, () => 0.5), 325)
+  assert.equal(nextCaptureIntervalMs(300, 300, () => 0.5), 300)
+  assert.equal(nextCaptureIntervalMs(400, 250, () => 0.5), 400)
+})
+
+test("captureStatusMessage maps common rejection reasons", () => {
+  assert.match(captureStatusMessage("no_face"), /No face detected/)
+  assert.match(captureStatusMessage("multiple_faces"), /Multiple faces detected/)
+  assert.match(captureStatusMessage("face_too_small"), /Move closer/)
+  assert.match(captureStatusMessage("pose"), /straight on/)
+  assert.match(captureStatusMessage("timeout"), /in time/)
+  assert.equal(captureStatusMessage(null), "Position your face in the oval.")
+  assert.equal(captureStatusMessage(null, "fallback"), "fallback")
+})

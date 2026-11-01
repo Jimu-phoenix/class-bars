@@ -21,30 +21,48 @@ export class OtpApiError extends Error {
   }
 }
 
-function isFunctionsHttpError(error: unknown): error is {
-  context?: { json: () => Promise<any> }
+type FunctionsHttpErrorLike = {
+  context?: { json: () => Promise<unknown> }
   message?: string
-} {
-  return typeof error === "object" && error !== null && ("context" in error || ("name" in error && (error as any).name === "FunctionsHttpError"))
+}
+
+function isFunctionsHttpError(error: unknown): error is FunctionsHttpErrorLike {
+  if (typeof error !== "object" || error === null) return false
+  if ("context" in error) return true
+  return (
+    "name" in error &&
+    typeof error.name === "string" &&
+    error.name === "FunctionsHttpError"
+  )
 }
 
 async function parseError(error: unknown): Promise<OtpApiError> {
   if (isFunctionsHttpError(error)) {
-    const ctx = (error as any).context
+    const ctx = error.context
     if (ctx && typeof ctx.json === "function") {
       try {
         const body = await ctx.json()
-        const message = typeof body?.error === "string" ? body.error : (typeof body?.message === "string" ? body.message : "Request failed")
-        const code = typeof body?.code === "string" ? body.code : "server_error"
-        const retryAfter = typeof body?.retry_after === "number" ? body.retry_after : undefined
+        const record =
+          typeof body === "object" && body !== null
+            ? (body as Record<string, unknown>)
+            : {}
+        const message =
+          typeof record.error === "string"
+            ? record.error
+            : typeof record.message === "string"
+              ? record.message
+              : "Request failed"
+        const code =
+          typeof record.code === "string" ? record.code : "server_error"
+        const retryAfter =
+          typeof record.retry_after === "number" ? record.retry_after : undefined
         return new OtpApiError(message, code, retryAfter)
       } catch {
         // fall through
       }
     }
-    // Try to get message from error
-    if ((error as any).message) {
-      return new OtpApiError((error as any).message, "server_error")
+    if (typeof error.message === "string") {
+      return new OtpApiError(error.message, "server_error")
     }
     return new OtpApiError("Request failed", "server_error")
   }

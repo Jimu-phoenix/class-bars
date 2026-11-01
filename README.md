@@ -13,7 +13,7 @@ A built-in **sandbox mode** lets you demo the entire flow end-to-end with no rea
 | Styling | Tailwind CSS v4 (`@tailwindcss/vite`), shadcn-style components on `@base-ui/react`, `class-variance-authority`, `lucide-react`, Inter variable font |
 | Backend | Supabase — Postgres with Row Level Security, Auth (email/password + Anonymous sign-ins), reCAPTCHA v2 checkbox protection (client-side) |
 |---|---|
-| Face recognition | `face-api.js` — TinyFaceDetector + 128-d descriptors; only encrypted embeddings are stored, never images |
+| Face recognition | `face-api.js` — TinyFaceDetector + 128-d descriptors; descriptor JSON is stored under RLS, never images |
 | Tests | Node's built-in test runner (`node:test`) — zero test dependencies |
 
 ## Getting started
@@ -51,6 +51,7 @@ SQL files are applied manually via Supabase Dashboard -> SQL Editor, **in this o
 12. `migrations/12_geofencing.sql` — PostGIS geofences (circle or class box), hardened check-in RPC, flagged attendance
 13. `migrations/13_set_venue_geofence_security_definer.sql` — admin geofence setup security definer RPC
 14. `migrations/14_face_embeddings_single_row.sql` — single face embedding per student (pruning duplicates & in-place update)
+15. `migrations/32_face_descriptor_validation.sql` — NOT VALID descriptor CHECKs for real and sandbox face templates; run backup → migration → preflight → validate
 
 `migrations/03_table_details.sql` is **not** part of the chain — it's a read-only report of your live schema (columns, constraints, RLS policies, triggers) for verification and drift checks. Migrations 08–14 have not been applied to every environment; apply them in order before deploying the matching client.
 
@@ -77,7 +78,7 @@ src/
   components/     Shell/route guards + CaptchaGate + ui/ primitives
   contexts/       AuthContext (session state, sign in/out/up)
   hooks/          useFaceDetection, usePoll, useLecturerSessions
-  lib/            supabase client, sandbox logic, faceCompare, faceStorage
+  lib/            supabase client, sandbox logic, faceCompare, faceCapture, faceBurst, faceQuality
   pages/          Home, Login, Signup, Onboarding, Profile,
                   LecturerDashboard/Courses/NewSession, FaceTest/FaceVerify,
                   SandboxLanding/Lecturer/Student

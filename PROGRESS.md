@@ -1,8 +1,8 @@
 # Class-BARS Progress Report
 
-**Date:** 2026-10-29
+**Date:** 2026-10-31
 **Repo:** `D:\classBars\class-bars`
-**Overall status:** Real (DB-backed) attendance flow built end-to-end and verified by lint/build/tests. Role-based access hardened end-to-end (client guards + server-side `staff_emails` allowlist enforced in the signup trigger). Theme toggle rewritten. Profile UI lives inside each role's dashboard. Auth pages guest-only. Dashboard shell + student pages rebuilt mobile-first. Student location card streamlined for privacy (raw coordinates removed; accuracy + Good/Fair/Poor flags displayed). Lecturer attendance-register PDF export added: per-course month/session picker, 2–8 ended sessions, browser-generated landscape A4 PDF, and a lecturer-only SECURITY DEFINER data RPC. OTP fallback added for student check-in. Face verification errors made specific (no match, accuracy/geofence reasons). Fixed login 500 by correcting profiles RLS (SECURITY DEFINER functions, no recursion). Fixed attendance RPC to remove devices dependency and drop device_id column. Sandbox untouched. **All existing migrations applied through 29; migrations 30 (200 m accuracy ceiling) and 31 (box geofence `ST_Covers`/area fix) built and must be applied.** Admin dashboard built (Home, Venues, Users & Roles, System Logs) with magic-link login and no signup; Venues supports circle and four-corner box geofence editing.
+**Overall status:** Real (DB-backed) attendance flow built end-to-end and verified by lint/build/tests. Role-based access hardened end-to-end (client guards + server-side `staff_emails` allowlist enforced in the signup trigger). Theme toggle rewritten. Profile UI lives inside each role's dashboard. Auth pages guest-only. Dashboard shell + student pages rebuilt mobile-first. Student location card streamlined for privacy (raw coordinates removed; accuracy + Good/Fair/Poor flags displayed). Lecturer attendance-register PDF export added: per-course month/session picker, 2–8 ended sessions, browser-generated landscape A4 PDF, and a lecturer-only SECURITY DEFINER data RPC. OTP fallback added for student check-in. Face verification errors made specific (no match, accuracy/geofence reasons). Fixed login 500 by correcting profiles RLS (SECURITY DEFINER functions, no recursion). Fixed attendance RPC to remove devices dependency and drop device_id column. Sandbox untouched. **All existing migrations applied through 29; migrations 30 (200 m accuracy ceiling), 31 (box geofence `ST_Covers`/area fix), and 32 (face descriptor validation) built and must be applied.** Face capture now uses a quality-gated 3-frame burst for enrolment and verification; descriptor CHECKs are built but not applied. Admin dashboard built (Home, Venues, Users & Roles, System Logs) with magic-link login and no signup; Venues supports circle and four-corner box geofence editing.
 
 ---
 
@@ -23,6 +23,8 @@
 | Student dashboard | Done | Same shell/sidebar, Overview + Courses + Update profile pages, live face check-in, privacy-preserving location accuracy card, OTP fallback |
 | New session form | Done | "Start now" vs "Schedule for later" + registration duration (5/15/30/60 min) that auto-computes session end |
 | Face pipeline | Done | face-api 0.22.2 (tiny detector/landmarks/recognition, models in `public/models/`), pure math + model-version helpers in `src/lib/faceCompare.ts` |
+| Face capture burst | Built — not device-verified | Quality-gated 3-frame burst for enrolment and verification; 250–400 ms interval; static oval + status; stops on hidden/unmount/60 s inactivity; dev-only video-vs-canvas equivalence check |
+| Face descriptor validation (`migrations/32`) | **Built — not applied** | Immutable safe validators + `NOT VALID` CHECKs for real and sandbox templates; run backup → migration → preflight → cleanup → validate |
 | Admin dashboard | Done | Magic-link login, no signup; Home (live stats), Venues (CRUD + circle/box geofence editor), Users & Roles (staff email allowlist), System Logs (audit_logs). Sidebar-driven navigation, all routes AdminRoute-guarded. |
 | Geofencing (`migrations/12`) | **Applied** | PostGIS proximity check in `check_in_attendance`; one `geofences` row per venue (circle 2–50 m or four-corner box); gap-based decision table with small-fence handling; raw coordinates never stored; admin-only fence writes. |
 | Admin geofence RPC (`migrations/13`) | **Applied** | `set_venue_geofence` made SECURITY DEFINER with explicit admin role check to prevent RLS subquery recursion |
@@ -32,7 +34,7 @@
 | Attendance RPC fix (`migration 29`) | **Built — apply in SQL Editor** | Remove devices table dependency, drop `device_id` from attendance_records, keep compatible signature |
 | OTP fallback | Done | `src/lib/attendanceOtp.ts`, `OtpFallbackCard`, integrated in StudentHome with quota/attempt logic |
 | Specific error messages | Done | Face verification shows "No match on face", check-in failures specify poor accuracy/outside geofence/no geofence |
-| Sandbox module | Untouched | Intentionally left as-is per user decision |
+| Sandbox module | Updated | Sandbox onboarding/verification use the same burst pipeline with Tiny-416; descriptor validation added client-side and in migration 32 |
 
 ---
 
@@ -200,7 +202,7 @@
 | Register PDF is generated entirely in the browser and never stored/logged | Avoids creating a second copy of attendance data and keeps export available without a server job |
 | Register marks `late` as present (`pr`) and missing rows as absent (`ab`) | The lecturer register uses the four existing final statuses; `prf` is reserved for geofence-flagged check-ins |
 | A ninth session is blocked in both the UI and the RPC | Prevent oversized tables and make the server the final authority on the 2–8 contract |
-| Sandbox module left untouched throughout | Explicit user instruction; all new work is on the real tables |
+| Sandbox module was isolated in earlier phases | Current burst work updates sandbox capture and adds descriptor validation without touching real attendance rows |
 | Remove raw lat/long coordinates from StudentHome location card; show accuracy and Good/Fair/Poor flag only | Privacy & UX; raw numbers clutter the mobile UI and run counter to privacy reassurance ("Coordinates stay on this device"). Device fix accuracy and the threshold quality flag are all that matter to the student |
 | Use SECURITY DEFINER for role checks in RLS | Avoid recursion when policies query profiles/courses; restore proper access for all roles |
 | Remove devices dependency from check-in | Table doesn't exist; simplify RPC and drop unused column |
@@ -212,8 +214,9 @@
 
 1. **Migration 15 is not applied** — `migrations/15_course_register_data.sql` must be run before live export works. The UI will surface the RPC error until then.
 2. **`scripts/reset_supabase_project.sql` is missing migrations 10–15** — it still builds base, 01, 02, 04–09. Do not use it to rebuild a project that needs the staff allowlist, admin/geofence policies, geofencing, or register export until it is updated.
-3. **`tests/schema.test.ts` fails** — stale `table_state.json` snapshot; regenerate against the live applied schema. The full `node --test tests/*.test.ts` run also reports the pre-existing `rolePolicy` fixture/env failures; the targeted register tests pass.
-4. **Hardware device verification** — while validated via unit tests, lint, and build, live end-to-end device testing with live PostGIS proximity and mobile camera face-matching should be verified on physical devices. The browser PDF download should be spot-checked on a real lecturer account after migration 15 is applied.
+3. **Migration 32 is not applied** — run the backup script, apply the migration, review the preflight report, clean invalid rows, then run the validate script. Existing rows are not scanned until `VALIDATE`.
+4. **`tests/schema.test.ts` fails** — stale `table_state.json` snapshot; regenerate against the live applied schema. The full `node --test tests/*.test.ts` run also reports the pre-existing `rolePolicy` fixture/env failures; the targeted register tests pass.
+5. **Hardware device verification** — while validated via unit tests, lint, and build, live end-to-end device testing with live PostGIS proximity and mobile camera face-matching should be verified on physical devices. The browser PDF download should be spot-checked on a real lecturer account after migration 15 is applied. Face-burst thresholds and the dev-only video-vs-canvas equivalence check also need real phone/desktop results.
 
 
 ---
@@ -233,7 +236,39 @@ package-lock.json                         # UPDATED — PDF dependency tree
 PROGRESS.md                               # UPDATED — documented register export, verification and migration 15 pending
 ```
 
-### 7.2 Earlier geofencing / location privacy phase
+### 7.2 Face burst capture (`current`)
+
+```
+src/lib/faceCapture.ts                    # UPDATED — burst/quality constants, failure reasons, interval/status helpers
+src/lib/faceCompare.ts                    # UPDATED — descriptor validation, averaging, median distance, zero-norm rejection
+src/lib/faceQuality.ts                    # NEW — brightness, sharpness, 68-point pose and quality gate
+src/lib/faceBurst.ts                      # NEW — canvas burst capture, metrics, dev equivalence check
+src/hooks/useFaceDetection.ts             # UPDATED — preview + burst lifecycle, visibility/inactivity cleanup
+src/components/face/FaceCaptureFrame.tsx  # UPDATED — static oval, status overlay, debug readout
+src/components/face/FaceEnrollCard.tsx    # UPDATED — burst descriptor save + retry
+src/components/face/FaceVerifyCard.tsx    # UPDATED — burst median distance + OTP gating
+src/pages/StudentHome.tsx                 # UPDATED — consumes burst distance, validates descriptor
+src/pages/SandboxStudent.tsx              # UPDATED — sandbox onboarding/verification use burst
+src/pages/FaceTest.tsx                    # UPDATED — burst diagnostic page, admin-only
+src/pages/FaceVerify.tsx                  # UPDATED — in-memory burst register/verify, no localStorage
+src/App.tsx                               # UPDATED — /face-test and /face-verify admin-only
+src/lib/realAttendance.ts                 # UPDATED — descriptor/distance validation before RPC
+src/lib/sandbox.ts                        # UPDATED — descriptor validation before upsert
+src/lib/faceStorage.ts                    # DELETED — localStorage descriptor storage removed
+migrations/32_face_descriptor_validation.sql          # NEW — NOT APPLIED — safe validators + NOT VALID CHECKs
+migrations/32_face_descriptor_validation_backup.sql   # NEW — backup tables
+migrations/32_face_descriptor_validation_preflight.sql # NEW — invalid-row report
+migrations/32_face_descriptor_validation_validate.sql # NEW — VALIDATE constraints
+migrations/32_face_descriptor_validation_rollback.sql # NEW — drop constraints/functions
+tests/faceCapture.test.ts                 # UPDATED — burst constants, interval and status tests
+tests/faceCompare.test.ts                 # UPDATED — descriptor validation/combination tests
+tests/faceQuality.test.ts                 # NEW — pose, brightness, sharpness and quality-gate tests
+tests/sandbox.test.ts                     # UPDATED — valid descriptor fixtures + invalid-input test
+tests/realAttendance.test.ts              # UPDATED — zero-norm parse test
+tests/schema.test.ts                      # UPDATED — migration 32 static checks
+```
+
+### 7.3 Earlier geofencing / location privacy phase
 
 ```
 src/pages/StudentHome.tsx                # UPDATED — removed raw lat/long display, added accuracy + Good/Fair/Poor status badge, dark mode support
