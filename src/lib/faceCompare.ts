@@ -1,10 +1,24 @@
 export const MATCH_THRESHOLD = 0.6;
+export const DESCRIPTOR_LENGTH = 128;
 
 // Version tag stamped on face_embeddings rows by the recognition model.
 // Check-in only compares against an active embedding with the same tag, so
 // bumping this (or the underlying recognition net) can never silently
 // mismatch descriptors.
 export const FACE_MODEL_VERSION = "face-api-recognition-full68-v1";
+
+export function isValidDescriptor(
+  descriptor: Float32Array | null | undefined,
+): descriptor is Float32Array {
+  if (!(descriptor instanceof Float32Array)) return false;
+  if (descriptor.length !== DESCRIPTOR_LENGTH) return false;
+  let sumSquares = 0;
+  for (const value of descriptor) {
+    if (!Number.isFinite(value)) return false;
+    sumSquares += value * value;
+  }
+  return Number.isFinite(sumSquares) && sumSquares > 0;
+}
 
 export function euclideanDistance(a: Float32Array, b: Float32Array): number {
   if (a.length !== b.length) {
@@ -16,6 +30,71 @@ export function euclideanDistance(a: Float32Array, b: Float32Array): number {
     sum += diff * diff;
   }
   return Math.sqrt(sum);
+}
+
+export function isDistanceMatch(
+  distance: number,
+  threshold = MATCH_THRESHOLD,
+): boolean {
+  return Number.isFinite(distance) && distance < threshold;
+}
+
+export function averageDescriptors(
+  descriptors: Float32Array[],
+): Float32Array | null {
+  if (descriptors.length === 0) return null;
+  if (!descriptors.every((descriptor) => isValidDescriptor(descriptor))) {
+    return null;
+  }
+
+  const average = new Float32Array(DESCRIPTOR_LENGTH);
+  for (const descriptor of descriptors) {
+    for (let i = 0; i < DESCRIPTOR_LENGTH; i++) {
+      average[i] += descriptor[i];
+    }
+  }
+  for (let i = 0; i < DESCRIPTOR_LENGTH; i++) {
+    average[i] /= descriptors.length;
+  }
+  return isValidDescriptor(average) ? average : null;
+}
+
+export type MedianDistanceResult = {
+  distance: number;
+  descriptor: Float32Array;
+  distances: number[];
+};
+
+export function medianDistance(
+  stored: Float32Array,
+  descriptors: Float32Array[],
+): MedianDistanceResult | null {
+  if (!isValidDescriptor(stored)) return null;
+
+  const valid = descriptors.filter((descriptor) => isValidDescriptor(descriptor));
+  if (valid.length === 0) return null;
+
+  const distances = valid.map((descriptor) =>
+    euclideanDistance(stored, descriptor),
+  );
+  const sorted = [...distances].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const distance =
+    sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
+
+  let bestIndex = 0;
+  let bestDelta = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < distances.length; i++) {
+    const delta = Math.abs(distances[i] - distance);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      bestIndex = i;
+    }
+  }
+
+  return { distance, descriptor: valid[bestIndex], distances };
 }
 
 export function isMatch(
@@ -69,7 +148,8 @@ export function parseEmbedding(embeddingJson: unknown): Float32Array | null {
     if (numbers.some((n) => !Number.isFinite(n))) {
       return null
     }
-    return new Float32Array(numbers)
+    const descriptor = new Float32Array(numbers)
+    return isValidDescriptor(descriptor) ? descriptor : null
   } catch {
     return null
   }

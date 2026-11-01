@@ -14,6 +14,10 @@ import {
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getSessionAttendance, type SessionAttendanceRow } from "@/lib/realAttendance"
+import {
+  displayMatchConfidence,
+  MATCH_CONFIDENCE_TOOLTIP,
+} from "@/lib/faceMatch"
 import { usePoll } from "@/hooks/usePoll"
 import DashboardShell from "@/components/DashboardShell"
 import { Badge } from "@/components/ui/badge"
@@ -29,6 +33,14 @@ import { cn } from "@/lib/utils"
 import type { SessionStatus } from "@/types/db"
 
 const POLL_MS = 3000
+
+function formatFlagReason(reason: string): string {
+  return reason
+    .split(",")
+    .map((part) => part.trim().replace(/_/g, " "))
+    .filter(Boolean)
+    .join(", ")
+}
 
 type SessionDetail = {
   id: string
@@ -318,53 +330,59 @@ export default function SessionLive() {
             </p>
           ) : (
             <ul className="divide-y divide-border">
-              {attendance.map((a) => (
-                <li key={a.record_id} className="flex items-center justify-between gap-4 py-3.5">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
-                      <UserRound className="size-4 text-muted-foreground" aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{a.student_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {a.student_number ?? "—"}
-                      </p>
-                      {a.status === "flagged" && a.flag_reason && (
-                        <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                          {a.flag_reason.replace(/_/g, " ")}
+              {attendance.map((a) => {
+                const matchConfidence = displayMatchConfidence(a.match_score)
+                return (
+                  <li key={a.record_id} className="flex items-center justify-between gap-4 py-3.5">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
+                        <UserRound className="size-4 text-muted-foreground" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{a.student_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {a.student_number ?? "—"}
                         </p>
-                      )}
+                        {a.status === "flagged" && a.flag_reason && (
+                          <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                            {formatFlagReason(a.flag_reason)}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Badge variant="outline" className="gap-1">
-                      <Fingerprint className="size-3" aria-hidden="true" />
-                      {methodLabel[a.method] ?? a.method}
-                    </Badge>
-                    <Badge
-                      variant="secondary"
-                      className={cn(
-                        a.status === "present" && "text-green-700 dark:text-green-400",
-                        a.status === "late" && "text-amber-700 dark:text-amber-400",
-                        a.status === "flagged" && "text-amber-700 dark:text-amber-400",
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Badge variant="outline" className="gap-1">
+                        <Fingerprint className="size-3" aria-hidden="true" />
+                        {methodLabel[a.method] ?? a.method}
+                      </Badge>
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          a.status === "present" && "text-green-700 dark:text-green-400",
+                          a.status === "late" && "text-amber-700 dark:text-amber-400",
+                          a.status === "flagged" && "text-amber-700 dark:text-amber-400",
+                        )}
+                      >
+                        {a.status}
+                      </Badge>
+                      {matchConfidence !== null && (
+                        <span
+                          className="whitespace-nowrap text-xs text-muted-foreground"
+                          title={MATCH_CONFIDENCE_TOOLTIP}
+                        >
+                          Match confidence: {matchConfidence}%
+                        </span>
                       )}
-                    >
-                      {a.status}
-                    </Badge>
-                    {a.confidence_score !== null && (
-                      <span className="text-xs font-mono text-muted-foreground">
-                        {(a.confidence_score * 100).toFixed(0)}%
+                      <span className="w-36 text-right text-xs text-muted-foreground">
+                        <span className="flex items-center justify-end gap-1">
+                          <CircleCheck className="size-3.5" aria-hidden="true" />
+                          {formatCheckinTime(a.check_in_time)}
+                        </span>
                       </span>
-                    )}
-                    <span className="w-36 text-right text-xs text-muted-foreground">
-                      <span className="flex items-center justify-end gap-1">
-                        <CircleCheck className="size-3.5" aria-hidden="true" />
-                        {formatCheckinTime(a.check_in_time)}
-                      </span>
-                    </span>
-                  </div>
-                </li>
-              ))}
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </CardContent>

@@ -7,6 +7,9 @@
 --   1. Apply migrations/12_geofencing.sql.
 --   2. Apply migrations/12_geofencing.sql AGAIN.
 --      Both runs must succeed; the migration is re-runnable.
+--   3. Apply migrations/30_raise_max_accuracy_200.sql.
+--   4. Apply migrations/31_fix_box_geofence_contains.sql.
+--   5. Apply migrations/33_face_match_confidence.sql.
 --
 -- This script creates temporary fixtures, exercises the schema, RPC and
 -- decision table, then rolls everything back. It leaves no rows behind.
@@ -282,6 +285,7 @@ do $$
 declare
   v_old         int;
   v_new         int;
+  v_new9        int;
   v_bad_columns int;
   v_count       int;
 begin
@@ -361,15 +365,25 @@ begin
     raise exception 'FAIL: expected one 8-argument check_in_attendance, found %', v_new;
   end if;
 
+  select count(*) into v_new9
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.proname = 'check_in_attendance'
+    and p.pronargs = 9;
+  if v_new9 <> 1 then
+    raise exception 'FAIL: expected one 9-argument check_in_attendance, found %', v_new9;
+  end if;
+
   select count(*) into v_count
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public'
     and p.proname = 'check_in_attendance'
-    and p.pronargs = 8
+    and p.pronargs in (8, 9)
     and p.prosecdef;
-  if v_count <> 1 then
-    raise exception 'FAIL: check_in_attendance must be SECURITY DEFINER';
+  if v_count <> 2 then
+    raise exception 'FAIL: check_in_attendance overloads must be SECURITY DEFINER';
   end if;
 
   select count(*) into v_count
@@ -397,6 +411,30 @@ begin
     'execute'
   ) then
     raise exception 'FAIL: anon can execute check_in_attendance';
+  end if;
+
+  if not has_function_privilege(
+    'authenticated',
+    'public.check_in_attendance(uuid,uuid,uuid,attendance_method,numeric,double precision,double precision,double precision,double precision)',
+    'execute'
+  ) then
+    raise exception 'FAIL: authenticated cannot execute 9-argument check_in_attendance';
+  end if;
+
+  if has_function_privilege(
+    'anon',
+    'public.check_in_attendance(uuid,uuid,uuid,attendance_method,numeric,double precision,double precision,double precision,double precision)',
+    'execute'
+  ) then
+    raise exception 'FAIL: anon can execute 9-argument check_in_attendance';
+  end if;
+
+  if has_function_privilege(
+    'authenticated',
+    'public._check_in_attendance(uuid,uuid,uuid,attendance_method,numeric,double precision,double precision,double precision,double precision)',
+    'execute'
+  ) then
+    raise exception 'FAIL: authenticated can execute internal _check_in_attendance';
   end if;
 
   if not has_function_privilege(
@@ -1011,14 +1049,35 @@ begin
       v_record.location_distance_m;
   end if;
 
-  -- Invalid location: NULL, NaN and accuracy above 100.
+  -- Accuracy ceiling: exactly 200 m is usable; 200.01 m is no_location.
+  v_session := pg_temp.new_session(v_course, v_lecturer, v_main);
+  perform pg_temp.expect_checkin(
+    v_session, v_lat, v_lng, 200, 'ok:present:', 'accuracy 200 usable'
+  );
+  v_session := pg_temp.new_session(v_course, v_lecturer, v_main);
+  v_point := pg_temp.point_at(v_lat, v_lng, 1, radians(90));
+  perform pg_temp.expect_checkin(
+    v_session, v_point[1], v_point[2], 200.01,
+    'err:no_location', 'accuracy 200.01'
+  );
+
+  -- Good/poor boundary: gap ~4 m, good_limit = 10 (circle radius 10).
+  v_point := pg_temp.point_at(v_lat, v_lng, 14, radians(90));
+  v_session := pg_temp.new_session(v_course, v_lecturer, v_main);
+  perform pg_temp.expect_checkin(
+    v_session, v_point[1], v_point[2], 10,
+    'err:outside_good_accuracy', 'accuracy 10 boundary blocked'
+  );
+  v_session := pg_temp.new_session(v_course, v_lecturer, v_main);
+  perform pg_temp.expect_checkin(
+    v_session, v_point[1], v_point[2], 10.1,
+    'ok:flagged:low_accuracy_overlap', 'accuracy 10.1 boundary flagged'
+  );
+
+  -- Invalid location: NULL and NaN.
   v_session := pg_temp.new_session(v_course, v_lecturer, v_main);
   perform pg_temp.expect_checkin(
     v_session, null, null, 10, 'err:no_location', 'NULL location'
-  );
-  v_point := pg_temp.point_at(v_lat, v_lng, 1, radians(90));
-  perform pg_temp.expect_checkin(
-    v_session, v_point[1], v_point[2], 101, 'err:no_location', 'accuracy 101'
   );
   perform pg_temp.expect_checkin(
     v_session, 'NaN'::double precision, v_point[2], 10,

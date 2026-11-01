@@ -7,6 +7,7 @@ import Signup from './pages/Signup'
 import Onboarding from './pages/Onboarding'
 import LecturerDashboard from './pages/LecturerDashboard'
 import LecturerCourses from './pages/LecturerCourses'
+import LecturerStudents from './pages/LecturerStudents'
 import LecturerProfile from './pages/LecturerProfile'
 import NewSession from './pages/NewSession'
 import SessionLive from './pages/SessionLive'
@@ -109,16 +110,24 @@ function App() {
             </RoleRoute>
           }
         />
-        <Route
-          path="/dashboard/courses"
-          element={
-            <RoleRoute role="lecturer">
-              <LecturerCourses />
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="/dashboard/profile"
+            <Route
+              path="/dashboard/courses"
+              element={
+                <RoleRoute role="lecturer">
+                  <LecturerCourses />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="/dashboard/students"
+              element={
+                <RoleRoute role="lecturer">
+                  <LecturerStudents />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="/dashboard/profile"
           element={
             <RoleRoute role="lecturer">
               <LecturerProfile />
@@ -144,17 +153,17 @@ function App() {
         <Route
           path="/face-test"
           element={
-            <ProtectedRoute>
+            <AdminRoute>
               <FaceTest />
-            </ProtectedRoute>
+            </AdminRoute>
           }
         />
         <Route
           path="/face-verify"
           element={
-            <ProtectedRoute>
+            <AdminRoute>
               <FaceVerify />
-            </ProtectedRoute>
+            </AdminRoute>
           }
         />
         <Route path="*" element={<NotFound />} />

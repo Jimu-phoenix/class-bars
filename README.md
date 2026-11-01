@@ -1,6 +1,6 @@
 # Class-BARS
 
-**Class-BARS (Biometric Attendance Recording System)** is a web application for recording student class attendance using facial recognition. Lecturers start a session for a course/venue; enrolled students check in by looking at their camera — a face embedding is matched against the student's stored template and attendance is recorded. Check-in also verifies the student is near the session venue using a PostGIS geofence (a circle or a four-corner class box); only the gap from the fence and reported GPS accuracy are stored, never raw coordinates. OTP fallback is still deferred.
+**Class-BARS (Biometric Attendance Recording System)** is a web application for recording student class attendance using facial recognition. Lecturers start a session for a course/venue; enrolled students check in by looking at their camera — a face embedding is matched against the student's stored template and attendance is recorded. Check-in also verifies the student is near the session venue using a PostGIS geofence (a circle or a four-corner class box); only the gap from the fence and reported GPS accuracy are stored, never raw coordinates. The client sends the median descriptor distance; the database derives a calibrated match score/band, and lecturers see only a rounded match-confidence percentage. OTP fallback is available after repeated face failures.
 
 A built-in **sandbox mode** lets you demo the entire flow end-to-end with no real accounts: a guest lecturer starts the default test class, guest students check in with face capture only. All sandbox data lives in separate tables and is disposable.
 
@@ -13,7 +13,7 @@ A built-in **sandbox mode** lets you demo the entire flow end-to-end with no rea
 | Styling | Tailwind CSS v4 (`@tailwindcss/vite`), shadcn-style components on `@base-ui/react`, `class-variance-authority`, `lucide-react`, Inter variable font |
 | Backend | Supabase — Postgres with Row Level Security, Auth (email/password + Anonymous sign-ins), reCAPTCHA v2 checkbox protection (client-side) |
 |---|---|
-| Face recognition | `face-api.js` — TinyFaceDetector + 128-d descriptors; only encrypted embeddings are stored, never images |
+| Face recognition | `face-api.js` — TinyFaceDetector + 128-d descriptors; descriptor JSON is stored under RLS, never images |
 | Tests | Node's built-in test runner (`node:test`) — zero test dependencies |
 
 ## Getting started
@@ -51,8 +51,34 @@ SQL files are applied manually via Supabase Dashboard -> SQL Editor, **in this o
 12. `migrations/12_geofencing.sql` — PostGIS geofences (circle or class box), hardened check-in RPC, flagged attendance
 13. `migrations/13_set_venue_geofence_security_definer.sql` — admin geofence setup security definer RPC
 14. `migrations/14_face_embeddings_single_row.sql` — single face embedding per student (pruning duplicates & in-place update)
+15. `migrations/15_course_register_data.sql` — lecturer-only 2–8 session attendance register RPC
+16. `migrations/26_proper_profiles_rls.sql` — non-recursive profile/role helper functions and policies
+17. `migrations/27_fix_other_policies_for_admins.sql` — admin policy fixes for the helper functions
+18. `migrations/29_fix_attendance_no_devices.sql` — remove the devices dependency from check-in
+19. `migrations/30_raise_max_accuracy_200.sql` — 200 m usable GPS accuracy ceiling
+20. `migrations/31_fix_box_geofence_contains.sql` — box geofence `ST_Covers`/area fix
+21. `migrations/32_face_descriptor_validation.sql` — NOT VALID descriptor CHECKs for real and sandbox face templates; run backup → migration → preflight → validate
+22. `migrations/33_face_match_confidence.sql` — server-computed face match score/band, 9-argument face RPC, OTP/manual compatibility, lecturer `match_score`; run `33_face_match_confidence_backup.sql` first, apply on a Supabase branch/staging project, then run `tests/sql/face_match_confidence_checks.sql`
 
-`migrations/03_table_details.sql` is **not** part of the chain — it's a read-only report of your live schema (columns, constraints, RLS policies, triggers) for verification and drift checks. Migrations 08–14 have not been applied to every environment; apply them in order before deploying the matching client.
+`migrations/03_table_details.sql` is **not** part of the chain — it's a read-only report of your live schema (columns, constraints, RLS policies, triggers) for verification and drift checks. Migrations 15, 26–33 have not been applied to every environment; apply them in order before deploying the matching client.
+
+### Deploy order and prerequisites
+
+Apply migrations strictly in the numbered order above on a staging/branch project before production:
+
+1. Run `migrations/32_face_descriptor_validation_backup.sql`, then `32_face_descriptor_validation.sql`, review the preflight report, clean any invalid rows, then run `32_face_descriptor_validation_validate.sql`.
+2. Run `migrations/33_face_match_confidence_backup.sql`, then `33_face_match_confidence.sql`. Run `tests/sql/geofencing_checks.sql` and `tests/sql/face_match_confidence_checks.sql` afterward.
+3. Only after SQL verification passes, deploy the matching client build. Verify PostgREST resolves the 8/9-argument `check_in_attendance` overloads; if it does not, rename the face RPC.
+
+`scripts/reset_supabase_project.sql` is missing migrations 10–15 and must not be used to rebuild an environment that needs the staff allowlist, admin/geofence policies, geofencing, or register export until it is updated.
+
+### Service worker status
+
+No service worker is registered and there is no PWA/offline implementation. The app is a standard SPA; face capture, check-in and the register PDF all run in the browser without a service worker.
+
+### flag_reason and RLS evidence
+
+`attendance_records.flag_reason` holds a single comma-separated string so location and face-review reasons can coexist (e.g. `low_accuracy_overlap,face_review`). `match_band` is constrained to `accept`/`review`, so a `retry` can never be stored as a row. The `face_match_config` table is single-row (`config_revision` increments on every change, recorded in `audit_logs`); its RLS select policy is `public.is_admin_user()` — authenticated students and lecturers read zero rows, admins read the row. Match fields (`match_distance`, `match_score`, `match_band`, `match_config_version`) are stripped from the student check-in JSON; the lecturer roster exposes only `match_score` (the legacy `confidence_score` is no longer returned by the roster RPC). Raw student coordinates are never stored — only `location_distance_m` and `location_accuracy_m`.
 
 ### Resetting the database
 
@@ -68,7 +94,7 @@ node --import ./tests/register.mjs --test tests/*.test.ts
 
 Supabase is mocked — the suite makes no network requests. See `test_result.md` for coverage details.
 
-Geofencing has an additional manual SQL check: run `migrations/12_geofencing.sql` twice, then run `tests/sql/geofencing_checks.sql` in the Supabase SQL Editor. It rolls back all fixtures and prints `PASS` notices for the schema, circle radius and box geometry constraints, RPC privileges and RLS, unique sharing, venue cascade deletion, the closed direct-insert path, and the full decision table for both shapes (including small fences and clockwise/anticlockwise boxes).
+Geofencing has an additional manual SQL check: run `migrations/12_geofencing.sql` twice, then run `tests/sql/geofencing_checks.sql` in the Supabase SQL Editor. It rolls back all fixtures and prints `PASS` notices for the schema, circle radius and box geometry constraints, RPC privileges and RLS, unique sharing, venue cascade deletion, the closed direct-insert path, and the full decision table for both shapes (including small fences and clockwise/anticlockwise boxes). After migration 33, also run `tests/sql/face_match_confidence_checks.sql` for the score curve, accept/review/retry bands, cutoff neighbourhoods, combined flag reasons, the 8/9-argument overload split, and the admin config audit.
 
 ## Project structure
 
@@ -77,7 +103,7 @@ src/
   components/     Shell/route guards + CaptchaGate + ui/ primitives
   contexts/       AuthContext (session state, sign in/out/up)
   hooks/          useFaceDetection, usePoll, useLecturerSessions
-  lib/            supabase client, sandbox logic, faceCompare, faceStorage
+  lib/            supabase client, sandbox logic, faceCompare, faceCapture, faceBurst, faceQuality, faceMatch
   pages/          Home, Login, Signup, Onboarding, Profile,
                   LecturerDashboard/Courses/NewSession, FaceTest/FaceVerify,
                   SandboxLanding/Lecturer/Student
@@ -88,4 +114,4 @@ tests/            Zero-dependency Node test suite
 
 ## Roadmap
 
-See [PROGRESS.md](PROGRESS.md) for current status, decisions log, and follow-ups. Geofencing (PostGIS) is implemented in migration 12; OTP fallback remains deferred.
+See [PROGRESS.md](PROGRESS.md) for current status, decisions log, and follow-ups. Geofencing (PostGIS) is implemented in migration 12; OTP fallback is implemented; server-computed face match confidence is built in migration 33 and awaits branch/live verification.

@@ -1,9 +1,13 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import {
+  DESCRIPTOR_LENGTH,
   MATCH_THRESHOLD,
+  averageDescriptors,
   euclideanDistance,
   isMatch,
+  isValidDescriptor,
+  medianDistance,
 } from "../src/lib/faceCompare.ts"
 
 test("euclideanDistance computes a 3-4-5 right triangle", () => {
@@ -75,4 +79,56 @@ test("custom threshold overrides the default", () => {
   const detected = new Float32Array(2)
   assert.equal(isMatch(registered, detected, 10), true)
   assert.equal(isMatch(registered, detected, 1), false)
+})
+
+function descriptorWith(index, value) {
+  const descriptor = new Float32Array(DESCRIPTOR_LENGTH)
+  descriptor[index] = value
+  return descriptor
+}
+
+test("isValidDescriptor accepts a 128-d non-zero descriptor", () => {
+  assert.equal(isValidDescriptor(descriptorWith(0, 1)), true)
+})
+
+test("isValidDescriptor rejects wrong length, non-finite, and zero-norm values", () => {
+  assert.equal(isValidDescriptor(null), false)
+  assert.equal(isValidDescriptor(undefined), false)
+  assert.equal(isValidDescriptor(new Float32Array(64)), false)
+  assert.equal(isValidDescriptor(descriptorWith(0, Number.NaN)), false)
+  assert.equal(isValidDescriptor(descriptorWith(0, Number.POSITIVE_INFINITY)), false)
+  assert.equal(isValidDescriptor(new Float32Array(DESCRIPTOR_LENGTH)), false)
+})
+
+test("averageDescriptors averages valid descriptors", () => {
+  const averaged = averageDescriptors([
+    descriptorWith(0, 1),
+    descriptorWith(0, 3),
+  ])
+  assert.ok(averaged instanceof Float32Array)
+  assert.equal(averaged.length, DESCRIPTOR_LENGTH)
+  assert.equal(averaged[0], 2)
+})
+
+test("averageDescriptors rejects empty and invalid input", () => {
+  assert.equal(averageDescriptors([]), null)
+  assert.equal(averageDescriptors([descriptorWith(0, 1), new Float32Array(64)]), null)
+})
+
+test("medianDistance returns the median distance and closest descriptor", () => {
+  const stored = descriptorWith(127, 1)
+  const descriptors = [
+    descriptorWith(0, 1),
+    descriptorWith(0, 2),
+    descriptorWith(0, 3),
+  ]
+  const result = medianDistance(stored, descriptors)
+  assert.ok(result)
+  assert.ok(Math.abs(result.distance - Math.sqrt(5)) < 1e-6)
+  assert.equal(result.descriptor, descriptors[1])
+  assert.deepEqual(result.distances, [
+    Math.sqrt(2),
+    Math.sqrt(5),
+    Math.sqrt(10),
+  ])
 })

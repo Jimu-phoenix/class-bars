@@ -5,24 +5,24 @@ import { supabase } from "@/lib/supabase"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 import type { ProfileRow } from "@/types/db"
 
-type ProfileFields = Pick<
-  ProfileRow,
-  "full_name" | "role" | "student_number" | "staff_number" | "phone_number"
->
+type ProfileFields = Pick<ProfileRow, "full_name" | "role" | "student_number" | "phone_number">
 
 function Field({
   id,
   label,
   children,
+  className,
 }: {
   id: string
   label: string
   children: React.ReactNode
+  className?: string
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className={cn("flex flex-col gap-1.5", className)}>
       <label htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
@@ -41,7 +41,6 @@ export default function ProfileSettings() {
   const [fullName, setFullName] = useState("")
   const [role, setRole] = useState<ProfileRow["role"] | null>(null)
   const [studentNumber, setStudentNumber] = useState("")
-  const [staffNumber, setStaffNumber] = useState("")
   const [phoneNumber, setPhoneNumber] = useState("")
 
   useEffect(() => {
@@ -53,7 +52,7 @@ export default function ProfileSettings() {
     async function loadProfile() {
       const { data, error: fetchError } = await supabase
         .from("profiles")
-        .select("full_name, role, student_number, staff_number, phone_number")
+        .select("full_name, role, student_number, phone_number")
         .eq("id", userId)
         .maybeSingle()
 
@@ -76,7 +75,6 @@ export default function ProfileSettings() {
       setFullName(data.full_name)
       setRole(data.role)
       setStudentNumber(data.student_number ?? "")
-      setStaffNumber(data.staff_number ?? "")
       setPhoneNumber(data.phone_number ?? "")
     }
 
@@ -96,8 +94,6 @@ export default function ProfileSettings() {
       }
       if (role === "student") {
         updates.student_number = studentNumber.trim() || null
-      } else {
-        updates.staff_number = staffNumber.trim() || null
       }
 
       const { error: updateError } = await supabase
@@ -176,19 +172,19 @@ export default function ProfileSettings() {
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field id="id_number" label={isStudent ? "Student number" : "Staff number"}>
-                <Input
-                  id="id_number"
-                  placeholder={isStudent ? "STU-2025-0001" : "LEC-0001"}
-                  value={isStudent ? studentNumber : staffNumber}
-                  onChange={(e) =>
-                    isStudent ? setStudentNumber(e.target.value) : setStaffNumber(e.target.value)
-                  }
-                  className="h-11"
-                />
-              </Field>
+              {isStudent ? (
+                <Field id="id_number" label="Student number">
+                  <Input
+                    id="id_number"
+                    placeholder="STU-2025-0001"
+                    value={studentNumber}
+                    onChange={(e) => setStudentNumber(e.target.value)}
+                    className="h-11"
+                  />
+                </Field>
+              ) : null}
 
-              <Field id="phone_number" label="Phone number">
+              <Field id="phone_number" label="Phone number" className={isStudent ? undefined : "sm:col-span-2"}>
                 <Input
                   id="phone_number"
                   type="tel"

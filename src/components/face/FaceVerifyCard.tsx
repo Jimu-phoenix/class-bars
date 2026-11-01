@@ -1,19 +1,15 @@
-import { useEffect, useRef, useState } from "react"
-import { Loader2, RefreshCw } from "lucide-react"
+import { useEffect, useRef } from "react"
+import { KeyRound, Loader2, RefreshCw } from "lucide-react"
 import { useFaceDetection } from "@/hooks/useFaceDetection"
-import { euclideanDistance, isMatch } from "@/lib/faceCompare"
-import {
-  recordSessionDistance,
-  getSessionDistances,
-  summariseDistances,
-  type DistanceSummary,
-} from "@/lib/faceCapture"
+import { isValidDescriptor } from "@/lib/faceCompare"
+import { captureStatusMessage } from "@/lib/faceCapture"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CardContent } from "@/components/ui/card"
 import FaceCaptureFrame, { FaceDebugReadout } from "@/components/face/FaceCaptureFrame"
+import type { BurstResult } from "@/lib/faceBurst"
 
-export type VerifyVerdict = { status: "no-match"; distance: number } | null
+export type VerifyVerdict = { status: "no-match" } | null
 
 export default function FaceVerifyCard({
   verifyLabel,
@@ -21,65 +17,79 @@ export default function FaceVerifyCard({
   submitting,
   error,
   verdict,
-  onMatch,
-  onNoMatch,
+  onCaptured,
   onRetry,
   onCancel,
+  onUseOtp,
+  attempts,
+  maxAttempts = 3,
 }: {
   verifyLabel: string
   stored: Float32Array
   submitting: boolean
   error: string
   verdict: VerifyVerdict
-  onMatch: (descriptor: Float32Array) => void
-  onNoMatch: (distance: number) => void
+  onCaptured: (descriptor: Float32Array, distance: number) => void
   onRetry: () => void
   onCancel: () => void
+  onUseOtp?: () => void
+  attempts: number
+  maxAttempts?: number
 }) {
   const {
     videoRef,
-    canvasRef,
     isLoading,
     error: cameraError,
-    recognitionReady,
-    results,
-    debugData,
+    burst,
+    equivalence,
+    phase,
     isWarmingUp,
-  } = useFaceDetection()
+    retry,
+  } = useFaceDetection({ referenceDescriptor: stored })
 
-  const [lastDistance, setLastDistance] = useState<number | null>(null)
-  const [distanceSummary, setDistanceSummary] = useState<DistanceSummary>(() =>
-    summariseDistances(getSessionDistances()),
-  )
-
-  const liveFace =
-    recognitionReady && results.length > 0
-      ? results[0].detection.descriptor
-      : null
-
-  const capturedRef = useRef(false)
+  const handledBurstRef = useRef<BurstResult | null>(null)
 
   useEffect(() => {
-    if (isWarmingUp || verdict !== null) return
-    if (!stored || !liveFace) return
-    if (capturedRef.current) return
-    capturedRef.current = true
-    const distance = euclideanDistance(stored, liveFace)
-    recordSessionDistance(distance)
-    setLastDistance(distance)
-    setDistanceSummary(summariseDistances(getSessionDistances()))
-    if (isMatch(stored, liveFace)) {
-      onMatch(liveFace)
-    } else {
-      onNoMatch(distance)
-    }
-  }, [liveFace, stored, verdict, isWarmingUp, onMatch, onNoMatch])
+    if (!burst || handledBurstRef.current === burst) return
+    handledBurstRef.current = burst
+    if (!burst.ok) return
 
-  useEffect(() => {
-    if (verdict === null) {
-      capturedRef.current = false
-    }
-  }, [verdict])
+    const distance = burst.combinedDistance
+    if (distance === null || !Number.isFinite(distance)) return
+    if (!isValidDescriptor(burst.descriptor)) return
+
+    onCaptured(burst.descriptor, distance)
+  }, [burst, onCaptured])
+
+  const captureFailed = burst !== null && !burst.ok
+  const canTryAgain =
+    !submitting &&
+    !isWarmingUp &&
+    phase !== "capturing" &&
+    phase !== "starting"
+  const showOtp =
+    onUseOtp !== undefined &&
+    !submitting &&
+    (attempts >= 2 ||
+      attempts >= maxAttempts ||
+      (burst !== null && !burst.ok && burst.reason === "timeout"))
+
+  const status = (() => {
+    if (isLoading || cameraError) return null
+    if (isWarmingUp) return "Getting camera ready…"
+    if (phase === "starting") return "Starting camera…"
+    if (phase === "capturing") return "Capturing a clear frame…"
+    if (phase === "paused") return "Camera paused. Try again to resume."
+    if (verdict) return null
+    if (burst && !burst.ok) return captureStatusMessage(burst.reason)
+    if (burst?.ok) return "Checking your face…"
+    return "Position your face in the oval."
+  })()
+
+  const handleRetry = () => {
+    onRetry()
+    retry()
+  }
 
   return (
     <CardContent className="flex flex-col gap-5">
@@ -90,15 +100,11 @@ export default function FaceVerifyCard({
       )}
       <FaceCaptureFrame
         videoRef={videoRef}
-        canvasRef={canvasRef}
         isLoading={isLoading}
         error={cameraError}
+        status={status}
         debugReadout={
-          <FaceDebugReadout
-            data={debugData}
-            lastDistance={lastDistance}
-            distanceSummary={distanceSummary}
-          />
+          <FaceDebugReadout burst={burst} equivalence={equivalence} />
         }
       />
 
@@ -116,27 +122,47 @@ export default function FaceVerifyCard({
                 Recording attendance…
               </Badge>
             ) : verdict ? (
-              <>
-                <Badge variant="destructive">NO MATCH</Badge>
-                <Badge variant="outline" className="font-mono text-xs">
-                  distance {verdict.distance.toFixed(4)}
-                </Badge>
-              </>
+              <Badge variant="destructive">Could not match — try again</Badge>
+            ) : captureFailed ? (
+              <Badge variant="outline">Capture failed</Badge>
             ) : (
               <Badge variant="outline">Looking for face…</Badge>
             )}
           </div>
-          {verdict && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onRetry}
-              disabled={submitting}
-            >
-              <RefreshCw data-icon="inline-start" />
-              Try again
-            </Button>
-          )}
+          <div className="flex flex-col items-center gap-2">
+            {canTryAgain && (verdict || captureFailed || phase === "paused") && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleRetry}
+                disabled={submitting || (verdict !== null && attempts >= maxAttempts)}
+              >
+                <RefreshCw data-icon="inline-start" />
+                Try again
+              </Button>
+            )}
+            {verdict && (
+              <p className="text-xs text-muted-foreground">
+                Attempt {attempts} of {maxAttempts}
+              </p>
+            )}
+            {showOtp && (
+              <Button
+                size="sm"
+                variant={attempts >= 2 || captureFailed ? "default" : "outline"}
+                onClick={onUseOtp}
+                disabled={submitting}
+              >
+                <KeyRound data-icon="inline-start" />
+                Use OTP
+              </Button>
+            )}
+            {verdict && attempts >= maxAttempts && (
+              <p className="text-center text-xs text-muted-foreground">
+                Too many failed face attempts. Use OTP to check in.
+              </p>
+            )}
+          </div>
         </div>
       )}
 

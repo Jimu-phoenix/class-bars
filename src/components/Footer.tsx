@@ -11,7 +11,6 @@ const productLinks = [
   { label: "Lecturer Dashboard", to: "/dashboard" },
   { label: "Student Portal", to: "/student" },
   { label: "Sandbox Demo", to: "/sandbox" },
-  { label: "Face Test", to: "/face-test" },
 ]
 
 const legalLinks = [

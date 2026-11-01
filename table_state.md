@@ -8,7 +8,6 @@
 | `full_name` | `text` |  |
 | `role` | `user_role` |  |
 | `student_number` | `text` |  Nullable Unique |
-| `staff_number` | `text` |  Nullable Unique |
 | `phone_number` | `text` |  Nullable |
 | `created_at` | `timestamptz` |  |
 | `updated_at` | `timestamptz` |  |
@@ -82,20 +81,6 @@
 | `created_at` | `timestamptz` |  |
 | `updated_at` | `timestamptz` |  |
 
-## Table `devices`
-
-### Columns
-
-| Name | Type | Constraints |
-|------|------|-------------|
-| `id` | `uuid` | Primary |
-| `user_id` | `uuid` |  |
-| `device_fingerprint` | `text` |  |
-| `device_name` | `text` |  Nullable |
-| `is_trusted` | `bool` |  |
-| `last_seen_at` | `timestamptz` |  |
-| `created_at` | `timestamptz` |  |
-
 ## Table `attendance_records`
 
 ### Columns
@@ -105,7 +90,6 @@
 | `id` | `uuid` | Primary |
 | `session_id` | `uuid` |  |
 | `student_id` | `uuid` |  |
-| `device_id` | `uuid` |  Nullable |
 | `method` | `attendance_method` |  |
 | `status` | `attendance_status` |  |
 | `check_in_time` | `timestamptz` |  |
@@ -114,6 +98,26 @@
 | `flag_reason` | `text` |  Nullable |
 | `location_distance_m` | `numeric` |  Nullable |
 | `location_accuracy_m` | `numeric` |  Nullable |
+| `match_distance` | `double precision` |  Nullable |
+| `match_score` | `numeric` |  Nullable |
+| `match_band` | `text` |  Nullable |
+| `match_config_version` | `text` |  Nullable |
+
+## Table `face_match_config`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `singleton` | `boolean` | Primary |
+| `model_version` | `text` |  |
+| `a` | `numeric` |  |
+| `b` | `numeric` |  |
+| `accept_score` | `numeric` |  |
+| `review_score` | `numeric` |  |
+| `source_note` | `text` |  |
+| `effective_from` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
 
 ## Table `otp_codes`
 
@@ -197,42 +201,6 @@
 | `domain` | `text` | Primary |
 | `created_at` | `timestamptz` |  |
 
-## Table `admin_sessions`
-
-### Columns
-
-| Name | Type | Constraints |
-|------|------|-------------|
-| `id` | `uuid` | Primary |
-| `user_id` | `uuid` |  |
-| `session_id` | `text` |  |
-| `issued_at` | `timestamptz` |  |
-| `expires_at` | `timestamptz` |  |
-| `last_seen_at` | `timestamptz` |  |
-| `revoked_at` | `timestamptz` |  Nullable |
-| `ip_address` | `inet` |  Nullable |
-| `user_agent` | `text` |  Nullable |
-
-## Table `admin_login_otps`
-
-### Columns
-
-| Name | Type | Constraints |
-|------|------|-------------|
-| `id` | `uuid` | Primary |
-| `email` | `text` |  |
-| `code_hash` | `text` |  |
-| `attempts` | `int4` |  |
-| `max_attempts` | `int4` |  |
-| `expires_at` | `timestamptz` |  |
-| `resend_available_at` | `timestamptz` |  |
-| `request_count_window` | `timestamptz` |  Nullable |
-| `request_count` | `int4` |  |
-| `ip_address` | `inet` |  Nullable |
-| `user_agent` | `text` |  Nullable |
-| `used_at` | `timestamptz` |  Nullable |
-| `created_at` | `timestamptz` |  |
-
 ## Table `admin_login_events`
 
 ### Columns
@@ -281,6 +249,35 @@ One fence per venue: a circle (centre + radius) or a four-corner class box.
 | `updated_at` | `timestamptz` |  |
 | `created_by` | `uuid` |  Nullable |
 
+## Table `sandbox_checkins_zero_backup`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` |  Nullable |
+| `session_id` | `uuid` |  Nullable |
+| `participant_id` | `uuid` |  Nullable |
+| `display_name` | `text` |  Nullable |
+| `embedding` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  Nullable |
+
+## Table `admin_sessions`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `user_id` | `uuid` |  |
+| `session_id` | `text` |  |
+| `issued_at` | `timestamptz` |  |
+| `expires_at` | `timestamptz` |  |
+| `last_seen_at` | `timestamptz` |  |
+| `revoked_at` | `timestamptz` |  Nullable |
+| `ip_address` | `inet` |  Nullable |
+| `user_agent` | `text` |  Nullable |
+
 ## Custom Types / Enums
 
 ### `user_role`
@@ -309,24 +306,19 @@ One fence per venue: a circle (centre + radius) or a four-corner class box.
 
 ## RLS Policies
 
-### `profiles`
+### `face_embeddings`
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
-| `Admins manage profiles` | SELECT | public | PERMISSIVE | `is_admin_session()` | — |
-| `Admins update profiles` | UPDATE | public | PERMISSIVE | `is_admin_session()` | `is_admin_session()` |
-| `Users insert own profile` | INSERT | public | PERMISSIVE | — | `((auth.uid() = id) AND (COALESCE(role, 'student'::user_role) = 'student'::user_role))` |
-| `Users update own profile` | UPDATE | public | PERMISSIVE | `(auth.uid() = id)` | — |
-| `Users view own profile` | SELECT | public | PERMISSIVE | `(auth.uid() = id)` | — |
+| `Students view own embedding` | SELECT | public | PERMISSIVE | `(auth.uid() = user_id)` | — |
+| `Students insert own embedding` | INSERT | public | PERMISSIVE | — | `(auth.uid() = user_id)` |
 
-### `courses`
+### `attendance_records`
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
-| `Admins manage courses` | ALL | public | PERMISSIVE | `is_admin_session()` | `is_admin_session()` |
-| `Authenticated users view courses` | SELECT | public | PERMISSIVE | `(auth.role() = 'authenticated'::text)` | — |
-| `Staff create courses` | INSERT | public | PERMISSIVE | — | `((lecturer_id = auth.uid()) AND is_staff())` |
-| `Staff update courses` | UPDATE | public | PERMISSIVE | `(is_staff() AND ((lecturer_id = auth.uid()) OR (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role))))))` | `(is_staff() AND ((lecturer_id = auth.uid()) OR (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role))))))` |
+| `Students view own attendance` | SELECT | public | PERMISSIVE | `(auth.uid() = student_id)` | — |
+| `Lecturers view their session attendance` | SELECT | public | PERMISSIVE | `(EXISTS ( SELECT 1    FROM class_sessions cs   WHERE ((cs.id = attendance_records.session_id) AND (cs.lecturer_id = auth.uid()))))` | — |
 
 ### `class_sessions`
 
@@ -336,108 +328,118 @@ One fence per venue: a circle (centre + radius) or a four-corner class box.
 | `Lecturers create own sessions` | INSERT | public | PERMISSIVE | — | `((lecturer_id = auth.uid()) AND is_staff())` |
 | `Lecturers update own sessions` | UPDATE | public | PERMISSIVE | `(lecturer_id = auth.uid())` | `(lecturer_id = auth.uid())` |
 
-### `venues`
-
-| Policy | Command | Roles | Action | USING | WITH CHECK |
-|--------|---------|-------|--------|-------|------------|
-| `Admins delete venues` | DELETE | public | RESTRICTIVE | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` | — |
-| `Admins insert venues` | INSERT | public | RESTRICTIVE | — | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` |
-| `Admins manage venues` | ALL | public | PERMISSIVE | `is_admin_session()` | `is_admin_session()` |
-| `Admins update venues` | UPDATE | public | RESTRICTIVE | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` |
-| `Authenticated users view venues` | SELECT | public | PERMISSIVE | `(auth.role() = 'authenticated'::text)` | — |
-| `Staff create venues` | INSERT | public | PERMISSIVE | — | `is_staff()` |
-
-### `face_embeddings`
-
-| Policy | Command | Roles | Action | USING | WITH CHECK |
-|--------|---------|-------|--------|-------|------------|
-| `Students insert own embedding` | INSERT | public | PERMISSIVE | — | `(auth.uid() = user_id)` |
-| `Students view own embedding` | SELECT | public | PERMISSIVE | `(auth.uid() = user_id)` | — |
-
-### `devices`
-
-| Policy | Command | Roles | Action | USING | WITH CHECK |
-|--------|---------|-------|--------|-------|------------|
-| `Users manage own devices` | ALL | public | PERMISSIVE | `(auth.uid() = user_id)` | `(auth.uid() = user_id)` |
-
-### `attendance_records`
-
-| Policy | Command | Roles | Action | USING | WITH CHECK |
-|--------|---------|-------|--------|-------|------------|
-| `Lecturers view their session attendance` | SELECT | public | PERMISSIVE | `(EXISTS ( SELECT 1    FROM class_sessions cs   WHERE ((cs.id = attendance_records.session_id) AND (cs.lecturer_id = auth.uid()))))` | — |
-| `Students view own attendance` | SELECT | public | PERMISSIVE | `(auth.uid() = student_id)` | — |
-
 ### `otp_codes`
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
 | `Users view own otp codes` | SELECT | public | PERMISSIVE | `(auth.uid() = user_id)` | — |
 
-### `audit_logs`
-
-| Policy | Command | Roles | Action | USING | WITH CHECK |
-|--------|---------|-------|--------|-------|------------|
-| `Admins view audit_logs` | SELECT | public | PERMISSIVE | `is_admin_session()` | — |
-
-### `staff_emails`
-
-| Policy | Command | Roles | Action | USING | WITH CHECK |
-|--------|---------|-------|--------|-------|------------|
-| `Staff emails readable by everyone` | SELECT | public | PERMISSIVE | `true` | — |
-
-### `sandbox_sessions`
-
-| Policy | Command | Roles | Action | USING | WITH CHECK |
-|--------|---------|-------|--------|-------|------------|
-| `Authenticated users reset sandbox sessions` | DELETE | public | PERMISSIVE | `(auth.role() = 'authenticated'::text)` | — |
-| `Authenticated users view sandbox sessions` | SELECT | public | PERMISSIVE | `(auth.role() = 'authenticated'::text)` | — |
-| `Lecturers start own sandbox sessions` | INSERT | public | PERMISSIVE | — | `(lecturer_id = auth.uid())` |
-| `Lecturers update own sandbox sessions` | UPDATE | public | PERMISSIVE | `(lecturer_id = auth.uid())` | `(lecturer_id = auth.uid())` |
-
-### `sandbox_checkins`
-
-| Policy | Command | Roles | Action | USING | WITH CHECK |
-|--------|---------|-------|--------|-------|------------|
-| `Authenticated users reset sandbox checkins` | DELETE | public | PERMISSIVE | `(auth.role() = 'authenticated'::text)` | — |
-| `Authenticated users view sandbox checkins` | SELECT | public | PERMISSIVE | `(auth.role() = 'authenticated'::text)` | — |
-| `Students check in as themselves` | INSERT | public | PERMISSIVE | — | `(participant_id = auth.uid())` |
-
-### `geofences`
-
-| Policy | Command | Roles | Action | USING | WITH CHECK |
-|--------|---------|-------|--------|-------|------------|
-| `Admins delete geofences` | DELETE | public | PERMISSIVE | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` | — |
-| `Admins insert geofences` | INSERT | public | PERMISSIVE | — | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` |
-| `Admins read geofences` | SELECT | public | PERMISSIVE | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` | — |
-| `Admins update geofences` | UPDATE | public | PERMISSIVE | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` |
-
-### `sandbox_participants`
-
-| Policy | Command | Roles | Action | USING | WITH CHECK |
-|--------|---------|-------|--------|-------|------------|
-| `Authenticated users reset participants` | DELETE | public | PERMISSIVE | `(auth.role() = 'authenticated'::text)` | — |
-| `Participant inserts own profile` | INSERT | public | PERMISSIVE | — | `(participant_id = auth.uid())` |
-| `Participant updates own profile` | UPDATE | public | PERMISSIVE | `(participant_id = auth.uid())` | `(participant_id = auth.uid())` |
-| `Participant views own profile` | SELECT | public | PERMISSIVE | `(participant_id = auth.uid())` | — |
-
 ### `staff_email_domains`
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
-| `Admins manage staff_email_domains` | ALL | public | PERMISSIVE | `is_admin_session()` | `is_admin_session()` |
 | `Staff domains readable by everyone` | SELECT | public | PERMISSIVE | `true` | — |
+| `Admins manage staff_email_domains` | ALL | public | PERMISSIVE | `is_admin_session()` | `is_admin_session()` |
+
+### `courses`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Authenticated users view courses` | SELECT | public | PERMISSIVE | `(auth.role() = 'authenticated'::text)` | — |
+| `Staff create courses` | INSERT | public | PERMISSIVE | — | `((lecturer_id = auth.uid()) AND is_staff())` |
+| `Staff update courses` | UPDATE | public | PERMISSIVE | `(is_staff() AND ((lecturer_id = auth.uid()) OR (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role))))))` | `(is_staff() AND ((lecturer_id = auth.uid()) OR (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role))))))` |
+| `Admins manage courses` | ALL | public | PERMISSIVE | `is_admin_user()` | `is_admin_user()` |
+
+### `venues`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Authenticated users view venues` | SELECT | public | PERMISSIVE | `(auth.role() = 'authenticated'::text)` | — |
+| `Staff create venues` | INSERT | public | PERMISSIVE | — | `is_staff()` |
+| `Admins insert venues` | INSERT | public | RESTRICTIVE | — | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` |
+| `Admins update venues` | UPDATE | public | RESTRICTIVE | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` |
+| `Admins delete venues` | DELETE | public | RESTRICTIVE | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` | — |
+| `Admins manage venues` | ALL | public | PERMISSIVE | `is_admin_user()` | `is_admin_user()` |
 
 ### `enrollments`
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
 | `Students view own enrollments` | SELECT | public | PERMISSIVE | `(student_id = auth.uid())` | — |
+| `Lecturers view course enrollments` | SELECT | public | PERMISSIVE | `((EXISTS ( SELECT 1    FROM courses c   WHERE ((c.id = enrollments.course_id) AND (c.lecturer_id = auth.uid())))) OR is_admin_user())` | — |
 
 ### `admin_sessions`
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
+| `Admins update own admin_sessions` | UPDATE | public | PERMISSIVE | `(auth.uid() = user_id)` | — |
 | `Admins insert own admin_sessions` | INSERT | public | PERMISSIVE | — | `((auth.uid() = user_id) AND (EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role)))))` |
 | `Admins read own admin_sessions` | SELECT | public | PERMISSIVE | `(auth.uid() = user_id)` | — |
-| `Admins update own admin_sessions` | UPDATE | public | PERMISSIVE | `(auth.uid() = user_id)` | — |
+
+### `sandbox_sessions`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Authenticated users view sandbox sessions` | SELECT | public | PERMISSIVE | `(auth.role() = 'authenticated'::text)` | — |
+| `Lecturers start own sandbox sessions` | INSERT | public | PERMISSIVE | — | `(lecturer_id = auth.uid())` |
+| `Lecturers update own sandbox sessions` | UPDATE | public | PERMISSIVE | `(lecturer_id = auth.uid())` | `(lecturer_id = auth.uid())` |
+| `Authenticated users reset sandbox sessions` | DELETE | public | PERMISSIVE | `(auth.role() = 'authenticated'::text)` | — |
+
+### `sandbox_checkins`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Authenticated users view sandbox checkins` | SELECT | public | PERMISSIVE | `(auth.role() = 'authenticated'::text)` | — |
+| `Students check in as themselves` | INSERT | public | PERMISSIVE | — | `(participant_id = auth.uid())` |
+| `Authenticated users reset sandbox checkins` | DELETE | public | PERMISSIVE | `(auth.role() = 'authenticated'::text)` | — |
+
+### `sandbox_participants`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Participant views own profile` | SELECT | public | PERMISSIVE | `(participant_id = auth.uid())` | — |
+| `Participant inserts own profile` | INSERT | public | PERMISSIVE | — | `(participant_id = auth.uid())` |
+| `Participant updates own profile` | UPDATE | public | PERMISSIVE | `(participant_id = auth.uid())` | `(participant_id = auth.uid())` |
+| `Authenticated users reset participants` | DELETE | public | PERMISSIVE | `(auth.role() = 'authenticated'::text)` | — |
+
+### `staff_emails`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Staff emails readable by everyone` | SELECT | public | PERMISSIVE | `true` | — |
+| `Admins insert staff emails` | INSERT | public | PERMISSIVE | — | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role))))` |
+| `Admins delete staff emails` | DELETE | public | PERMISSIVE | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role))))` | — |
+
+### `geofences`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Admins read geofences` | SELECT | public | PERMISSIVE | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` | — |
+| `Admins insert geofences` | INSERT | public | PERMISSIVE | — | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` |
+| `Admins update geofences` | UPDATE | public | PERMISSIVE | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` |
+| `Admins delete geofences` | DELETE | public | PERMISSIVE | `(EXISTS ( SELECT 1    FROM profiles   WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))` | — |
+
+### `profiles`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Users view own profile` | SELECT | public | PERMISSIVE | `(auth.uid() = id)` | — |
+| `Users update own profile` | UPDATE | public | PERMISSIVE | `(auth.uid() = id)` | — |
+| `Users insert own profile` | INSERT | public | PERMISSIVE | — | `((auth.uid() = id) AND (COALESCE(role, 'student'::user_role) = 'student'::user_role))` |
+| `Admins view all profiles` | SELECT | public | PERMISSIVE | `is_admin_user()` | — |
+| `Admins update all profiles` | UPDATE | public | PERMISSIVE | `is_admin_user()` | — |
+| `Admins insert profiles` | INSERT | public | PERMISSIVE | — | `is_admin_user()` |
+| `Lecturers view enrolled students` | SELECT | public | PERMISSIVE | `(is_lecturer_user() AND (EXISTS ( SELECT 1    FROM (enrollments e      JOIN courses c ON ((c.id = e.course_id)))   WHERE ((e.student_id = profiles.id) AND (c.lecturer_id = auth.uid())))))` | — |
+
+### `audit_logs`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Admins view audit_logs` | SELECT | public | PERMISSIVE | `is_admin_user()` | — |
+
+### `face_match_config`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Authenticated users read face match config` | SELECT | authenticated | PERMISSIVE | `true` | — |
 
