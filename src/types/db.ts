@@ -46,6 +46,10 @@ export type AttendanceRecordRow = {
   flag_reason: string | null
   location_distance_m: number | null
   location_accuracy_m: number | null
+  match_distance: number | null
+  match_score: number | null
+  match_band: string | null
+  match_config_version: string | null
 }
 
 export type CourseRow = {

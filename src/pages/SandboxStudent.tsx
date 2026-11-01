@@ -256,12 +256,7 @@ function VerifyStep({
                 Recording attendance…
               </Badge>
             ) : verdict ? (
-              <>
-                <Badge variant="destructive">NO MATCH</Badge>
-                <Badge variant="outline" className="font-mono text-xs">
-                  distance {verdict.distance.toFixed(4)}
-                </Badge>
-              </>
+              <Badge variant="destructive">NO MATCH</Badge>
             ) : captureFailed ? (
               <Badge variant="outline">Capture failed</Badge>
             ) : (

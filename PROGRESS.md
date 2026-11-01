@@ -1,8 +1,8 @@
 # Class-BARS Progress Report
 
-**Date:** 2026-10-31
+**Date:** 2026-11-01
 **Repo:** `D:\classBars\class-bars`
-**Overall status:** Real (DB-backed) attendance flow built end-to-end and verified by lint/build/tests. Role-based access hardened end-to-end (client guards + server-side `staff_emails` allowlist enforced in the signup trigger). Theme toggle rewritten. Profile UI lives inside each role's dashboard. Auth pages guest-only. Dashboard shell + student pages rebuilt mobile-first. Student location card streamlined for privacy (raw coordinates removed; accuracy + Good/Fair/Poor flags displayed). Lecturer attendance-register PDF export added: per-course month/session picker, 2–8 ended sessions, browser-generated landscape A4 PDF, and a lecturer-only SECURITY DEFINER data RPC. OTP fallback added for student check-in. Face verification errors made specific (no match, accuracy/geofence reasons). Fixed login 500 by correcting profiles RLS (SECURITY DEFINER functions, no recursion). Fixed attendance RPC to remove devices dependency and drop device_id column. Sandbox untouched. **All existing migrations applied through 29; migrations 30 (200 m accuracy ceiling), 31 (box geofence `ST_Covers`/area fix), and 32 (face descriptor validation) built and must be applied.** Face capture now uses a quality-gated 3-frame burst for enrolment and verification; descriptor CHECKs are built but not applied. Admin dashboard built (Home, Venues, Users & Roles, System Logs) with magic-link login and no signup; Venues supports circle and four-corner box geofence editing.
+**Overall status:** Real (DB-backed) attendance flow built end-to-end and verified by lint/build/tests. Role-based access hardened end-to-end (client guards + server-side `staff_emails` allowlist enforced in the signup trigger). Theme toggle rewritten. Profile UI lives inside each role's dashboard. Auth pages guest-only. Dashboard shell + student pages rebuilt mobile-first. Student location card streamlined for privacy (raw coordinates removed; accuracy + Good/Fair/Poor flags displayed). Lecturer attendance-register PDF export added: per-course month/session picker, 2–8 ended sessions, browser-generated landscape A4 PDF, and a lecturer-only SECURITY DEFINER data RPC. OTP fallback added for student check-in. Face verification errors made specific (no match, accuracy/geofence reasons). Fixed login 500 by correcting profiles RLS (SECURITY DEFINER functions, no recursion). Fixed attendance RPC to remove devices dependency and drop device_id column. Sandbox untouched. **All existing migrations applied through 29; migrations 30 (200 m accuracy ceiling), 31 (box geofence `ST_Covers`/area fix), and 32 (face descriptor validation) built and must be applied.** Face capture now uses a quality-gated 3-frame burst for enrolment and verification; descriptor CHECKs are built but not applied. Admin dashboard built (Home, Venues, Users & Roles, System Logs) with magic-link login and no signup; Venues supports circle and four-corner box geofence editing. Migration 33 (server-computed face match confidence) is built but not applied: the client sends only the median descriptor distance, the database derives a calibrated score/band, retries create no row, review flags the record, and lecturers see only a rounded match-confidence percentage.
 
 ---
 
@@ -25,6 +25,7 @@
 | Face pipeline | Done | face-api 0.22.2 (tiny detector/landmarks/recognition, models in `public/models/`), pure math + model-version helpers in `src/lib/faceCompare.ts` |
 | Face capture burst | Built — not device-verified | Quality-gated 3-frame burst for enrolment and verification; 250–400 ms interval; static oval + status; stops on hidden/unmount/60 s inactivity; dev-only video-vs-canvas equivalence check |
 | Face descriptor validation (`migrations/32`) | **Built — not applied** | Immutable safe validators + `NOT VALID` CHECKs for real and sandbox templates; run backup → migration → preflight → cleanup → validate |
+| Face match confidence (`migrations/33`) | **Built — not applied** | Server-computed calibrated score/band from `face_match_config`; single-row config with `config_revision` incremented on each change (audit trail); explicit score clamping to [0,1]; `lock_timeout`/`statement_timeout` and `FOR UPDATE` on the config row; 9-arg face RPC returns `{outcome,record,band,config_version}` and retry creates no row; match fields stripped from the student check-in JSON; 8-arg RPC remains for OTP/manual and rejects face; lecturer roster exposes `match_score` (no `confidence_score`); `face_match_config` RLS select is admin-only (`is_admin_user()`); raw distance is never shown |
 | Admin dashboard | Done | Magic-link login, no signup; Home (live stats), Venues (CRUD + circle/box geofence editor), Users & Roles (staff email allowlist), System Logs (audit_logs). Sidebar-driven navigation, all routes AdminRoute-guarded. |
 | Geofencing (`migrations/12`) | **Applied** | PostGIS proximity check in `check_in_attendance`; one `geofences` row per venue (circle 2–50 m or four-corner box); gap-based decision table with small-fence handling; raw coordinates never stored; admin-only fence writes. |
 | Admin geofence RPC (`migrations/13`) | **Applied** | `set_venue_geofence` made SECURITY DEFINER with explicit admin role check to prevent RLS subquery recursion |
@@ -33,7 +34,7 @@
 | Profiles RLS fix (`migrations/26-27`) | **Built — apply in SQL Editor** | SECURITY DEFINER functions for role checks, no recursion; proper access for students/lecturers/admins |
 | Attendance RPC fix (`migration 29`) | **Built — apply in SQL Editor** | Remove devices table dependency, drop `device_id` from attendance_records, keep compatible signature |
 | OTP fallback | Done | `src/lib/attendanceOtp.ts`, `OtpFallbackCard`, integrated in StudentHome with quota/attempt logic |
-| Specific error messages | Done | Face verification shows "No match on face", check-in failures specify poor accuracy/outside geofence/no geofence |
+| Specific error messages | Done | Face verification shows "Could not match — try again", check-in failures specify poor accuracy/outside geofence/no geofence |
 | Sandbox module | Updated | Sandbox onboarding/verification use the same burst pipeline with Tiny-416; descriptor validation added client-side and in migration 32 |
 
 ---
@@ -51,7 +52,7 @@
 - **Login 500 fix:** Recursive RLS on profiles caused 500 errors after migration 20. Fixed with SECURITY DEFINER functions (`current_user_role`, `is_admin_user`, `is_lecturer_user`) in migrations 26-27, no recursion.
 - **Attendance devices error:** `check_in_attendance` referenced non-existent `devices` table. Migration 29 removes the check and drops `attendance_records.device_id`. Client passes `p_device_id: null` (compatible).
 - **OTP fallback:** Added OTP API layer and UI for students when face verification fails repeatedly or on demand. Integrates with `send-attendance-otp`/`verify-attendance-otp` edge functions.
-- **Specific errors:** Face no-match shows "No match on face", check-in errors specify poor accuracy/outside geofence/no geofence/unknown reasons.
+- **Specific errors:** Face no-match shows "Could not match — try again", check-in errors specify poor accuracy/outside geofence/no geofence/unknown reasons.
 
 ### 2.2 Course ownership
 - `migrations/08_course_lecturer.sql` (applied): adds `courses.lecturer_id uuid references profiles(id)` (+index), replaces the staff-wide course create/update policies with owner-scoped ones (admin exception). Existing rows keep `lecturer_id NULL`; legacy courses won't show in "My courses" until an admin reassigns them.
@@ -65,7 +66,7 @@
 - `src/components/DashboardShell.tsx`: collapsible sidebar (desktop pin to icon-only, persisted to localStorage; slide-over drawer on mobile) with brand + role badge, nav, and bottom Sign out. Nav routes in `src/lib/nav.ts` (`LECTURER_NAV` / `STUDENT_NAV`).
 - `src/components/dashboard/StatCard.tsx` shared card: icon chip, uppercase label, big number, hint row, optional emerald live-pulse.
 - `LecturerDashboard`: greeting + 4 stat cards (Total sessions, Live now w/ pulse, Upcoming, Courses taught) + Recent sessions (pulse on ongoing rows, Start/End/Cancel actions).
-- `SessionLive` (`/dashboard/sessions/:id`): start/end/cancel, polled roster (3 s) with method/status badges and confidence %, all inside the same shell.
+- `SessionLive` (`/dashboard/sessions/:id`): start/end/cancel, polled roster (3 s) with method/status badges and rounded match confidence, all inside the same shell.
 - `LecturerProfile` (`/dashboard/profile`) uses a shared `ProfileSettings` editor.
 
 ### 2.5 Student dashboard
@@ -101,6 +102,18 @@
 - **PDF renderer:** `src/lib/registerPdf/renderRegisterPdf.ts` uses `jspdf` + `jspdf-autotable` in landscape A4. It includes course code/name, lecturer, month, generated timestamp, session date headers (time added when two sessions share a date), a repeated header row on every page, `avoid` row page breaks, a B&W status legend and `Page x of y` footers. Filename: sanitised `<course-code>_register_<YYYY-MM>.pdf`.
 - **Lazy loading + UX:** the per-course **Export register** button lives in `src/pages/LecturerCourses.tsx`; `jspdf`/`jspdf-autotable` are imported dynamically only after the lecturer clicks Export, so the 432 kB renderer chunk is not part of the main bundle. The dialog loads completed sessions, defaults to the latest month with ended sessions and the first up-to-8 sessions, lets the lecturer switch months/select sessions, blocks a ninth selection, and shows loading/error/`Generating…` states. A reserved `onRegisterExported()` hook is called after a successful download for a future audit event.
 - **Verification:** `tsc -b`, ESLint on changed files, 8/8 `tests/registerPdf.test.ts`, and the Vite production build pass. A 60-student × 8-session smoke PDF rendered as 3 pages with repeated headers and correct page numbers; an empty-roster PDF rendered its header and legend. **Migration 15 has not been applied**, so live RPC/export remains to be verified in Supabase.
+
+### 2.10 Server-computed face match confidence (`migrations/33`, built — not applied)
+
+- **Why:** the previous flow compared descriptors in the browser and sent a client-computed confidence, so the stored number was not trustworthy and raw distances leaked into diagnostics. Migration 33 makes the score server-authoritative while keeping the descriptor comparison on-device.
+- **Config:** `public.face_match_config` is a single-row calibration table (`model_version`, `config_revision`, `a`, `b`, `accept_score`, `review_score`, `source_note`, `effective_from`, `updated_at`). Seed: `face-api-recognition-full68-v1`, `A=19.8713`, `B=-10.7966`, accept `0.80`, review `0.60`. `config_revision` increments on each update and is recorded in `audit_logs`. Only admins can read or update it (RLS select is `is_admin_user()`); updates go through `set_face_match_config(...)`, which writes an `audit_logs` row.
+- **Scoring:** `public.face_match_score(p_distance)` is `STABLE SECURITY DEFINER`, rejects NULL/NaN/Infinity/negative/>10 m, computes `1 / (1 + exp(A*d + B))`, clamps the score to [0,1], and returns `score`, `band` (`accept`/`review`/`retry`) and `config_version`. Execute is revoked from public/anon/authenticated.
+- **Check-in contract:** the internal `_check_in_attendance(...)` owns the existing geofence decision table and now also writes nullable `match_distance`, `match_score`, `match_band` and `match_config_version`. The 9-argument `check_in_attendance(..., p_match_distance)` returns `jsonb` `{outcome, record, band, config_version}`; match fields are stripped from the `record` returned to students; `retry` returns no record. The 8-argument overload remains for OTP/manual, returns `attendance_records`, and rejects `p_method = 'face'`.
+- **Flag coexistence:** one comma-separated `flag_reason` can hold both `low_accuracy_overlap` and `face_review`; location-only rows keep the old reason. `match_band` is constrained to `accept`/`review` so a retry can never be stored.
+- **Lecturer UI:** `get_session_attendance` returns `match_score`; the legacy `confidence_score` is no longer returned by the roster RPC. `src/lib/faceMatch.ts` rounds to the nearest 10 and clamps to 10–90; `SessionLive` shows `Match confidence: NN%` with the approved tooltip, and formats comma-separated flag reasons. Raw distance is never shown.
+- **Student UI:** a `retry` outcome increments the attempt counter and shows “Could not match — try again” without a record; `accept` checks in; `review` checks in and shows the generic flagged message. OTP appears after two failed attempts. The client maps `face_distance_required` to an app-update prompt and warns when the server `config_version` differs from the client `FACE_MODEL_VERSION`. `FaceCaptureFrame`/`FaceTest`/`FaceVerify`/`SandboxStudent` no longer display raw distances, thresholds or combined distances.
+- **Safety:** the distance is still client-supplied and is not tamper-proof; this design makes the score derivation server-side but cannot prove the descriptor match happened on a genuine camera. PostgREST overload resolution for the 8/9-argument pair must be verified on a Supabase branch; the fallback is a distinct face RPC name.
+- **Verification:** `tsc -p tsconfig.app.json --noEmit` and ESLint on changed files pass; `tests/faceMatch.test.ts` 3/3 and the existing `realAttendance`/`faceCompare`/`geofence`/`registerPdf` suites 44/44 pass. **Migrations 32/33 have not been applied**, so SQL tests and live RPC behavior remain to be verified on a branch.
 
 ---
 
@@ -207,6 +220,11 @@
 | Use SECURITY DEFINER for role checks in RLS | Avoid recursion when policies query profiles/courses; restore proper access for all roles |
 | Remove devices dependency from check-in | Table doesn't exist; simplify RPC and drop unused column |
 | Make face/attendance errors specific | Better UX - students know why check-in failed (face no-match, accuracy, geofence) |
+| Replace client-computed `1 - distance` confidence with a server-calibrated score/band | The stored confidence must not be client-authored; the database derives it from a versioned config and only stores the rounded display source |
+| Keep the 8-argument check-in RPC for OTP/manual and add a 9-argument face RPC | Preserves the existing non-face path and makes the unscored face path impossible |
+| A face `retry` outcome writes no attendance row; `review` writes a flagged row | Prevents low-confidence attempts from becoming attendance while preserving a human-review trail |
+| Store `match_distance` but never display it; show only a rounded 10–90 match confidence | Distance is a calibration input, not a user-facing number; rounding avoids false precision |
+| Keep one comma-separated `flag_reason` instead of adding a second flag column | Reuses the existing schema and lets location and face-review reasons coexist (`low_accuracy_overlap,face_review`) |
 
 ---
 
@@ -215,8 +233,12 @@
 1. **Migration 15 is not applied** — `migrations/15_course_register_data.sql` must be run before live export works. The UI will surface the RPC error until then.
 2. **`scripts/reset_supabase_project.sql` is missing migrations 10–15** — it still builds base, 01, 02, 04–09. Do not use it to rebuild a project that needs the staff allowlist, admin/geofence policies, geofencing, or register export until it is updated.
 3. **Migration 32 is not applied** — run the backup script, apply the migration, review the preflight report, clean invalid rows, then run the validate script. Existing rows are not scanned until `VALIDATE`.
-4. **`tests/schema.test.ts` fails** — stale `table_state.json` snapshot; regenerate against the live applied schema. The full `node --test tests/*.test.ts` run also reports the pre-existing `rolePolicy` fixture/env failures; the targeted register tests pass.
-5. **Hardware device verification** — while validated via unit tests, lint, and build, live end-to-end device testing with live PostGIS proximity and mobile camera face-matching should be verified on physical devices. The browser PDF download should be spot-checked on a real lecturer account after migration 15 is applied. Face-burst thresholds and the dev-only video-vs-canvas equivalence check also need real phone/desktop results.
+4. **Migration 33 is not applied** — run `33_face_match_confidence_backup.sql`, apply `33_face_match_confidence.sql` on a Supabase branch, then run `tests/sql/face_match_confidence_checks.sql` and `tests/sql/geofencing_checks.sql`. The migration is hardened with `config_revision` traceability, score clamping, `lock_timeout`/`statement_timeout`, `FOR UPDATE` on the config row, admin-only config RLS, and match-field stripping from the student check-in JSON. Verify PostgREST resolves the 8/9-argument overloads as expected; if not, rename the face RPC.
+5. **Face distance is client-supplied** — the server now derives the score, but it cannot prove the descriptor comparison happened on a genuine camera. Treat match confidence as a review signal, not proof of liveness.
+6. **`tests/schema.test.ts` fails** — stale `table_state.json` snapshot; regenerate against the live applied schema. The full `node --test tests/*.test.ts` run also reports the pre-existing `rolePolicy` fixture/env failures; the targeted register tests pass.
+7. **Hardware device verification** — while validated via unit tests, lint, and build, live end-to-end device testing with live PostGIS proximity and mobile camera face-matching should be verified on physical devices. The browser PDF download should be spot-checked on a real lecturer account after migration 15 is applied. Face-burst thresholds and the dev-only video-vs-canvas equivalence check also need real phone/desktop results.
+
+8. **Service worker status** — no service worker is registered and there is no PWA/offline implementation; face capture, check-in and the register PDF run in the browser as a standard SPA.
 
 
 ---
@@ -300,6 +322,32 @@ src/components/Navbar.tsx                 # UPDATED — dashboardPath fallback /
 src/App.tsx                               # UPDATED — /profile route removed; /admin routes added
 src/pages/Profile.tsx                     # DELETED — standalone profile page removed
 src/hooks/useCaptcha.ts                   # NEW — shared captcha gate wiring
+```
+
+### 7.4 Server-computed face match confidence (`current`)
+
+```
+migrations/33_face_match_confidence.sql          # UPDATED — hardened: config_revision, clamping, lock timeout, FOR UPDATE, admin-only config RLS, match-field stripping
+migrations/33_face_match_confidence_backup.sql   # UPDATED — transaction, fresh backups, match-row copy, revokes
+migrations/33_face_match_confidence_rollback.sql # UPDATED — transaction, revokes before drop, IF EXISTS
+tests/sql/face_match_confidence_checks.sql       # UPDATED — revision, validation, stripping, prerequisites, RLS
+src/lib/faceMatch.ts                             # NEW — rounded 10–90 match-confidence display helper + tooltip
+tests/faceMatch.test.ts                          # NEW — rounding, clamping, invalid-score tests
+src/lib/realAttendance.ts                        # UPDATED — structured face result, match_score roster field (confidence_score removed)
+src/types/db.ts                                  # UPDATED — attendance match columns
+src/components/face/FaceVerifyCard.tsx           # UPDATED — server outcome flow, no local distance display
+src/components/face/FaceCaptureFrame.tsx         # UPDATED — raw distance/stat readout removed
+src/pages/StudentHome.tsx                        # UPDATED — accept/review/retry handling, OTP after two failures, face_distance_required and update-app messaging
+src/pages/SessionLive.tsx                        # UPDATED — rounded match confidence + formatted flag reasons
+src/pages/FaceVerify.tsx                         # UPDATED — raw distance/threshold badges removed
+src/pages/FaceTest.tsx                           # UPDATED — distance/attempt debug fields removed
+src/pages/SandboxStudent.tsx                     # UPDATED — raw distance badge removed
+src/lib/faceBurst.ts                             # UPDATED — distance removed from debug logs
+src/lib/geofence.ts                              # UPDATED — generic flagged message
+src/lib/registerPdf/renderRegisterPdf.ts         # UPDATED — generic prf legend
+PROGRESS.md                                      # UPDATED — migration 33 status, risks, verification
+README.md                                        # UPDATED — migration order, deploy order, service-worker status, flag_reason/RLS evidence
+table_state.md                                   # UPDATED — match columns, config table and policy
 ```
 
 ---

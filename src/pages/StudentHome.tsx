@@ -352,17 +352,36 @@ export default function StudentHome() {
       const location = await getCurrentPosition()
       setLocation(location)
       setLocationError("")
-      const row = await checkInFace(
+      const result = await checkInFace(
         selectedSession.id,
         user.id,
         distance,
         location,
       )
+      if (result.outcome === "retry") {
+        setVerifyAttempts((n) => n + 1)
+        setVerifyResult({ status: "no-match" })
+        return
+      }
+      const row = result.record
+      if (!row) {
+        setError("Check in failed - no attendance record returned")
+        setVerifyResult(null)
+        return
+      }
       setCheckedInBySession((m) => ({ ...m, [selectedSession.id]: row }))
       setCheckedToday((n) => n + 1)
       setTotalCheckins((n) => n + 1)
       setConfirmedCheckin(row)
       setStage("confirmed")
+      if (
+        result.config_version &&
+        result.config_version !== FACE_MODEL_VERSION
+      ) {
+        setError(
+          "App update required — the face model is out of date. Please update the app and re-enroll your face."
+        )
+      }
     } catch (err: unknown) {
       let rawMessage: string
       if (err instanceof Error) {
@@ -405,8 +424,10 @@ export default function StudentHome() {
         specificMessage = "No geofence set for this venue - check in failed"
       } else if (lower.includes("already recorded")) {
         specificMessage = rawMessage
-      } else if (/no match|not match|face.*match/i.test(rawMessage)) {
-        specificMessage = "No match on face - check in failed"
+      } else if (/face_distance_required/i.test(rawMessage)) {
+        specificMessage = "Face check-in needs an app update — please update and try again"
+      } else if (/no match|not match|face.*match|invalid_face_distance/i.test(rawMessage)) {
+        specificMessage = "Could not match — try again"
       } else if (rawMessage && rawMessage !== "[object Object]") {
         specificMessage = `${rawMessage} - check in failed`
       } else {
@@ -836,13 +857,8 @@ export default function StudentHome() {
               submitting={submitting}
               error={error}
               verdict={verifyResult}
-              onMatch={(d, distance) => void checkIn(d, distance)}
-              onNoMatch={(distance) => {
-                setVerifyAttempts((n) => n + 1)
-                setVerifyResult({ status: "no-match", distance })
-              }}
+              onCaptured={(d, distance) => void checkIn(d, distance)}
               onRetry={() => {
-                setVerifyAttempts(0)
                 setVerifyResult(null)
               }}
               attempts={verifyAttempts}

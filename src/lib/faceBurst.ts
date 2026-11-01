@@ -162,7 +162,6 @@ function logAttempt(attempt: BurstAttempt, framesAccepted: number, startedAt: nu
     rollDeg: attempt.rollDeg,
     sharpness: attempt.sharpness,
     brightness: attempt.brightness,
-    distance: attempt.distance,
     accepted: attempt.accepted,
     reasons: attempt.reasons,
     framesAccepted,
@@ -365,7 +364,6 @@ export async function captureFaceBurst({
       framesTried: result.framesTried,
       framesAccepted: result.framesAccepted,
       elapsedMs: result.elapsedMs,
-      combinedDistance: result.combinedDistance,
     })
   }
   return result

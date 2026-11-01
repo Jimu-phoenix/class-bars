@@ -55,8 +55,7 @@ export const NO_GEOFENCE_MESSAGE =
   "This room has no location set. Ask your lecturer to set the room's geofence."
 export const OUTSIDE_ROOM_MESSAGE =
   "You appear to be outside the room. Move closer and try again."
-export const FLAGGED_CHECKIN_MESSAGE =
-  "Checked in, flagged for review because your location accuracy was low."
+export const FLAGGED_CHECKIN_MESSAGE = "Checked in, flagged for review."
 
 export class LocationError extends Error {
   readonly code: number

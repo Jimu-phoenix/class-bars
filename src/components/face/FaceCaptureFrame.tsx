@@ -4,7 +4,6 @@ import { isModelError } from "@/lib/faceModels"
 import { FACE_MODEL_VERSION } from "@/lib/faceCompare"
 import {
   isFaceDebugEnabled,
-  type DistanceSummary,
   USE_TINY_LANDMARKS,
   ENROL_DETECTOR,
   VERIFY_INPUT_SIZE,
@@ -14,13 +13,9 @@ import type { BurstResult, DescriptorEquivalence } from "@/lib/faceBurst"
 export function FaceDebugReadout({
   burst,
   equivalence,
-  lastDistance,
-  distanceSummary,
 }: {
   burst?: BurstResult | null
   equivalence?: DescriptorEquivalence | null
-  lastDistance?: number | null
-  distanceSummary?: DistanceSummary | null
 }) {
   if (!isFaceDebugEnabled()) return null
 
@@ -32,9 +27,6 @@ export function FaceDebugReadout({
           : ""
       }`
     : "—"
-  const combinedDistance =
-    burst?.ok && burst.combinedDistance !== null ? burst.combinedDistance : null
-
   return (
     <div
       role="region"
@@ -100,18 +92,8 @@ export function FaceDebugReadout({
             : "—"}
         </div>
         <div>
-          <span className="font-medium text-foreground">Attempt distance:</span>{" "}
-          {lastAttempt?.distance !== null && lastAttempt?.distance !== undefined
-            ? lastAttempt.distance.toFixed(4)
-            : "—"}
-        </div>
-        <div>
-          <span className="font-medium text-foreground">Combined distance:</span>{" "}
-          {combinedDistance !== null ? combinedDistance.toFixed(4) : "—"}
-        </div>
-        <div>
-          <span className="font-medium text-foreground">Video/canvas:</span>{" "}
-          {equivalence ? equivalence.distance.toFixed(6) : "—"}
+          <span className="font-medium text-foreground">Descriptor check:</span>{" "}
+          {equivalence ? "complete" : "—"}
         </div>
       </div>
       {burst && !burst.ok ? (
@@ -122,23 +104,6 @@ export function FaceDebugReadout({
       {lastAttempt && lastAttempt.reasons.length > 0 ? (
         <div className="mt-1 text-[10px]">
           Last attempt reasons: {lastAttempt.reasons.join(", ")}
-        </div>
-      ) : null}
-      {distanceSummary ? (
-        <div className="mt-1.5 border-t border-border/50 pt-1">
-          <div>
-            <span className="font-medium text-foreground">Last distance:</span>{" "}
-            {lastDistance !== undefined && lastDistance !== null
-              ? lastDistance.toFixed(4)
-              : "—"}
-          </div>
-          <div>
-            <span className="font-medium text-foreground">Session stats:</span>{" "}
-            {distanceSummary.attempts} attempt{distanceSummary.attempts === 1 ? "" : "s"} · min{" "}
-            {distanceSummary.min !== null ? distanceSummary.min.toFixed(4) : "—"} · med{" "}
-            {distanceSummary.median !== null ? distanceSummary.median.toFixed(4) : "—"} · max{" "}
-            {distanceSummary.max !== null ? distanceSummary.max.toFixed(4) : "—"}
-          </div>
         </div>
       ) : null}
     </div>

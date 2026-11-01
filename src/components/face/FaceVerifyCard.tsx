@@ -1,21 +1,15 @@
 import { useEffect, useRef } from "react"
 import { KeyRound, Loader2, RefreshCw } from "lucide-react"
 import { useFaceDetection } from "@/hooks/useFaceDetection"
-import { isDistanceMatch, isValidDescriptor } from "@/lib/faceCompare"
-import {
-  recordSessionDistance,
-  getSessionDistances,
-  summariseDistances,
-  captureStatusMessage,
-  type DistanceSummary,
-} from "@/lib/faceCapture"
+import { isValidDescriptor } from "@/lib/faceCompare"
+import { captureStatusMessage } from "@/lib/faceCapture"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CardContent } from "@/components/ui/card"
 import FaceCaptureFrame, { FaceDebugReadout } from "@/components/face/FaceCaptureFrame"
 import type { BurstResult } from "@/lib/faceBurst"
 
-export type VerifyVerdict = { status: "no-match"; distance: number } | null
+export type VerifyVerdict = { status: "no-match" } | null
 
 export default function FaceVerifyCard({
   verifyLabel,
@@ -23,8 +17,7 @@ export default function FaceVerifyCard({
   submitting,
   error,
   verdict,
-  onMatch,
-  onNoMatch,
+  onCaptured,
   onRetry,
   onCancel,
   onUseOtp,
@@ -36,8 +29,7 @@ export default function FaceVerifyCard({
   submitting: boolean
   error: string
   verdict: VerifyVerdict
-  onMatch: (descriptor: Float32Array, distance: number) => void
-  onNoMatch: (distance: number) => void
+  onCaptured: (descriptor: Float32Array, distance: number) => void
   onRetry: () => void
   onCancel: () => void
   onUseOtp?: () => void
@@ -55,8 +47,6 @@ export default function FaceVerifyCard({
     retry,
   } = useFaceDetection({ referenceDescriptor: stored })
 
-  const lastDistance = burst?.ok ? burst.combinedDistance : null
-  const distanceSummary: DistanceSummary = summariseDistances(getSessionDistances())
   const handledBurstRef = useRef<BurstResult | null>(null)
 
   useEffect(() => {
@@ -66,16 +56,10 @@ export default function FaceVerifyCard({
 
     const distance = burst.combinedDistance
     if (distance === null || !Number.isFinite(distance)) return
-
-    recordSessionDistance(distance)
-
     if (!isValidDescriptor(burst.descriptor)) return
-    if (isDistanceMatch(distance)) {
-      onMatch(burst.descriptor, distance)
-    } else {
-      onNoMatch(distance)
-    }
-  }, [burst, onMatch, onNoMatch])
+
+    onCaptured(burst.descriptor, distance)
+  }, [burst, onCaptured])
 
   const captureFailed = burst !== null && !burst.ok
   const canTryAgain =
@@ -120,12 +104,7 @@ export default function FaceVerifyCard({
         error={cameraError}
         status={status}
         debugReadout={
-          <FaceDebugReadout
-            burst={burst}
-            equivalence={equivalence}
-            lastDistance={lastDistance}
-            distanceSummary={distanceSummary}
-          />
+          <FaceDebugReadout burst={burst} equivalence={equivalence} />
         }
       />
 
@@ -143,12 +122,7 @@ export default function FaceVerifyCard({
                 Recording attendance…
               </Badge>
             ) : verdict ? (
-              <>
-                <Badge variant="destructive">NO MATCH - Face not recognized</Badge>
-                <Badge variant="outline" className="font-mono text-xs">
-                  distance {verdict.distance.toFixed(4)}
-                </Badge>
-              </>
+              <Badge variant="destructive">Could not match — try again</Badge>
             ) : captureFailed ? (
               <Badge variant="outline">Capture failed</Badge>
             ) : (
@@ -185,7 +159,7 @@ export default function FaceVerifyCard({
             )}
             {verdict && attempts >= maxAttempts && (
               <p className="text-center text-xs text-muted-foreground">
-                No match on face - too many failed attempts. Use OTP to check in.
+                Too many failed face attempts. Use OTP to check in.
               </p>
             )}
           </div>

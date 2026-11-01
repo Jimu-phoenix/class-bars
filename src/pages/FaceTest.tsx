@@ -125,15 +125,12 @@ export default function FaceTest() {
                     ? {
                         ok: burst.ok,
                         reason: burst.ok ? null : burst.reason,
-                        combinedDistance: burst.ok ? burst.combinedDistance : null,
-                        equivalence,
                         framesTried: burst.framesTried,
                         framesAccepted: burst.framesAccepted,
                         elapsedMs: burst.elapsedMs,
                         videoWidth: burst.videoWidth,
                         videoHeight: burst.videoHeight,
                         trackSettings: burst.trackSettings,
-                        attempts: burst.attempts,
                       }
                     : null,
                   null,

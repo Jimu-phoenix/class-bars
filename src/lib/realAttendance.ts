@@ -5,6 +5,7 @@ import {
   isValidDescriptor,
   parseEmbedding,
 } from "@/lib/faceCompare"
+import type { FaceMatchBand } from "@/lib/faceMatch"
 import type { Coordinates } from "@/lib/geofence"
 import type {
   AttendanceMethod,
@@ -78,8 +79,51 @@ export type SessionAttendanceRow = {
   method: AttendanceMethod
   status: AttendanceStatus
   check_in_time: string | null
-  confidence_score: number | null
+  match_score: number | null
   flag_reason: string | null
+}
+
+export type FaceCheckInResult = {
+  outcome: FaceMatchBand
+  record: AttendanceRecordRow | null
+  band: FaceMatchBand | null
+  config_version: string | null
+}
+
+function parseFaceCheckInResult(data: unknown): FaceCheckInResult {
+  if (data === null || typeof data !== "object") {
+    throw new Error("Invalid check-in response")
+  }
+
+  const payload = data as Record<string, unknown>
+  const outcome = payload.outcome
+  if (outcome !== "accept" && outcome !== "review" && outcome !== "retry") {
+    throw new Error("Invalid check-in response")
+  }
+
+  const band = payload.band
+  if (
+    band !== null &&
+    band !== undefined &&
+    band !== "accept" &&
+    band !== "review" &&
+    band !== "retry"
+  ) {
+    throw new Error("Invalid check-in response")
+  }
+
+  const record = payload.record
+  if (outcome !== "retry" && (record === null || typeof record !== "object")) {
+    throw new Error("Invalid check-in response")
+  }
+
+  return {
+    outcome,
+    record: (record as AttendanceRecordRow | null | undefined) ?? null,
+    band: (band as FaceMatchBand | null | undefined) ?? null,
+    config_version:
+      typeof payload.config_version === "string" ? payload.config_version : null,
+  }
 }
 
 export async function getSessionAttendance(
@@ -97,21 +141,22 @@ export async function checkInFace(
   studentId: string,
   distance: number,
   location: Coordinates,
-): Promise<AttendanceRecordRow> {
-  if (!Number.isFinite(distance)) {
+): Promise<FaceCheckInResult> {
+  if (!Number.isFinite(distance) || distance < 0) {
     throw new Error("Invalid face distance")
   }
-  const confidence = faceConfidence(distance)
+
   const { data, error } = await supabase.rpc("check_in_attendance", {
     p_session_id: sessionId,
     p_student_id: studentId,
     p_device_id: null,
     p_method: "face",
-    p_confidence: confidence,
+    p_confidence: null,
     p_latitude: location.latitude,
     p_longitude: location.longitude,
     p_accuracy_m: location.accuracy,
+    p_match_distance: distance,
   })
   if (error) throw error
-  return data as AttendanceRecordRow
+  return parseFaceCheckInResult(data)
 }

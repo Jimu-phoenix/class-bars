@@ -98,6 +98,26 @@
 | `flag_reason` | `text` |  Nullable |
 | `location_distance_m` | `numeric` |  Nullable |
 | `location_accuracy_m` | `numeric` |  Nullable |
+| `match_distance` | `double precision` |  Nullable |
+| `match_score` | `numeric` |  Nullable |
+| `match_band` | `text` |  Nullable |
+| `match_config_version` | `text` |  Nullable |
+
+## Table `face_match_config`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `singleton` | `boolean` | Primary |
+| `model_version` | `text` |  |
+| `a` | `numeric` |  |
+| `b` | `numeric` |  |
+| `accept_score` | `numeric` |  |
+| `review_score` | `numeric` |  |
+| `source_note` | `text` |  |
+| `effective_from` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
 
 ## Table `otp_codes`
 
@@ -416,4 +436,10 @@ One fence per venue: a circle (centre + radius) or a four-corner class box.
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
 | `Admins view audit_logs` | SELECT | public | PERMISSIVE | `is_admin_user()` | — |
+
+### `face_match_config`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Authenticated users read face match config` | SELECT | authenticated | PERMISSIVE | `true` | — |
 

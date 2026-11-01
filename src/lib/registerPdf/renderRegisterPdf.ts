@@ -43,7 +43,7 @@ const SHORT_MONTHS = [
   "Dec",
 ]
 
-const LEGEND = "pr = present, ab = absent, prf = present, location flagged"
+const LEGEND = "pr = present, ab = absent, prf = present, flagged for review"
 
 function pad(value: number): string {
   return String(value).padStart(2, "0")

@@ -2,11 +2,7 @@ import { useState } from "react"
 import { Link } from "react-router-dom"
 import { RefreshCw, Trash2 } from "lucide-react"
 import { useFaceDetection } from "@/hooks/useFaceDetection"
-import {
-  isDistanceMatch,
-  isValidDescriptor,
-  MATCH_THRESHOLD,
-} from "@/lib/faceCompare"
+import { isDistanceMatch, isValidDescriptor } from "@/lib/faceCompare"
 import { captureStatusMessage } from "@/lib/faceCapture"
 import type { BurstResult } from "@/lib/faceBurst"
 import FaceCaptureFrame, { FaceDebugReadout } from "@/components/face/FaceCaptureFrame"
@@ -122,7 +118,7 @@ function VerifyPanel({
   const distance = burst?.ok ? burst.combinedDistance : null
   const match =
     distance !== null
-      ? { distance, match: isDistanceMatch(distance) }
+      ? { match: isDistanceMatch(distance) }
       : null
 
   const handleNewBurst = () => {
@@ -137,11 +133,7 @@ function VerifyPanel({
         error={error}
         status={match ? null : statusMessage(phase, isWarmingUp, burst, isLoading, error)}
         debugReadout={
-          <FaceDebugReadout
-            burst={burst}
-            equivalence={equivalence}
-            lastDistance={match?.distance ?? null}
-          />
+          <FaceDebugReadout burst={burst} equivalence={equivalence} />
         }
       />
       <div className="flex items-center gap-2">
@@ -167,12 +159,6 @@ function VerifyPanel({
           <CardContent className="flex flex-wrap items-center gap-2">
             <Badge variant={match.match ? "default" : "destructive"}>
               {match.match ? "MATCH" : "NO MATCH"}
-            </Badge>
-            <Badge variant="outline" className="font-mono text-xs">
-              Distance: {match.distance.toFixed(4)}
-            </Badge>
-            <Badge variant="outline" className="font-mono text-xs">
-              Threshold: {MATCH_THRESHOLD}
             </Badge>
           </CardContent>
         </Card>
