@@ -123,3 +123,28 @@ test("consent migration adds consent_required to _check_in_attendance for face",
   const sql = await read("migrations/34_consent_and_account_deletion.sql")
   assert.match(sql, /p_method = 'face'.*consent_given_at|consent_given_at.*p_method = 'face'/is)
 })
+
+test("manual mark migration adds get_session_enrolled_students RPC", async () => {
+  const sql = await read("migrations/35_lecturer_manual_mark.sql")
+  assert.match(sql, /get_session_enrolled_students/i)
+  assert.match(sql, /registration_number/i)
+  assert.match(sql, /checked_in/i)
+})
+
+test("manual mark migration adds lecturer_mark_present RPC", async () => {
+  const sql = await read("migrations/35_lecturer_manual_mark.sql")
+  assert.match(sql, /lecturer_mark_present/i)
+  assert.match(sql, /is_lecturer_user/i)
+  assert.match(sql, /'already recorded'/i)
+  assert.match(sql, /attendance.manual_marked/i)
+})
+
+test("manual mark migration rejects manual in _check_in_attendance", async () => {
+  const sql = await read("migrations/35_lecturer_manual_mark.sql")
+  assert.match(sql, /manual_not_allowed/i)
+})
+
+test("manual mark migration rejects manual in 8-arg check_in_attendance", async () => {
+  const sql = await read("migrations/35_lecturer_manual_mark.sql")
+  assert.match(sql, /p_method = 'manual' then\n    raise exception 'manual_not_allowed'/s)
+})

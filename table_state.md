@@ -458,7 +458,15 @@ Single-row calibration for the server-side face match score.
 | Function | Change |
 |----------|--------|
 | `public.upsert_face_embedding(jsonb, text)` | Raises `consent_required` when `profiles.consent_given_at IS NULL` |
-| `public._check_in_attendance(...)` | Raises `consent_required` when `p_method = 'face'` and `consent_given_at IS NULL` |
+| `public._check_in_attendance(...)` | Raises `consent_required` when `p_method = 'face'` and `consent_given_at IS NULL`; raises `manual_not_allowed` when `p_method = 'manual'` |
+| `public.check_in_attendance(uuid, uuid, uuid, attendance_method, numeric, double precision, double precision, double precision)` | Raises `manual_not_allowed` when `p_method = 'manual'` |
+
+### New RPCs (migration 35)
+
+| Function | Returns | Security | Grants |
+|----------|---------|----------|--------|
+| `public.get_session_enrolled_students(p_session_id uuid)` | `table(student_id, full_name, registration_number, checked_in)` | SECURITY DEFINER | EXECUTE to authenticated |
+| `public.lecturer_mark_present(p_session_id uuid, p_student_id uuid)` | `jsonb` | SECURITY DEFINER | EXECUTE to authenticated |
 
 ### `face_match_config`
 

@@ -35,6 +35,7 @@
 | Attendance RPC fix (`migration 29`) | **Applied** | Remove devices table dependency, drop `device_id` from attendance_records, keep compatible signature |
 | OTP fallback | Done | `src/lib/attendanceOtp.ts`, `OtpFallbackCard`, integrated in StudentHome with quota/attempt logic. Edge functions `send-attendance-otp`/`verify-attendance-otp` (deployed to Supabase, not in repo): improved error handling to log/return the actual error detail instead of `"unknown"`; required `service_role` table grants on `otp_codes` and `ALLOWED_ORIGIN` CORS config for local dev |
 | Consent + account deletion (migration 34) | Built — not applied | `consent_given_at` + `consent_version` on profiles; `record_consent(p_version)` RPC (students only, idempotent, audit trail); `delete_my_account()` RPC (students only, one transaction, anonymises attendance); `protect_profiles_consent` BEFORE INSERT OR UPDATE trigger blocks direct client consent writes (coexists with `trg_protect_profiles_role`); face enrolment and face check-in require consent; OTP/manual check-in works without consent. `delete_my_account` nulls audit_logs.ip_address/user_agent/user_id/entity_id and redacts metadata containing the deleted uuid; inserts one `account.deleted` audit row with no personal data. |
+| Lecturer manual mark (migration 35) | Built — not applied | `get_session_enrolled_students(p_session_id)` RPC lists enrolled students with checked_in status; `lecturer_mark_present(p_session_id, p_student_id)` RPC marks a student present (method='manual', status='present') with audit trail; lecturer must own the session (class_sessions.lecturer_id = auth.uid()); session must be ongoing; student must be enrolled; 8-arg student check-in RPC rejects `p_method = 'manual'` with `manual_not_allowed`; OTP path unchanged. |
 | Specific error messages | Done | Face verification shows "Could not match — try again", check-in failures specify poor accuracy/outside geofence/no geofence |
 | Sandbox module | Updated | Sandbox onboarding/verification use the same burst pipeline with Tiny-416; descriptor validation added client-side and in migration 32 |
 
@@ -131,7 +132,13 @@
 - **`delete_my_account()`:** SECURITY DEFINER RPC, students only, one transaction, fixed `search_path`, derives user from `auth.uid()` (no argument). Deletes `face_embeddings`, `enrollments`, `otp_codes`; anonymises `attendance_records` (student_id, confidence_score, flag_reason, location_distance_m, location_accuracy_m, match_distance, match_score, match_band, match_config_version all NULL; keeps id/session_id/method/status/check_in_time/created_at); unlinks `audit_logs` (ip_address, user_agent, user_id in one update where user_id = v_uid; entity_id = null where entity_id = v_uid; metadata = '{}' where metadata contains v_uid); inserts one `account.deleted` audit row (user_id/entity_id/ip_address/user_agent all NULL, metadata '{}'); deletes `profiles` row; deletes `auth.users` row. Revoked from public/anon, granted to authenticated.
 - **Client:** `src/lib/consent.ts` (CONSENT_VERSION, DATA_CONTACT_EMAIL, helpers), `src/lib/account.ts` (recordConsent, deleteMyAccount), `ConsentCard` + `DangerZoneCard` on `/student/profile`, consent banner on `StudentHome`, face enrolment gated behind consent, consent step added to `/onboarding`.
 
----
+### 2.12 Lecturer manual "mark present" on live sessions (migration 35, built — not applied)
+
+- **`get_session_enrolled_students(p_session_id)`:** STABLE SECURITY DEFINER RPC. Caller must be an authenticated lecturer who owns the session (`class_sessions.lecturer_id = auth.uid()`, same rule as `get_session_attendance`). Returns one row per enrolled student: `student_id`, `full_name`, `registration_number` (profiles.student_number aliased), `checked_in` boolean. No face data, scores, email, or coordinates. Revoked from public/anon, granted to authenticated.
+- **`lecturer_mark_present(p_session_id, p_student_id)`:** SECURITY DEFINER RPC. Caller = auth.uid() must be role 'lecturer' (read from profiles via `is_lecturer_user()`, never user_metadata) AND own the session. Session must be ongoing (raises 'Session is not open for check-in'). Student must be enrolled (raises 'Student is not enrolled in this course'). Inserts `attendance_records` with `method='manual'`, `status='present'`, all match_*/location_*/confidence_score/flag_reason NULL. On unique_violation raises 'already recorded'. Writes `audit_logs` row: action `attendance.manual_marked`, entity_type `attendance_records`, entity_id = new record id, user_id = lecturer, metadata = `{session_id}` only (no student identifiers). Admins NOT allowed. Revoked from public/anon, granted to authenticated.
+- **Student path closed:** `_check_in_attendance` and the 8-argument `check_in_attendance` both reject `p_method = 'manual'` with stable error `manual_not_allowed`. OTP path unchanged.
+- **Client:** `src/lib/manualMark.ts` (getSessionEnrolledStudents, lecturerMarkPresent wrappers), `src/lib/studentSearch.ts` (filterStudents helper), `SessionLive.tsx` manual mark card (visible only while session is ongoing, search input with debounce, enrolled list fetched once and refreshed after each mark, confirmation dialog with Cancel-focused initial state, "Mark" button or "Checked in" badge per row). Roster rows show "Manual" method badge for manual marks.
+- **Tests:** `tests/studentSearch.test.ts` (empty query, whitespace, partial reg, multi-word names, limit, checked-in inclusion), `tests/sql/lecturer_manual_mark_checks.sql` (owner can list/mark, other lecturer/student/admin/anon rejected, scheduled/completed/cancelled rejected, unenrolled student rejected, duplicate mark raises 'already recorded', already-checked-in shows true, audit row has no student identifiers, 8-arg RPC rejects 'manual' but accepts 'otp', roster shows manual mark).
 
 ## 3. Phase A — theme (light/dark/system) + Phase B — role access hardening
 
@@ -246,6 +253,8 @@
 | Consent stored on `profiles` (not a separate table) | Single source of truth; consent columns protected by trigger so only `record_consent` RPC can write them |
 | Account deletion anonymises attendance instead of deleting rows | Preserves class statistics while breaking the link to the deleted student; `student_id` made nullable |
 | Deletion RPC runs as SECURITY DEFINER and deletes `auth.users` | Ends the sign-in session; if `auth.users` deletion is not permitted on a given project, an Edge Function fallback using `auth.admin.deleteUser` is required |
+| Lecturer manual mark via lecturer-only RPC with audit | Students cannot self-mark as `manual`; lecturers mark present only after seeing the student in the room; no face match or location check on the lecturer's mark; audit row carries session_id only |
+| Students cannot send `p_method = 'manual'` | Both `_check_in_attendance` and the 8-arg `check_in_attendance` raise `manual_not_allowed`; OTP path unchanged |
 
 ---
 
@@ -260,11 +269,12 @@
 7. **Hardware device verification** — while validated via unit tests, lint, and build, live end-to-end device testing with live PostGIS proximity and mobile camera face-matching should be verified on physical devices. The browser PDF download should be spot-checked on a real lecturer account. The dev-only video-vs-canvas equivalence check has passed; the face-burst quality thresholds remain provisional pending more real phone/desktop results.
 
 8. **Service worker status** — no service worker is registered and there is no PWA/offline implementation; face capture, check-in and the register PDF run in the browser as a standard SPA.
-9. **OTP/manual path bypass** — the 8-argument check-in RPC accepts `p_method` of `otp`/`manual` from the client without proving an OTP was verified. Planned fix: require a verified `otp_codes` row for `otp`, and allow `manual` only through a lecturer-checked RPC.
+9. **OTP/manual path bypass** — the 8-argument check-in RPC accepts `p_method = 'otp'` from the client without proving an OTP was verified; `p_method = 'manual'` is now rejected with `manual_not_allowed` (migration 35). Planned fix: require a verified `otp_codes` row for `otp`.
 10. **Face template update/delete rules not enforced** — `FaceBiometricsCard` still lets a student add/update/remove their template freely; rules (e.g. re-enrolment limits or lecturer/admin approval) are not yet defined or enforced server-side.
 11. **OTP Edge Functions are not in the repo** — `send-attendance-otp`/`verify-attendance-otp` exist only in Supabase; download with the Supabase CLI and commit them.
 12. **Migration 34 not applied** — consent columns, `record_consent`, `delete_my_account`, and consent enforcement on face enrolment/check-in are not live until migration 34 (backup → 34 → tests) is applied on a Supabase branch. `auth.users` deletion inside `delete_my_account` should be verified on a branch; if it fails, use an Edge Function fallback.
 13. **`table_state.json` referenced by `tests/schema.test.ts` does not exist** — the file is `table_state.md`; the test reads `table_state.json` and will fail until a JSON snapshot is generated.
+14. **Migration 35 not applied** — `get_session_enrolled_students`, `lecturer_mark_present`, and consent enforcement on `manual` check-in are not live until migration 35 is applied on a Supabase branch, then `tests/sql/lecturer_manual_mark_checks.sql` is run.
 
 
 ---
@@ -397,5 +407,21 @@ src/types/db.ts                                          # UPDATED — consent_g
 PROGRESS.md                                              # UPDATED — consent + account deletion phase
 README.md                                                # UPDATED — migration order, deploy order
 table_state.md                                           # UPDATED — consent columns, trigger, new/modified RPCs
+```
+
+### 7.6 Lecturer manual mark (migration 35)
+
+```
+migrations/35_lecturer_manual_mark.sql          # NEW — NOT APPLIED — get_session_enrolled_students, lecturer_mark_present, manual_not_allowed rejection in _check_in_attendance and 8-arg check_in_attendance
+migrations/35_lecturer_manual_mark_rollback.sql # NEW — NOT APPLIED — drops new functions, restores pre-35 _check_in_attendance and 8-arg check_in_attendance
+tests/sql/lecturer_manual_mark_checks.sql       # NEW — owner can list/mark, other lecturer/student/admin/anon rejected, scheduled/completed/cancelled rejected, unenrolled student rejected, duplicate mark raises 'already recorded', already-checked-in shows true, audit row has no student identifiers, 8-arg RPC rejects 'manual' but accepts 'otp', roster shows manual mark
+src/lib/manualMark.ts                           # NEW — getSessionEnrolledStudents, lecturerMarkPresent wrappers, ManualMarkError
+src/lib/studentSearch.ts                        # NEW — filterStudents helper (trim, lowercase, multi-word, limit, unchecked-first sort)
+tests/studentSearch.test.ts                     # NEW — unit tests for filterStudents
+src/pages/SessionLive.tsx                       # UPDATED — manual mark card visible when session ongoing, search input with debounce, enrolled list fetched once + refreshed after mark, confirmation dialog (Cancel-focused, in-flight disabled), roster shows Manual badge
+tests/schema.test.ts                            # UPDATED — static checks for migration 35
+README.md                                       # UPDATED — migration order, deploy order
+table_state.md                                  # UPDATED — new/modified RPCs for migration 35
+PROGRESS.md                                     # UPDATED — manual mark phase
 ```
 ---

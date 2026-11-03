@@ -1,6 +1,6 @@
 export const CONSENT_VERSION = '2026-11-v1'
 
-export const DATA_CONTACT_EMAIL = 'bis22-pjimu@mubas.ac.mw'
+export const DATA_CONTACT_EMAIL = 'bis22-pjimu@gmail.com'
 
 export type ProfileWithConsent = {
   id: string
