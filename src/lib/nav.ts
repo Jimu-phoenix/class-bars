@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react"
-import { BookOpen, Building, LayoutDashboard, ShieldCheck, UserRound, Users } from "lucide-react"
+import { BookOpen, Building, History, LayoutDashboard, ShieldCheck, UserRound, Users } from "lucide-react"
 
 export type NavItem = {
   to: string
@@ -19,6 +19,7 @@ export const LECTURER_NAV: NavItem[] = [
 export const STUDENT_NAV: NavItem[] = [
   { to: "/student", label: "Home", icon: LayoutDashboard, end: true },
   { to: "/student/courses", label: "Courses", icon: BookOpen },
+  { to: "/student/history", label: "History", icon: History },
   { to: "/student/profile", label: "Profile", icon: UserRound },
 ]
 

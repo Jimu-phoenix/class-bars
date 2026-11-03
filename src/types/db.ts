@@ -12,6 +12,8 @@ export type ProfileRow = {
   role: UserRole
   student_number: string | null
   phone_number: string | null
+  consent_given_at: string | null
+  consent_version: string | null
   created_at: string
   updated_at: string
 }
@@ -134,4 +136,56 @@ export type SandboxParticipantRow = {
   embedding: string
   created_at: string
   updated_at: string
+}
+
+export type HistoryResult = "present" | "late" | "flagged" | "absent" | "upcoming" | "live" | null
+
+export type LecturerSessionRow = {
+  session_id: string
+  course_id: string
+  course_code: string
+  course_name: string
+  venue_name: string
+  scheduled_start: string
+  actual_start: string | null
+  status: SessionStatus
+  checked_in_count: number
+  total_count: number
+}
+
+export type StudentSearchRow = {
+  student_id: string
+  full_name: string
+  registration_number: string | null
+}
+
+export type StudentListRow = {
+  student_id: string
+  full_name: string
+  registration_number: string | null
+  course_codes: string[]
+}
+
+export type LecturerHistoryRow = {
+  session_id: string
+  course_id: string
+  course_code: string
+  course_name: string
+  session_start: string
+  session_status: SessionStatus
+  result: HistoryResult
+  method: AttendanceMethod | null
+}
+
+export type MyHistoryRow = {
+  session_id: string
+  session_start: string
+  session_status: SessionStatus
+  result: HistoryResult
+}
+
+export type StudentHeaderRow = {
+  student_id: string
+  full_name: string
+  registration_number: string | null
 }

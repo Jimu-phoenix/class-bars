@@ -1,4 +1,15 @@
 import { Link } from "react-router-dom"
+import {
+  ArrowUpRight,
+  Camera,
+  ClipboardCheck,
+  Fingerprint,
+  KeyRound,
+  MapPin,
+  ScanFace,
+  ScanLine,
+  UserCheck,
+} from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRole } from "@/contexts/RoleContext"
 import Navbar from "@/components/Navbar"
@@ -7,123 +18,122 @@ import Footer from "@/components/Footer"
 const features = [
   {
     title: "Face Detection",
-    description: "Real-time face detection using SSD MobileNet v1. Identifies and tracks faces in the camera feed with bounding boxes and landmarks.",
+    icon: ScanLine,
+    description:
+      "Real-time face detection in the browser, with landmarks used to check pose and image quality before each capture.",
   },
   {
     title: "Face Recognition",
-    description: "Generates a 128-d face descriptor vector for each detected face, enabling accurate face matching against enrolled templates.",
+    icon: ScanFace,
+    description:
+      "Generates a 128-d face descriptor vector for each detected face, enabling accurate face matching against enrolled templates.",
   },
   {
     title: "Attendance Recording",
-    description: "Automated attendance logging by matching detected faces against registered student profiles. Eliminates manual roll calls.",
+    icon: ClipboardCheck,
+    description:
+      "Automated attendance logging by matching detected faces against registered student profiles. Eliminates manual roll calls.",
   },
   {
     title: "Biometric Security",
-    description: "Uses unique facial features for verification, providing a secure and contactless alternative to PINs, cards, or signatures.",
+    icon: Fingerprint,
+    description:
+      "Uses unique facial features for verification, providing a secure and contactless alternative to PINs, cards, or signatures.",
   },
 ]
 
 const steps = [
-  { number: "01", label: "Register", description: "Enroll student face data into the system" },
-  { number: "02", label: "Detect", description: "Live camera captures faces in the classroom" },
-  { number: "03", label: "Match", description: "Face descriptors compared against enrolled data" },
-  { number: "04", label: "Record", description: "Attendance logged automatically" },
+  { number: "01", label: "Register", icon: UserCheck, description: "Enroll student face data into the system" },
+  { number: "02", label: "Detect", icon: Camera, description: "Live camera captures faces in the classroom" },
+  { number: "03", label: "Match", icon: Fingerprint, description: "Face descriptors compared against enrolled data" },
+  { number: "04", label: "Record", icon: ClipboardCheck, description: "Attendance logged automatically" },
+]
+
+const methods = [
+  { label: "Face check-in", icon: ScanFace, description: "Verified against your enrolled template" },
+  { label: "Location check", icon: MapPin, description: "Confirms you are in the classroom" },
+  { label: "OTP fallback", icon: KeyRound, description: "A one-time code when face check-in fails" },
+  { label: "Lecturer mark", icon: UserCheck, description: "Manual mark for students without a device" },
 ]
 
 const stats = [
-  { value: "128-d", label: "Face Descriptors" },
-  { value: "< 100ms", label: "Match Latency" },
-  { value: "AES-256", label: "Encryption" },
-  { value: "Local", label: "Processing" },
+  { value: "128", label: "Numbers per face template" },
+  { value: "3", label: "Frames per verification" },
+  { value: "0", label: "Face photos stored" },
+  { value: "On-device", label: "Face matching" },
 ]
+
+const primaryButton =
+  "inline-flex h-11 items-center justify-center gap-2 rounded-full bg-foreground px-6 text-sm font-medium text-background transition-colors hover:bg-foreground/85"
+const secondaryButton =
+  "inline-flex h-11 items-center justify-center gap-2 rounded-full border border-border bg-background px-6 text-sm font-medium transition-colors hover:bg-muted"
 
 export default function Home() {
   const { user } = useAuth()
   const { role } = useRole()
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <Navbar />
 
-      <main className="flex-1 relative z-10">
-        <div className="fixed inset-0 -z-10 pointer-events-none" aria-hidden="true">
-          <div className="absolute inset-0 hero-gradient opacity-5" />
-          <div className="absolute inset-0 hero-gradient-bottom opacity-10" />
-          <div
-            className="absolute inset-0 opacity-20 grid-bg-primary"
-          />
-          <div
-            className="absolute inset-0 opacity-10 grid-bg-secondary animate-grid-move"
-          />
-        </div>
-
-        <section className="relative pt-28 pb-16 md:pt-36 md:pb-24 lg:pt-44 lg:pb-32 px-4 md:px-6 lg:px-8">
+      <main className="flex-1">
+        {/* Hero */}
+        <section className="px-4 pt-32 pb-16 md:px-6 md:pt-40 md:pb-20 lg:px-8 lg:pt-48 lg:pb-24">
           <div className="container-narrow">
-            <div className="max-w-3xl mx-auto text-center">
-              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-                <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
-                </span>
+            <div className="mx-auto max-w-4xl text-center">
+              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3.5 py-1.5 text-xs font-medium text-muted-foreground">
+                <Fingerprint className="size-3.5" aria-hidden="true" />
                 v0.1.0 — Technical Preview
               </span>
 
-              <h1 className="mt-8 heading-1 font-heading tracking-tighter text-balance lg:text-7xl">
-                Class-BARS
+              <h1 className="font-heading mt-8 text-5xl leading-[1.05] font-medium tracking-tighter text-balance md:text-6xl lg:text-7xl">
+                Biometric attendance
                 <br />
-                <span className="text-muted-foreground/60 font-normal">Biometric Attendance</span>
+                for{" "}
+                <span
+                  className="mx-1 inline-flex h-[0.72em] w-[1.5em] translate-y-[0.05em] items-center justify-center rounded-full bg-foreground align-baseline text-background"
+                  aria-hidden="true"
+                >
+                  <ScanFace className="size-[0.46em]" strokeWidth={1.75} />
+                </span>{" "}
+                every class
               </h1>
 
-              <p className="mt-6 body-lg muted-text max-w-2xl mx-auto text-pretty">
-                Automated face recognition attendance for classrooms. Fast, secure, and contactless.
-                All processing happens locally — no face images ever leave your device.
+              <p className="body-lg muted-text mx-auto mt-8 max-w-2xl text-pretty">
+                Face-recognition attendance for classrooms. Fast, contactless and consent-based. Face
+                detection and matching run on your device, and no face photos are ever stored or uploaded.
               </p>
 
-              <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
                 {user ? (
                   role === "lecturer" ? (
                     <>
-                      <Link
-                        to="/dashboard"
-                        className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
-                      >
+                      <Link to="/dashboard" className={primaryButton}>
                         Lecturer Dashboard
+                        <ArrowUpRight className="size-4" aria-hidden="true" />
                       </Link>
-                      <Link
-                        to="/dashboard/sessions/new"
-                        className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-background px-6 text-sm font-medium transition-colors hover:bg-muted"
-                      >
+                      <Link to="/dashboard/sessions/new" className={secondaryButton}>
                         New Session
                       </Link>
                     </>
                   ) : (
                     <>
-                      <Link
-                        to="/student"
-                        className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
-                      >
+                      <Link to="/student" className={primaryButton}>
                         Open Live Classes
+                        <ArrowUpRight className="size-4" aria-hidden="true" />
                       </Link>
-                      <Link
-                        to="/student/profile"
-                        className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-background px-6 text-sm font-medium transition-colors hover:bg-muted"
-                      >
+                      <Link to="/student/profile" className={secondaryButton}>
                         My Profile
                       </Link>
                     </>
                   )
                 ) : (
                   <>
-                    <Link
-                      to="/signup"
-                      className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
-                    >
+                    <Link to="/signup" className={primaryButton}>
                       Get Started
+                      <ArrowUpRight className="size-4" aria-hidden="true" />
                     </Link>
-                    <Link
-                      to="/sandbox"
-                      className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-background px-6 text-sm font-medium transition-colors hover:bg-muted"
-                    >
+                    <Link to="/sandbox" className={secondaryButton}>
                       Try Demo
                     </Link>
                   </>
@@ -133,89 +143,113 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="relative py-16 md:py-24 lg:py-32 px-4 md:px-6 lg:px-8 border-t border-border/50">
+        {/* Ways to check in */}
+        <section className="px-4 pb-16 md:px-6 md:pb-24 lg:px-8">
           <div className="container-default">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-16">
-              {stats.map((stat) => (
-                <div
-                  key={stat.label}
-                  className="p-4 md:p-6 rounded-xl border border-border bg-card/50 backdrop-blur-sm transition-all hover:border-primary/50 hover:shadow-lg"
+            <ul className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5">
+              {methods.map(({ label, icon: Icon, description }) => (
+                <li
+                  key={label}
+                  className="flex flex-col items-start gap-4 rounded-3xl bg-muted/60 p-5 md:p-6"
                 >
-                  <p className="font-heading text-2xl md:text-3xl lg:text-4xl font-semibold tracking-tight text-foreground">
-                    {stat.value}
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mb-16 text-center max-w-2xl mx-auto">
-              <h2 className="heading-2 font-heading tracking-tight">How It Works</h2>
-              <p className="mt-4 body-lg muted-text">From enrollment to attendance in four steps</p>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-              {steps.map((step) => (
-                <article
-                  key={step.number}
-                  className="group relative p-6 md:p-8 rounded-xl border border-border bg-card/50 backdrop-blur-sm transition-all hover:border-primary/50 hover:shadow-lg"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary font-mono">
-                      {step.number}
-                    </span>
-                    <h3 className="font-medium text-foreground">{step.label}</h3>
+                  <span className="flex size-12 items-center justify-center rounded-2xl bg-background text-foreground">
+                    <Icon className="size-6" strokeWidth={1.5} aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="font-heading text-sm font-semibold md:text-base">{label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground md:text-sm">{description}</p>
                   </div>
-                  <p className="text-sm muted-text">{step.description}</p>
-                  <div className="absolute inset-0 bg-gradient-to-t from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-xl" />
-                </article>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         </section>
 
-        <section className="relative py-16 md:py-24 lg:py-32 px-4 md:px-6 lg:px-8 border-t border-border/50">
+        {/* Facts */}
+        <section className="px-4 pb-20 md:px-6 md:pb-28 lg:px-8">
           <div className="container-default">
-            <div className="mb-12 md:mb-16 text-center max-w-2xl mx-auto">
-              <h2 className="heading-2 font-heading tracking-tight">Technical Features</h2>
-              <p className="mt-4 body-lg muted-text">Built for performance, security, and privacy</p>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-8 rounded-3xl border border-border px-6 py-8 text-center md:grid-cols-4 md:py-10">
+              {stats.map((stat) => (
+                <div key={stat.label}>
+                  <dt className="sr-only">{stat.label}</dt>
+                  <dd className="font-heading text-3xl font-semibold tracking-tight md:text-4xl">
+                    {stat.value}
+                  </dd>
+                  <p className="mt-1.5 text-xs text-muted-foreground md:text-sm" aria-hidden="true">
+                    {stat.label}
+                  </p>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </section>
+
+        {/* How it works */}
+        <section className="px-4 py-16 md:px-6 md:py-24 lg:px-8">
+          <div className="container-default">
+            <div className="mx-auto mb-14 max-w-2xl text-center md:mb-20">
+              <h2 className="heading-2 font-heading tracking-tight">How It Works</h2>
+              <p className="body-lg muted-text mt-4">From enrollment to attendance in four steps</p>
             </div>
-            <div className="grid gap-6 md:grid-cols-2">
+
+            <ol className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
+              {steps.map((step) => (
+                <li key={step.number} className="border-t border-foreground/15 pt-6">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-sm text-muted-foreground">{step.number}</span>
+                    <step.icon className="size-6 text-foreground" strokeWidth={1.5} aria-hidden="true" />
+                  </div>
+                  <h3 className="font-heading mt-8 text-lg font-semibold tracking-tight">{step.label}</h3>
+                  <p className="muted-text mt-2 text-sm">{step.description}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        {/* Technical features */}
+        <section className="px-4 py-16 md:px-6 md:py-24 lg:px-8">
+          <div className="container-default">
+            <div className="mx-auto mb-12 max-w-2xl text-center md:mb-16">
+              <h2 className="heading-2 font-heading tracking-tight">Technical Features</h2>
+              <p className="body-lg muted-text mt-4">Built for performance, security, and privacy</p>
+            </div>
+            <div className="grid gap-5 md:grid-cols-2">
               {features.map((feature) => (
                 <article
                   key={feature.title}
-                  className="group p-6 md:p-8 rounded-xl border border-border bg-card/50 backdrop-blur-sm transition-all hover:border-primary/50 hover:shadow-lg"
+                  className="rounded-3xl border border-border p-7 transition-colors hover:bg-muted/40 md:p-9"
                 >
-                  <h3 className="font-heading text-lg font-semibold tracking-tight text-foreground">{feature.title}</h3>
-                  <p className="mt-3 body-sm muted-text">{feature.description}</p>
-                  <div className="mt-4 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <span className="flex size-12 items-center justify-center rounded-2xl bg-muted text-foreground">
+                    <feature.icon className="size-6" strokeWidth={1.5} aria-hidden="true" />
+                  </span>
+                  <h3 className="font-heading mt-6 text-lg font-semibold tracking-tight">{feature.title}</h3>
+                  <p className="body-sm muted-text mt-3">{feature.description}</p>
                 </article>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="relative py-16 md:py-24 lg:py-32 px-4 md:px-6 lg:px-8 border-t border-border/50">
+        {/* Final call to action */}
+        <section className="px-4 py-16 md:px-6 md:py-24 lg:px-8 lg:pb-32">
           <div className="container-default">
-            <div className="relative rounded-2xl border border-border bg-gradient-to-br from-primary/5 via-background to-muted/30 p-8 md:p-12 lg:p-16 text-center overflow-hidden">
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--primary)_0%,transparent_70%)] opacity-10" aria-hidden="true" />
-              <div className="relative z-10 max-w-2xl mx-auto">
+            <div className="rounded-[2rem] bg-muted/60 px-6 py-14 text-center md:px-12 md:py-20">
+              <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-foreground text-background">
+                <Fingerprint className="size-7" strokeWidth={1.5} aria-hidden="true" />
+              </span>
+              <div className="mx-auto mt-8 max-w-2xl">
                 <h2 className="heading-2 font-heading tracking-tight">Ready to Get Started?</h2>
-                <p className="mt-4 body-lg muted-text">
+                <p className="body-lg muted-text mt-4">
                   Join lecturers and students using Class-BARS for secure, automated attendance.
                   Try the sandbox demo or create your account.
                 </p>
-                <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-                  <Link
-                    to="/signup"
-                    className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
-                  >
+                <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
+                  <Link to="/signup" className={primaryButton}>
                     Create Account
+                    <ArrowUpRight className="size-4" aria-hidden="true" />
                   </Link>
-                  <Link
-                    to="/sandbox"
-                    className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-background px-6 text-sm font-medium transition-colors hover:bg-muted"
-                  >
+                  <Link to="/sandbox" className={secondaryButton}>
                     Try Sandbox Demo
                   </Link>
                 </div>
