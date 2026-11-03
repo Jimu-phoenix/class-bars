@@ -36,6 +36,7 @@
 | OTP fallback | Done | `src/lib/attendanceOtp.ts`, `OtpFallbackCard`, integrated in StudentHome with quota/attempt logic. Edge functions `send-attendance-otp`/`verify-attendance-otp` (deployed to Supabase, not in repo): improved error handling to log/return the actual error detail instead of `"unknown"`; required `service_role` table grants on `otp_codes` and `ALLOWED_ORIGIN` CORS config for local dev |
 | Consent + account deletion (migration 34) | Built — not applied | `consent_given_at` + `consent_version` on profiles; `record_consent(p_version)` RPC (students only, idempotent, audit trail); `delete_my_account()` RPC (students only, one transaction, anonymises attendance); `protect_profiles_consent` BEFORE INSERT OR UPDATE trigger blocks direct client consent writes (coexists with `trg_protect_profiles_role`); face enrolment and face check-in require consent; OTP/manual check-in works without consent. `delete_my_account` nulls audit_logs.ip_address/user_agent/user_id/entity_id and redacts metadata containing the deleted uuid; inserts one `account.deleted` audit row with no personal data. |
 | Lecturer manual mark (migration 35) | Built — not applied | `get_session_enrolled_students(p_session_id)` RPC lists enrolled students with checked_in status; `lecturer_mark_present(p_session_id, p_student_id)` RPC marks a student present (method='manual', status='present') with audit trail; lecturer must own the session (class_sessions.lecturer_id = auth.uid()); session must be ongoing; student must be enrolled; 8-arg student check-in RPC rejects `p_method = 'manual'` with `manual_not_allowed`; OTP path unchanged. |
+| Attendance history (migration 36) | Built — not applied | Five lecturer-only STABLE SECURITY DEFINER RPCs (`get_lecturer_sessions`, `search_my_students`, `get_student_history_for_lecturer`, `get_my_history`, `get_student_header_for_lecturer`), revoked from public/anon, granted to authenticated. Client: `src/lib/history.ts`, `/student/history`, `/dashboard/sessions`, `/dashboard/students`, `/dashboard/students/:id`, shared `SessionRow`. Counts not percentages; enrolment date = `enrollments.created_at`; no match scores/distances/coordinates in the UI. |
 | Specific error messages | Done | Face verification shows "Could not match — try again", check-in failures specify poor accuracy/outside geofence/no geofence |
 | Sandbox module | Updated | Sandbox onboarding/verification use the same burst pipeline with Tiny-416; descriptor validation added client-side and in migration 32 |
 
@@ -139,6 +140,31 @@
 - **Student path closed:** `_check_in_attendance` and the 8-argument `check_in_attendance` both reject `p_method = 'manual'` with stable error `manual_not_allowed`. OTP path unchanged.
 - **Client:** `src/lib/manualMark.ts` (getSessionEnrolledStudents, lecturerMarkPresent wrappers), `src/lib/studentSearch.ts` (filterStudents helper), `SessionLive.tsx` manual mark card (visible only while session is ongoing, search input with debounce, enrolled list fetched once and refreshed after each mark, confirmation dialog with Cancel-focused initial state, "Mark" button or "Checked in" badge per row). Roster rows show "Manual" method badge for manual marks.
 - **Tests:** `tests/studentSearch.test.ts` (empty query, whitespace, partial reg, multi-word names, limit, checked-in inclusion), `tests/sql/lecturer_manual_mark_checks.sql` (owner can list/mark, other lecturer/student/admin/anon rejected, scheduled/completed/cancelled rejected, unenrolled student rejected, duplicate mark raises 'already recorded', already-checked-in shows true, audit row has no student identifiers, 8-arg RPC rejects 'manual' but accepts 'otp', roster shows manual mark).
+
+### 2.13 Attendance history (migration 36, built — not applied)
+
+Migration 36 (`migrations/36_history_rpcs.sql` + `migrations/36_history_rpcs_rollback.sql`) adds five lecturer-only, STABLE SECURITY DEFINER history RPCs, all revoked from `public`/`anon` and granted `EXECUTE` to `authenticated`, with a fixed `search_path` and `lock_timeout`/`statement_timeout`. None expose `flag_reason`, `match_score`, `match_band`, `match_distance`, `location_distance_m`, `location_accuracy_m` or `confidence_score`.
+
+- `get_lecturer_sessions(p_course_id, p_limit, p_offset)` — the lecturer's sessions across all courses (or one course), newest first, with `checked_in_count` and `total_count` for pagination. Cancelled excluded. `p_course_id` null means all courses.
+- `search_my_students(p_query, p_limit)` — students enrolled in at least one of the lecturer's courses, matched by name or registration number. Returns nothing below 2 characters.
+- `get_student_history_for_lecturer(p_student_id, p_course_id)` — one row per non-cancelled session with result derivation: record status (`present`/`late`/`flagged`/`absent`), completed-with-no-record → `absent`, ongoing → `live`, scheduled → `upcoming`; plus `method`. Sessions before the student's enrolment date are excluded unless a record exists. Raises 'Student not found in your courses' when the student shares none of the lecturer's courses.
+- `get_my_history(p_course_id)` — the caller's own results for a course (students only); same result derivation, no `method`. Raises 'You are not enrolled in this course'.
+- `get_student_header_for_lecturer(p_student_id)` — name + registration number only when the student shares a course with the lecturer; else raises 'Student not found in your courses'.
+
+**Client:**
+- `src/lib/history.ts` — typed RPC wrappers with friendly error mapping, plus pure helpers (`summariseHistory`, `lecturerStatusCode`, `studentResultLabel`, `methodLabel`, `formatDateTime`) and a `makeRequestGuard` stale-response guard. Unit tests in `tests/history.test.ts` (6/6 pass).
+- Types added to `src/types/db.ts`: `HistoryResult`, `LecturerSessionRow`, `StudentSearchRow`, `LecturerHistoryRow`, `MyHistoryRow`, `StudentHeaderRow`.
+
+**Routes (all inside existing fail-closed `RoleRoute` guards):**
+- Student: `/student/history` (`History` added to `STUDENT_NAV` and the mobile bottom tab bar: Home, Courses, History, Profile). Student picks an enrolled course, sees "Present X of Y ended sessions" and per-session date/time + result label. Students never see methods, scores, distances or flag reasons.
+- Lecturer: `/dashboard/sessions` (index; `/dashboard/sessions/:id` unchanged) — all sessions read-only, course filter, load-more pagination (20/page, button hidden via `total_count`), skeleton/empty/error-with-retry, shared `SessionRow` component extracted from `LecturerDashboard`. Reached via an "All sessions" button in the Recent sessions card header. Not a nav item.
+- Lecturer: `/dashboard/students` (rewrote existing `LecturerStudents` to search-first: server-side `search_my_students`, min 2 chars, ~250ms debounce, stale responses ignored, rows navigate to `/dashboard/students/:id`) and `/dashboard/students/:id` (`LecturerStudentDetail`) — header via `get_student_header_for_lecturer`, summary line, optional course filter, register-code statuses (`pr`/`prf`/`ab`, late counts as pr), method badge (Face/OTP/Manual) only when a record exists, legend under the list, friendly 403-style state. `Students` was already in `LECTURER_NAV`.
+
+**Enrolment date** = `enrollments.created_at` (interpreted in Africa/Blantyre). **Counts, not percentages.**
+
+**SQL checks:** `tests/sql/history_checks.sql` (rolls back; run as postgres after migration 36) covers cross-lecturer isolation, the anonymised-record exclusion, enrolment-date rule, result derivation, role locks, anon privilege, search, pagination and output-column safety.
+
+**Verification:** `tsc -p tsconfig.app.json --noEmit`, ESLint on changed files, `tests/history.test.ts` 6/6 and existing suites pass; Vite build clean. Migration 36 is BUILT, NOT APPLIED (run `tests/sql/history_checks.sql` after applying on a branch).
 
 ## 3. Phase A — theme (light/dark/system) + Phase B — role access hardening
 
@@ -255,6 +281,11 @@
 | Deletion RPC runs as SECURITY DEFINER and deletes `auth.users` | Ends the sign-in session; if `auth.users` deletion is not permitted on a given project, an Edge Function fallback using `auth.admin.deleteUser` is required |
 | Lecturer manual mark via lecturer-only RPC with audit | Students cannot self-mark as `manual`; lecturers mark present only after seeing the student in the room; no face match or location check on the lecturer's mark; audit row carries session_id only |
 | Students cannot send `p_method = 'manual'` | Both `_check_in_attendance` and the 8-arg `check_in_attendance` raise `manual_not_allowed`; OTP path unchanged |
+| History: counts not percentages, enrolment date = `enrollments.created_at` (Africa/Blantyre) | The register-style summary uses counts (`Present X of Y ended sessions`; late/flagged count as present) rather than percentages, keeping the UI honest about small denominators |
+| History: derivation rules (record → status; completed-no-record → absent; ongoing → live; scheduled → upcoming; cancelled excluded; pre-enrolment sessions excluded unless a record exists) | Single source of truth for `result` on both student and lecturer history, matching the register codes (`pr`/`prf`/`ab`) |
+| History: lecturer sessions list + students pages instead of a lecturer History tab | A lecturer tab would duplicate the student model; instead `/dashboard/sessions` (all sessions) and `/dashboard/students` + `/dashboard/students/:id` serve the lecturer's review workflow |
+| History: no match scores, distances, accuracy or coordinates anywhere in the UI | Lecturers see only register-code statuses and method; sensitive match fields never leave the database |
+| History output columns exclude sensitive fields | All five migration-36 functions return only session/student identifiers and result/method; no `flag_reason`, `match_*`, `location_*` or `confidence_score` columns |
 
 ---
 

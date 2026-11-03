@@ -148,3 +148,50 @@ test("manual mark migration rejects manual in 8-arg check_in_attendance", async 
   const sql = await read("migrations/35_lecturer_manual_mark.sql")
   assert.match(sql, /p_method = 'manual' then\n    raise exception 'manual_not_allowed'/s)
 })
+
+test("history migration adds get_lecturer_sessions RPC", async () => {
+  const sql = await read("migrations/36_history_rpcs.sql")
+  assert.match(sql, /get_lecturer_sessions/i)
+  assert.match(sql, /checked_in_count/i)
+  assert.match(sql, /total_count/i)
+  assert.match(sql, /stable/i)
+  assert.match(sql, /security definer/i)
+  assert.match(sql, /set search_path = public, pg_temp/i)
+})
+
+test("history migration adds search_my_students RPC", async () => {
+  const sql = await read("migrations/36_history_rpcs.sql")
+  assert.match(sql, /search_my_students/i)
+  assert.match(sql, /registration_number/i)
+})
+
+test("history migration adds get_student_history_for_lecturer RPC", async () => {
+  const sql = await read("migrations/36_history_rpcs.sql")
+  assert.match(sql, /get_student_history_for_lecturer/i)
+  assert.match(sql, /'Student not found in your courses'/i)
+})
+
+test("history migration adds get_my_history RPC", async () => {
+  const sql = await read("migrations/36_history_rpcs.sql")
+  assert.match(sql, /get_my_history/i)
+  assert.match(sql, /'You are not enrolled in this course'/i)
+})
+
+test("history migration adds get_student_header_for_lecturer RPC", async () => {
+  const sql = await read("migrations/36_history_rpcs.sql")
+  assert.match(sql, /get_student_header_for_lecturer/i)
+})
+
+test("history migration revokes from public/anon and grants execute to authenticated", async () => {
+  const sql = await read("migrations/36_history_rpcs.sql")
+  for (const fn of [
+    "get_lecturer_sessions",
+    "search_my_students",
+    "get_student_history_for_lecturer",
+    "get_my_history",
+    "get_student_header_for_lecturer",
+  ]) {
+    assert.match(sql, new RegExp(`revoke all on function public\\.${fn}`, "i"))
+    assert.match(sql, new RegExp(`grant execute on function public\\.${fn}.*to authenticated`, "i"))
+  }
+})

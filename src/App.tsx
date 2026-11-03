@@ -7,12 +7,15 @@ import Signup from './pages/Signup'
 import Onboarding from './pages/Onboarding'
 import LecturerDashboard from './pages/LecturerDashboard'
 import LecturerCourses from './pages/LecturerCourses'
+import LecturerSessions from './pages/LecturerSessions'
 import LecturerStudents from './pages/LecturerStudents'
+import LecturerStudentDetail from './pages/LecturerStudentDetail'
 import LecturerProfile from './pages/LecturerProfile'
 import NewSession from './pages/NewSession'
 import SessionLive from './pages/SessionLive'
 import StudentHome from './pages/StudentHome'
 import StudentCourses from './pages/StudentCourses'
+import StudentHistory from './pages/StudentHistory'
 import StudentProfile from './pages/StudentProfile'
 import NotFound from './pages/NotFound'
 import PrivacyPolicy from './pages/PrivacyPolicy'
@@ -103,6 +106,14 @@ function App() {
           }
         />
         <Route
+          path="/student/history"
+          element={
+            <RoleRoute role="student">
+              <StudentHistory />
+            </RoleRoute>
+          }
+        />
+        <Route
           path="/dashboard"
           element={
             <RoleRoute role="lecturer">
@@ -127,6 +138,14 @@ function App() {
               }
             />
             <Route
+              path="/dashboard/students/:id"
+              element={
+                <RoleRoute role="lecturer">
+                  <LecturerStudentDetail />
+                </RoleRoute>
+              }
+            />
+            <Route
               path="/dashboard/profile"
           element={
             <RoleRoute role="lecturer">
@@ -139,6 +158,14 @@ function App() {
           element={
             <RoleRoute role="lecturer">
               <NewSession />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/dashboard/sessions"
+          element={
+            <RoleRoute role="lecturer">
+              <LecturerSessions />
             </RoleRoute>
           }
         />

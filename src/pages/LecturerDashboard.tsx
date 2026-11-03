@@ -1,23 +1,12 @@
 import { useEffect, useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
-import {
-  Ban,
-  BookOpen,
-  CalendarDays,
-  Clock,
-  Loader2,
-  MapPin,
-  Play,
-  Plus,
-  Radio,
-  Square,
-} from "lucide-react"
+import { useNavigate } from "react-router-dom"
+import { BookOpen, CalendarDays, Clock, Plus, Radio } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
 import { useLecturerSessions, type SessionListItem } from "@/hooks/useLecturerSessions"
 import DashboardShell from "@/components/DashboardShell"
+import SessionRow from "@/components/dashboard/SessionRow"
 import StatCard from "@/components/dashboard/StatCard"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -27,31 +16,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-
-const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  scheduled: "secondary",
-  ongoing: "default",
-  completed: "outline",
-  cancelled: "destructive",
-}
-
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
-
-function formatRange(startIso: string, endIso: string) {
-  const end = new Date(endIso)
-  return `${formatDateTime(startIso)} – ${end.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`
-}
 
 export default function LecturerDashboard() {
   const { user } = useAuth()
@@ -179,6 +143,9 @@ export default function LecturerDashboard() {
                 <Plus data-icon="inline-start" aria-hidden="true" />
                 New session
               </Button>
+              <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/sessions")}>
+                All sessions
+              </Button>
             </CardAction>
           </CardHeader>
           <CardContent>
@@ -202,82 +169,21 @@ export default function LecturerDashboard() {
             ) : (
               <ul className="divide-y border-border">
                 {recentSessions.map((s) => (
-                  <li key={s.id} className="flex items-center justify-between gap-4 py-4">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">
-                        <Link
-                          to={`/dashboard/sessions/${s.id}`}
-                          className="transition-colors hover:text-primary hover:underline"
-                        >
-                          {s.courses?.course_code} — {s.courses?.course_name}
-                        </Link>
-                      </p>
-                      <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs muted-text">
-                        <span className="inline-flex items-center gap-1">
-                          <CalendarDays className="size-3.5" aria-hidden="true" />
-                          {formatRange(s.scheduled_start, s.scheduled_end)}
-                        </span>
-                        {s.venues?.name && (
-                          <span className="inline-flex items-center gap-1">
-                            <MapPin className="size-3.5" aria-hidden="true" />
-                            {s.venues.name}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {s.status === "scheduled" && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={busyId === s.id}
-                            onClick={() => void runSessionAction(s, "start")}
-                          >
-                            {busyId === s.id ? (
-                              <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden="true" />
-                            ) : (
-                              <Play data-icon="inline-start" aria-hidden="true" />
-                            )}
-                            Start
-                          </Button>
-                          <Button
-                            size="icon-sm"
-                            variant="ghost"
-                            aria-label="Cancel session"
-                            disabled={busyId === s.id}
-                            onClick={() => void runSessionAction(s, "cancel")}
-                          >
-                            <Ban aria-hidden="true" />
-                          </Button>
-                        </>
-                      )}
-                      {s.status === "ongoing" && (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          disabled={busyId === s.id}
-                          onClick={() => void runSessionAction(s, "end")}
-                        >
-                          {busyId === s.id ? (
-                            <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden="true" />
-                          ) : (
-                            <Square data-icon="inline-start" aria-hidden="true" />
-                          )}
-                          End
-                        </Button>
-                      )}
-                      <Badge variant={statusVariant[s.status] ?? "outline"} className="gap-1.5">
-                        {s.status === "ongoing" && (
-                          <span className="relative flex size-1.5">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                            <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
-                          </span>
-                        )}
-                        {s.status}
-                      </Badge>
-                    </div>
-                  </li>
+                  <SessionRow
+                    key={s.id}
+                    id={s.id}
+                    courseCode={s.courses?.course_code ?? "—"}
+                    courseName={s.courses?.course_name ?? "—"}
+                    venueName={s.venues?.name ?? null}
+                    scheduledStart={s.scheduled_start}
+                    scheduledEnd={s.scheduled_end}
+                    status={s.status}
+                    actions
+                    busyId={busyId}
+                    onAction={(_sessionId, action) =>
+                      void runSessionAction(s, action)
+                    }
+                  />
                 ))}
               </ul>
             )}
