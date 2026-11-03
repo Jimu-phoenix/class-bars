@@ -153,7 +153,56 @@ revoke all on function public.search_my_students(text, int) from public, anon;
 grant execute on function public.search_my_students(text, int) to authenticated;
 
 -- ---------------------------------------------------------------------
--- 3. get_student_history_for_lecturer(p_student_id, p_course_id)
+-- 3. list_my_students()
+-- Returns every distinct student enrolled in at least one of the lecturer's
+-- courses, with the distinct course codes (as text[]) of that lecturer's
+-- courses the student is in. Hard cap LIMIT 1000. No email, no face data,
+-- no other profile fields.
+-- ---------------------------------------------------------------------
+create or replace function public.list_my_students() returns table (
+  student_id        uuid,
+  full_name         text,
+  registration_number text,
+  course_codes      text[]
+)
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_lecturer uuid := auth.uid();
+begin
+  if v_lecturer is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  if not public.is_lecturer_user() then
+    raise exception 'Only lecturers can list students';
+  end if;
+
+  return query
+  select
+    p.id                  as student_id,
+    p.full_name           as full_name,
+    p.student_number      as registration_number,
+    array_agg(distinct c.course_code::text order by c.course_code::text)
+      as course_codes
+  from public.enrollments e
+  join public.profiles p on p.id = e.student_id
+  join public.courses c on c.id = e.course_id
+  where c.lecturer_id = v_lecturer
+  group by p.id, p.full_name, p.student_number
+  order by p.full_name asc nulls last, p.id asc
+  limit 1000;
+end;
+$$;
+
+revoke all on function public.list_my_students() from public, anon;
+grant execute on function public.list_my_students() to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 4. get_student_history_for_lecturer(p_student_id, p_course_id)
 -- One row per non-cancelled session of a course, with result derivation:
 --   record present  -> result = record status (present/late/flagged/absent)
 --   completed, no record -> 'absent'

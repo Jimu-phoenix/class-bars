@@ -159,6 +159,13 @@ export type StudentSearchRow = {
   registration_number: string | null
 }
 
+export type StudentListRow = {
+  student_id: string
+  full_name: string
+  registration_number: string | null
+  course_codes: string[]
+}
+
 export type LecturerHistoryRow = {
   session_id: string
   course_id: string

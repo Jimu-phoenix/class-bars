@@ -190,8 +190,18 @@ test("history migration revokes from public/anon and grants execute to authentic
     "get_student_history_for_lecturer",
     "get_my_history",
     "get_student_header_for_lecturer",
+    "list_my_students",
   ]) {
     assert.match(sql, new RegExp(`revoke all on function public\\.${fn}`, "i"))
     assert.match(sql, new RegExp(`grant execute on function public\\.${fn}.*to authenticated`, "i"))
   }
+})
+
+test("history migration adds list_my_students RPC with 1000 cap", async () => {
+  const sql = await read("migrations/36_history_rpcs.sql")
+  assert.match(sql, /list_my_students/i)
+  assert.match(sql, /course_codes/i)
+  assert.match(sql, /array_agg/i)
+  assert.match(sql, /limit 1000/i)
+  assert.match(sql, /group by/i)
 })

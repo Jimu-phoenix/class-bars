@@ -51,6 +51,7 @@ on conflict (id) do update set course_name = excluded.course_name, lecturer_id =
 insert into public.enrollments (student_id, course_id, academic_year, semester, created_at) values
   ('00000000-0000-4000-8000-000000000b01', '00000000-0000-4000-8000-000000001b01', '2026', '1', now() - interval '30 days'),
   ('00000000-0000-4000-8000-000000000b03', '00000000-0000-4000-8000-000000001b01', '2026', '1', now() - interval '50 days'),
+  ('00000000-0000-4000-8000-000000000b03', '00000000-0000-4000-8000-000000001b03', '2026', '1', now() - interval '50 days'),
   ('00000000-0000-4000-8000-000000000b03', '00000000-0000-4000-8000-000000001b02', '2026', '1', now() - interval '10 days'),
   ('00000000-0000-4000-8000-000000000b02', '00000000-0000-4000-8000-000000001b02', '2026', '1', now() - interval '10 days')
 on conflict (student_id, course_id, academic_year, semester) do nothing;
@@ -457,6 +458,80 @@ begin
   select count(*) into v_cnt from public.get_lecturer_sessions(null, 2, 8);
   if v_cnt <> 0 then
     raise exception 'FAIL: page 5 should return 0, got %', v_cnt;
+  end if;
+
+  -- ------------------------------------------------------------------
+  -- 14. list_my_students checks.
+  -- ------------------------------------------------------------------
+  -- Output columns contain only the four fields (no sensitive fields).
+  select prosrc into v_row
+  from pg_proc where proname = 'list_my_students';
+  if v_row.prosrc ilike '%flag_reason%' or
+     v_row.prosrc ilike '%match_score%' or
+     v_row.prosrc ilike '%match_band%' or
+     v_row.prosrc ilike '%match_distance%' or
+     v_row.prosrc ilike '%location_distance_m%' or
+     v_row.prosrc ilike '%location_accuracy_m%' or
+     v_row.prosrc ilike '%confidence_score%' then
+    raise exception 'FAIL: list_my_students exposes a sensitive field';
+  end if;
+
+  -- Lecturer A gets exactly their students; student Both appears once with
+  -- both course codes (HIST-101 and HIST-103).
+  perform set_config('request.jwt.claims', json_build_object('sub', v_lec_a, 'role', 'authenticated')::text, true);
+  select count(*) into v_cnt
+  from public.list_my_students();
+  if v_cnt <> 2 then
+    raise exception 'FAIL: lecturer A should see 2 students, got %', v_cnt;
+  end if;
+
+  select array_agg(course_codes order by course_codes) into v_row
+  from (
+    select course_codes from public.list_my_students() where student_id = v_stu_both
+  ) sub;
+  if v_row.array_agg is null or cardinality(v_row.array_agg) <> 2 then
+    raise exception 'FAIL: student Both should have 2 course codes under lecturer A, got %', v_row.array_agg;
+  end if;
+
+  -- Lecturer B never sees lecturer A's students.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_lec_b, 'role', 'authenticated')::text, true);
+  select bool_or(student_id = v_stu_a) into v_found
+  from public.list_my_students();
+  if v_found then
+    raise exception 'FAIL: lecturer B must not see student A';
+  end if;
+
+  -- Role locks: student, admin cannot call list_my_students.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_stu_a, 'role', 'authenticated')::text, true);
+  begin
+    perform public.list_my_students();
+    raise exception 'FAIL: student list_my_students accepted';
+  exception when others then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+  end;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_adm, 'role', 'authenticated')::text, true);
+  begin
+    perform public.list_my_students();
+    raise exception 'FAIL: admin list_my_students accepted';
+  exception when others then
+    if sqlerrm like 'FAIL:%' then raise; end if;
+  end;
+
+  -- Anon has no execute privilege.
+  if public.has_function_privilege(
+       'anon',
+       'public.list_my_students()'::regprocedure,
+       'execute'
+     ) then
+    raise exception 'FAIL: anon should not have execute on list_my_students';
+  end if;
+
+  -- 1000 cap clause exists in the function source.
+  select prosrc into v_row
+  from pg_proc where proname = 'list_my_students';
+  if v_row.prosrc not like '%limit 1000%' then
+    raise exception 'FAIL: list_my_students missing LIMIT 1000 cap';
   end if;
 
   raise notice 'PASS: all history checks passed';

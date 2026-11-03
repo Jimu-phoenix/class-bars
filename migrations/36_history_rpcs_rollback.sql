@@ -36,6 +36,16 @@ $$;
 
 do $$
 begin
+  if to_regprocedure('public.list_my_students()') is not null then
+    revoke execute on function public.list_my_students()
+    from public, anon, authenticated;
+    drop function public.list_my_students();
+  end if;
+end
+$$;
+
+do $$
+begin
   if to_regprocedure('public.get_student_history_for_lecturer(uuid,uuid)') is not null then
     revoke execute on function public.get_student_history_for_lecturer(uuid, uuid)
     from public, anon, authenticated;

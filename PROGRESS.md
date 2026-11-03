@@ -143,22 +143,23 @@
 
 ### 2.13 Attendance history (migration 36, built — not applied)
 
-Migration 36 (`migrations/36_history_rpcs.sql` + `migrations/36_history_rpcs_rollback.sql`) adds five lecturer-only, STABLE SECURITY DEFINER history RPCs, all revoked from `public`/`anon` and granted `EXECUTE` to `authenticated`, with a fixed `search_path` and `lock_timeout`/`statement_timeout`. None expose `flag_reason`, `match_score`, `match_band`, `match_distance`, `location_distance_m`, `location_accuracy_m` or `confidence_score`.
+Migration 36 (`migrations/36_history_rpcs.sql` + `migrations/36_history_rpcs_rollback.sql`) adds six lecturer-only, STABLE SECURITY DEFINER history RPCs, all revoked from `public`/`anon` and granted `EXECUTE` to `authenticated`, with a fixed `search_path` and `lock_timeout`/`statement_timeout`. None expose `flag_reason`, `match_score`, `match_band`, `match_distance`, `location_distance_m`, `location_accuracy_m` or `confidence_score`.
 
 - `get_lecturer_sessions(p_course_id, p_limit, p_offset)` — the lecturer's sessions across all courses (or one course), newest first, with `checked_in_count` and `total_count` for pagination. Cancelled excluded. `p_course_id` null means all courses.
-- `search_my_students(p_query, p_limit)` — students enrolled in at least one of the lecturer's courses, matched by name or registration number. Returns nothing below 2 characters.
+- `search_my_students(p_query, p_limit)` — kept in the migration but unused by the app (server-side search replaced by client-side filtering of `list_my_students`).
+- `list_my_students()` — every distinct student enrolled in at least one of the lecturer's courses, with `course_codes` (text[]) of that lecturer's courses the student is in. Hard cap `LIMIT 1000`. No email, no face data.
 - `get_student_history_for_lecturer(p_student_id, p_course_id)` — one row per non-cancelled session with result derivation: record status (`present`/`late`/`flagged`/`absent`), completed-with-no-record → `absent`, ongoing → `live`, scheduled → `upcoming`; plus `method`. Sessions before the student's enrolment date are excluded unless a record exists. Raises 'Student not found in your courses' when the student shares none of the lecturer's courses.
 - `get_my_history(p_course_id)` — the caller's own results for a course (students only); same result derivation, no `method`. Raises 'You are not enrolled in this course'.
 - `get_student_header_for_lecturer(p_student_id)` — name + registration number only when the student shares a course with the lecturer; else raises 'Student not found in your courses'.
 
 **Client:**
-- `src/lib/history.ts` — typed RPC wrappers with friendly error mapping, plus pure helpers (`summariseHistory`, `lecturerStatusCode`, `studentResultLabel`, `methodLabel`, `formatDateTime`) and a `makeRequestGuard` stale-response guard. Unit tests in `tests/history.test.ts` (6/6 pass).
-- Types added to `src/types/db.ts`: `HistoryResult`, `LecturerSessionRow`, `StudentSearchRow`, `LecturerHistoryRow`, `MyHistoryRow`, `StudentHeaderRow`.
+- `src/lib/history.ts` — typed RPC wrappers with friendly error mapping, plus pure helpers (`summariseHistory`, `lecturerStatusCode`, `studentResultLabel`, `methodLabel`, `filterStudents`, `formatDateTime`) and a `makeRequestGuard` stale-response guard. Unit tests in `tests/history.test.ts`.
+- Types added to `src/types/db.ts`: `HistoryResult`, `LecturerSessionRow`, `StudentListRow`, `LecturerHistoryRow`, `MyHistoryRow`, `StudentHeaderRow`.
 
 **Routes (all inside existing fail-closed `RoleRoute` guards):**
 - Student: `/student/history` (`History` added to `STUDENT_NAV` and the mobile bottom tab bar: Home, Courses, History, Profile). Student picks an enrolled course, sees "Present X of Y ended sessions" and per-session date/time + result label. Students never see methods, scores, distances or flag reasons.
 - Lecturer: `/dashboard/sessions` (index; `/dashboard/sessions/:id` unchanged) — all sessions read-only, course filter, load-more pagination (20/page, button hidden via `total_count`), skeleton/empty/error-with-retry, shared `SessionRow` component extracted from `LecturerDashboard`. Reached via an "All sessions" button in the Recent sessions card header. Not a nav item.
-- Lecturer: `/dashboard/students` (rewrote existing `LecturerStudents` to search-first: server-side `search_my_students`, min 2 chars, ~250ms debounce, stale responses ignored, rows navigate to `/dashboard/students/:id`) and `/dashboard/students/:id` (`LecturerStudentDetail`) — header via `get_student_header_for_lecturer`, summary line, optional course filter, register-code statuses (`pr`/`prf`/`ab`, late counts as pr), method badge (Face/OTP/Manual) only when a record exists, legend under the list, friendly 403-style state. `Students` was already in `LECTURER_NAV`.
+- Lecturer: `/dashboard/students` (`LecturerStudents`) — loads the full student list **once on mount** via `list_my_students()` (skeleton while loading, error with retry, empty state "No students are enrolled in your courses yet"), shows a count ("N students"), a labelled `type="search"` input that filters **instantly client-side** with `filterStudents` (no debounce, no 2-character minimum, no server call while typing), rows sorted by name with registration number and course-code badges, capped at 50 rows per page with a "Show more" button (filter runs over the full list), "No students match your search" empty state, rows navigate to `/dashboard/students/:id`. List kept in component state only (no localStorage, URLs, or console logging of names). The list is capped at 1000 server-side. `/dashboard/students/:id` (`LecturerStudentDetail`) — header via `get_student_header_for_lecturer`, summary line, optional course filter, register-code statuses (`pr`/`prf`/`ab`, late counts as pr), method badge (Face/OTP/Manual) only when a record exists, legend under the list, friendly 403-style state. `Students` was already in `LECTURER_NAV`.
 
 **Enrolment date** = `enrollments.created_at` (interpreted in Africa/Blantyre). **Counts, not percentages.**
 
@@ -285,7 +286,8 @@ Migration 36 (`migrations/36_history_rpcs.sql` + `migrations/36_history_rpcs_rol
 | History: derivation rules (record → status; completed-no-record → absent; ongoing → live; scheduled → upcoming; cancelled excluded; pre-enrolment sessions excluded unless a record exists) | Single source of truth for `result` on both student and lecturer history, matching the register codes (`pr`/`prf`/`ab`) |
 | History: lecturer sessions list + students pages instead of a lecturer History tab | A lecturer tab would duplicate the student model; instead `/dashboard/sessions` (all sessions) and `/dashboard/students` + `/dashboard/students/:id` serve the lecturer's review workflow |
 | History: no match scores, distances, accuracy or coordinates anywhere in the UI | Lecturers see only register-code statuses and method; sensitive match fields never leave the database |
-| History output columns exclude sensitive fields | All five migration-36 functions return only session/student identifiers and result/method; no `flag_reason`, `match_*`, `location_*` or `confidence_score` columns |
+| History output columns exclude sensitive fields | All six migration-36 functions return only session/student identifiers and result/method; no `flag_reason`, `match_*`, `location_*` or `confidence_score` columns |
+| History: students page loads list on mount, filters client-side, capped at 1000 server-side | `/dashboard/students` fetches all of the lecturer's students once via `list_my_students()` (LIMIT 1000) and filters with the pure `filterStudents` helper — no server call while typing, no debounce, no 2-character minimum; capped at 50 rendered rows with "Show more" |
 
 ---
 

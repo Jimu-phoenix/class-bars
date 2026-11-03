@@ -483,7 +483,8 @@ Single-row calibration for the server-side face match score.
 | `public.get_student_history_for_lecturer(p_student_id uuid, p_course_id uuid)` | `table(session_id, course_id, course_code, course_name, session_start, session_status, result, method)` | STABLE SECURITY DEFINER | EXECUTE to authenticated |
 | `public.get_my_history(p_course_id uuid)` | `table(session_id, session_start, session_status, result)` | STABLE SECURITY DEFINER | EXECUTE to authenticated |
 | `public.get_student_header_for_lecturer(p_student_id uuid)` | `table(student_id, full_name, registration_number)` | STABLE SECURITY DEFINER | EXECUTE to authenticated |
+| `public.list_my_students()` | `table(student_id, full_name, registration_number, course_codes)` | STABLE SECURITY DEFINER | EXECUTE to authenticated |
 
-All five are lecturer-only (`is_lecturer_user()`), revoked from `public`/`anon`, granted `EXECUTE` to `authenticated`, run with a fixed `search_path` and `lock_timeout`/`statement_timeout`. None of them expose `flag_reason`, `match_score`, `match_band`, `match_distance`, `location_distance_m`, `location_accuracy_m` or `confidence_score`.
+All six are lecturer-only (`is_lecturer_user()`), revoked from `public`/`anon`, granted `EXECUTE` to `authenticated`, run with a fixed `search_path` and `lock_timeout`/`statement_timeout`. None of them expose `flag_reason`, `match_score`, `match_band`, `match_distance`, `location_distance_m`, `location_accuracy_m` or `confidence_score`.
 
 

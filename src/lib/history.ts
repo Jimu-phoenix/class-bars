@@ -4,9 +4,9 @@ import type {
   HistoryResult,
   LecturerHistoryRow,
   LecturerSessionRow,
+  StudentListRow,
   MyHistoryRow,
   StudentHeaderRow,
-  StudentSearchRow,
 } from "@/types/db"
 
 // ---------------------------------------------------------------------------
@@ -82,23 +82,15 @@ export async function getLecturerSessions({
   )
 }
 
-export async function searchMyStudents({
-  query,
-  limit = 20,
-}: {
-  query: string
-  limit?: number
-}): Promise<StudentSearchRow[]> {
-  const { data, error } = await supabase.rpc("search_my_students", {
-    p_query: query,
-    p_limit: limit,
-  })
+export async function listMyStudents(): Promise<StudentListRow[]> {
+  const { data, error } = await supabase.rpc("list_my_students", {})
   if (error) throw mapHistoryError(error)
   return (
-    (data as StudentSearchRow[] ?? []).map((row) => ({
+    (data as StudentListRow[] ?? []).map((row) => ({
       student_id: row.student_id,
       full_name: row.full_name,
       registration_number: row.registration_number,
+      course_codes: row.course_codes ?? [],
     })) ?? []
   )
 }
@@ -218,6 +210,23 @@ export function methodLabel(method: AttendanceMethod | null | undefined): string
   if (method === "otp") return "OTP"
   if (method === "manual") return "Manual"
   return null
+}
+
+export function filterStudents(
+  list: StudentListRow[],
+  query: string,
+): StudentListRow[] {
+  const trimmed = query.trim()
+  if (trimmed.length === 0) return list
+
+  const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return list
+
+  return list.filter((student) => {
+    const haystack = `${student.full_name ?? ""} ${student.registration_number ?? ""}`
+      .toLowerCase()
+    return words.every((word) => haystack.includes(word))
+  })
 }
 
 export function formatDateTime(iso: string) {
