@@ -59,8 +59,9 @@ SQL files are applied manually via Supabase Dashboard -> SQL Editor, **in this o
 20. `migrations/31_fix_box_geofence_contains.sql` — box geofence `ST_Covers`/area fix
 21. `migrations/32_face_descriptor_validation.sql` — NOT VALID descriptor CHECKs for real and sandbox face templates; run backup → migration → preflight → validate
 22. `migrations/33_face_match_confidence.sql` — server-computed face match score/band, 9-argument face RPC, OTP/manual compatibility, lecturer `match_score`; run `33_face_match_confidence_backup.sql` first, apply on a Supabase branch/staging project, then run `tests/sql/face_match_confidence_checks.sql`
+23. `migrations/34_consent_and_account_deletion.sql` — recorded consent on profiles + self-service account deletion (students only); run `34_consent_and_account_deletion_backup.sql` first
 
-`migrations/03_table_details.sql` is **not** part of the chain — it's a read-only report of your live schema (columns, constraints, RLS policies, triggers) for verification and drift checks. Migrations 15, 26–33 have not been applied to every environment; apply them in order before deploying the matching client.
+`migrations/03_table_details.sql` is **not** part of the chain — it's a read-only report of your live schema (columns, constraints, RLS policies, triggers) for verification and drift checks. Migrations 15, 26–34 have not been applied to every environment; apply them in order before deploying the matching client.
 
 ### Deploy order and prerequisites
 
@@ -68,7 +69,7 @@ Apply migrations strictly in the numbered order above on a staging/branch projec
 
 1. Run `migrations/32_face_descriptor_validation_backup.sql`, then `32_face_descriptor_validation.sql`, review the preflight report, clean any invalid rows, then run `32_face_descriptor_validation_validate.sql`.
 2. Run `migrations/33_face_match_confidence_backup.sql`, then `33_face_match_confidence.sql`. Run `tests/sql/geofencing_checks.sql` and `tests/sql/face_match_confidence_checks.sql` afterward.
-3. Only after SQL verification passes, deploy the matching client build. Verify PostgREST resolves the 8/9-argument `check_in_attendance` overloads; if it does not, rename the face RPC.
+3. Run `migrations/34_consent_and_account_deletion_backup.sql`, then `34_consent_and_account_deletion.sql`. Run `tests/sql/consent_and_deletion_checks.sql` afterward.
 
 `scripts/reset_supabase_project.sql` is missing migrations 10–15 and must not be used to rebuild an environment that needs the staff allowlist, admin/geofence policies, geofencing, or register export until it is updated.
 

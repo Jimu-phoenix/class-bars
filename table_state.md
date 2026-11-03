@@ -9,6 +9,8 @@
 | `role` | `user_role` |  |
 | `student_number` | `text` |  Nullable Unique |
 | `phone_number` | `text` |  Nullable |
+| `consent_given_at` | `timestamptz` |  Nullable |
+| `consent_version` | `text` |  Nullable |
 | `created_at` | `timestamptz` |  |
 | `updated_at` | `timestamptz` |  |
 
@@ -98,26 +100,10 @@
 | `flag_reason` | `text` |  Nullable |
 | `location_distance_m` | `numeric` |  Nullable |
 | `location_accuracy_m` | `numeric` |  Nullable |
-| `match_distance` | `double precision` |  Nullable |
+| `match_distance` | `float8` |  Nullable |
 | `match_score` | `numeric` |  Nullable |
 | `match_band` | `text` |  Nullable |
 | `match_config_version` | `text` |  Nullable |
-
-## Table `face_match_config`
-
-### Columns
-
-| Name | Type | Constraints |
-|------|------|-------------|
-| `singleton` | `boolean` | Primary |
-| `model_version` | `text` |  |
-| `a` | `numeric` |  |
-| `b` | `numeric` |  |
-| `accept_score` | `numeric` |  |
-| `review_score` | `numeric` |  |
-| `source_note` | `text` |  |
-| `effective_from` | `timestamptz` |  |
-| `updated_at` | `timestamptz` |  |
 
 ## Table `otp_codes`
 
@@ -278,6 +264,25 @@ One fence per venue: a circle (centre + radius) or a four-corner class box.
 | `ip_address` | `inet` |  Nullable |
 | `user_agent` | `text` |  Nullable |
 
+## Table `face_match_config`
+
+Single-row calibration for the server-side face match score.
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `singleton` | `bool` | Primary |
+| `config_revision` | `int8` |  |
+| `model_version` | `text` |  |
+| `a` | `numeric` |  |
+| `b` | `numeric` |  |
+| `accept_score` | `numeric` |  |
+| `review_score` | `numeric` |  |
+| `source_note` | `text` |  |
+| `effective_from` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
 ## Custom Types / Enums
 
 ### `user_role`
@@ -431,15 +436,33 @@ One fence per venue: a circle (centre + radius) or a four-corner class box.
 | `Admins insert profiles` | INSERT | public | PERMISSIVE | — | `is_admin_user()` |
 | `Lecturers view enrolled students` | SELECT | public | PERMISSIVE | `(is_lecturer_user() AND (EXISTS ( SELECT 1    FROM (enrollments e      JOIN courses c ON ((c.id = e.course_id)))   WHERE ((e.student_id = profiles.id) AND (c.lecturer_id = auth.uid())))))` | — |
 
+**Trigger:** `trg_protect_profiles_consent` (BEFORE UPDATE, for each row) → `public.protect_profiles_consent()`. Raises if `consent_given_at` or `consent_version` changed and `current_user IN ('authenticated', 'anon')`; SECURITY DEFINER RPCs pass.
+
 ### `audit_logs`
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
 | `Admins view audit_logs` | SELECT | public | PERMISSIVE | `is_admin_user()` | — |
 
+**Note:** `audit_logs.user_id` is nullable with no FK. `delete_my_account()` sets `user_id = NULL` for the deleted user's existing rows; the deletion audit row itself carries no user reference.
+
+### New RPCs (migration 34)
+
+| Function | Returns | Security | Grants |
+|----------|---------|----------|--------|
+| `public.record_consent(p_version text)` | `void` | SECURITY DEFINER | EXECUTE to authenticated |
+| `public.delete_my_account()` | `void` | SECURITY DEFINER | EXECUTE to authenticated |
+
+### Modified RPCs (migration 34)
+
+| Function | Change |
+|----------|--------|
+| `public.upsert_face_embedding(jsonb, text)` | Raises `consent_required` when `profiles.consent_given_at IS NULL` |
+| `public._check_in_attendance(...)` | Raises `consent_required` when `p_method = 'face'` and `consent_given_at IS NULL` |
+
 ### `face_match_config`
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
-| `Authenticated users read face match config` | SELECT | authenticated | PERMISSIVE | `true` | — |
+| `Admin users read face match config` | SELECT | authenticated | PERMISSIVE | `is_admin_user()` | — |
 

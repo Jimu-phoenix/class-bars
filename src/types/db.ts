@@ -12,6 +12,8 @@ export type ProfileRow = {
   role: UserRole
   student_number: string | null
   phone_number: string | null
+  consent_given_at: string | null
+  consent_version: string | null
   created_at: string
   updated_at: string
 }

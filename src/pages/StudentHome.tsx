@@ -11,12 +11,18 @@ import {
   RefreshCw,
   ScanFace,
   UserRound,
+  AlertCircle,
 } from "lucide-react"
 import { Circle, CircleMarker, MapContainer, Polygon, TileLayer, useMap } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
+import {
+  canUseFace,
+  needsConsent,
+} from "@/lib/consent"
+import type { ProfileWithConsent } from "@/lib/consent"
 import {
   checkInFace,
   getActiveFaceEmbedding,
@@ -160,6 +166,9 @@ export default function StudentHome() {
   const [locationError, setLocationError] = useState("")
   const [verifyMode, setVerifyMode] = useState<"face" | "otp">("face")
 
+  const [consentProfile, setConsentProfile] = useState<{ consent_given_at: string | null; consent_version: string | null } | null>(null)
+  const [consentLoading, setConsentLoading] = useState(true)
+
   const [checkLocOpen, setCheckLocOpen] = useState(false)
   const [checkLocSession, setCheckLocSession] = useState<LiveSessionListItem | null>(null)
   const [fenceLoading, setFenceLoading] = useState(false)
@@ -239,6 +248,26 @@ export default function StudentHome() {
     setFullName(data?.full_name ?? (user.user_metadata?.full_name as string | undefined) ?? "")
   }, [user])
 
+  const loadConsent = useCallback(async () => {
+    if (!user) {
+      setConsentLoading(false)
+      return
+    }
+    setConsentLoading(true)
+    try {
+      const { data } = await supabase
+        .from("profiles")
+        .select("consent_given_at, consent_version")
+        .eq("id", user.id)
+        .maybeSingle()
+      setConsentProfile((data as { consent_given_at: string | null; consent_version: string | null } | null) ?? null)
+    } catch {
+      setConsentProfile(null)
+    } finally {
+      setConsentLoading(false)
+    }
+  }, [user])
+
   useEffect(() => {
     if (!user) return
     const timer = window.setTimeout(() => {
@@ -246,9 +275,18 @@ export default function StudentHome() {
       void loadStats()
       void loadProfile()
       void loadLocation()
+      void loadConsent()
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [user, loadEmbedding, loadStats, loadProfile, loadLocation])
+  }, [user, loadEmbedding, loadStats, loadProfile, loadLocation, loadConsent])
+
+  useEffect(() => {
+    const handleConsentRecorded = () => {
+      void loadConsent()
+    }
+    window.addEventListener("consent-recorded", handleConsentRecorded)
+    return () => window.removeEventListener("consent-recorded", handleConsentRecorded)
+  }, [loadConsent])
 
   const refresh = useCallback(async () => {
     if (!user) return
@@ -297,6 +335,16 @@ export default function StudentHome() {
     setError("")
     setVerifyResult(null)
     setVerifyAttempts(0)
+
+    // Face check-in requires consent. Without it, offer OTP fallback only.
+    if (!canUseFace(consentProfile as ProfileWithConsent)) {
+      setError("Consent not recorded - fix: Face check-in is disabled until you record your consent.")
+      setVerifyMode("otp")
+      setSelectedSession(session)
+      setStage("verifying")
+      return
+    }
+
     setVerifyMode("face")
     try {
       const row = await getActiveFaceEmbedding(user.id)
@@ -599,6 +647,27 @@ export default function StudentHome() {
         <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
           {error}
         </p>
+      )}
+
+      {!consentLoading && consentProfile && needsConsent(consentProfile as ProfileWithConsent) && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 sm:p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="size-5 shrink-0 text-amber-600" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-400">
+                Consent not recorded - fix
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Face check-in is disabled until you record your consent.
+              </p>
+            </div>
+            <Link to="/student/profile" className="shrink-0">
+              <Button size="sm" variant="outline">
+                Record consent
+              </Button>
+            </Link>
+          </div>
+        </div>
       )}
 
       {(embedding.status === "missing" || embedding.status === "stale") && (

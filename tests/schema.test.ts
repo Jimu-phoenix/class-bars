@@ -81,3 +81,45 @@ test("face descriptor migration adds NOT VALID descriptor constraints", async ()
     assert.match(sql, new RegExp(constraint))
   }
 })
+
+test("consent migration adds consent columns to profiles", async () => {
+  const sql = await read("migrations/34_consent_and_account_deletion.sql")
+  assert.match(sql, /consent_given_at/i)
+  assert.match(sql, /consent_version/i)
+})
+
+test("consent migration creates protect_profiles_consent trigger", async () => {
+  const sql = await read("migrations/34_consent_and_account_deletion.sql")
+  assert.match(sql, /protect_profiles_consent/i)
+  assert.match(sql, /trg_protect_profiles_consent/i)
+  assert.match(sql, /current_user in \('authenticated', 'anon'\)/i)
+})
+
+test("consent migration creates record_consent RPC", async () => {
+  const sql = await read("migrations/34_consent_and_account_deletion.sql")
+  assert.match(sql, /record_consent/i)
+  assert.match(sql, /2026-11-v1/i) // version format example in comment is fine; check regex
+  assert.match(sql, /^[0-9]{4}-[0-9]{2}-v[0-9]+$/i)
+})
+
+test("consent migration creates delete_my_account RPC", async () => {
+  const sql = await read("migrations/34_consent_and_account_deletion.sql")
+  assert.match(sql, /delete_my_account/i)
+  assert.match(sql, /auth\.users/i)
+  assert.match(sql, /student_id = null/i)
+})
+
+test("consent migration makes attendance_records.student_id nullable", async () => {
+  const sql = await read("migrations/34_consent_and_account_deletion.sql")
+  assert.match(sql, /alter column student_id drop not null/i)
+})
+
+test("consent migration adds consent_required to upsert_face_embedding", async () => {
+  const sql = await read("migrations/34_consent_and_account_deletion.sql")
+  assert.match(sql, /consent_required/i)
+})
+
+test("consent migration adds consent_required to _check_in_attendance for face", async () => {
+  const sql = await read("migrations/34_consent_and_account_deletion.sql")
+  assert.match(sql, /p_method = 'face'.*consent_given_at|consent_given_at.*p_method = 'face'/is)
+})

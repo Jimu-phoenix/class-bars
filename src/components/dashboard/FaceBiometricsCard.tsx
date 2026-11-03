@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { CheckCircle2, Loader2, ScanFace, Trash2 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
+import { supabase } from "@/lib/supabase"
 import {
   clearFaceEmbedding,
   getActiveFaceEmbedding,
@@ -21,7 +22,11 @@ import {
 } from "@/components/ui/dialog"
 import type { FaceEmbeddingRow } from "@/types/db"
 
-export default function FaceBiometricsCard() {
+type FaceBiometricsCardProps = {
+  hasConsent?: boolean
+}
+
+export default function FaceBiometricsCard({ hasConsent }: FaceBiometricsCardProps = {}) {
   const { user } = useAuth()
 
   const [embedding, setEmbedding] = useState<FaceEmbeddingRow | null>(null)
@@ -30,6 +35,37 @@ export default function FaceBiometricsCard() {
   const [embeddingNotice, setEmbeddingNotice] = useState("")
   const [showEnroll, setShowEnroll] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [consentLoading, setConsentLoading] = useState(true)
+  const [consentStatus, setConsentStatus] = useState<boolean | null>(null)
+
+  const loadConsent = useCallback(async () => {
+    if (!user) {
+      setConsentLoading(false)
+      setConsentStatus(null)
+      return
+    }
+    setConsentLoading(true)
+    try {
+      const { data } = await supabase
+        .from("profiles")
+        .select("consent_given_at")
+        .eq("id", user.id)
+        .maybeSingle()
+      setConsentStatus(!!(data as { consent_given_at: string | null } | null)?.consent_given_at)
+    } catch {
+      setConsentStatus(null)
+    } finally {
+      setConsentLoading(false)
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (!user) return
+    const timer = window.setTimeout(() => void loadConsent(), 0)
+    return () => window.clearTimeout(timer)
+  }, [user, loadConsent])
+
+  const canEnroll = hasConsent ?? consentStatus
 
   const loadEmbedding = useCallback(async () => {
     if (!user) return
@@ -76,6 +112,51 @@ export default function FaceBiometricsCard() {
     } finally {
       setEmbeddingLoading(false)
     }
+  }
+
+  if (consentLoading) {
+    return (
+      <section
+        aria-labelledby="face-heading"
+        className="rounded-xl border border-border bg-card p-4 sm:p-5"
+      >
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" aria-hidden="true" />
+          <span className="sr-only">Loading consent status…</span>
+        </div>
+      </section>
+    )
+  }
+
+  if (!canEnroll) {
+    return (
+      <section
+        aria-labelledby="face-heading"
+        className="rounded-xl border border-border bg-card p-4 sm:p-5"
+      >
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted"
+          >
+            <ScanFace className="size-4.5" />
+          </span>
+          <div className="min-w-0">
+            <h2 id="face-heading" className="text-base font-semibold">
+              Face biometrics
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Used to verify you when joining live classes.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 sm:p-4">
+          <p className="text-sm text-amber-800 dark:text-amber-400">
+            Record your consent above before enrolling your face.
+          </p>
+        </div>
+      </section>
+    )
   }
 
   return (
