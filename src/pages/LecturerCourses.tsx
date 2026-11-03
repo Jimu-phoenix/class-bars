@@ -28,7 +28,7 @@ import {
 import type { CourseRow } from "@/types/db"
 
 const inputClass =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+  "h-11 rounded-full border border-border bg-muted/40 px-4 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
 
 type EndedSession = {
   id: string
@@ -263,8 +263,8 @@ function ExportRegisterDialog({
         if (!open) onClose()
       }}
     >
-      <DialogContent className="max-h-[90dvh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto p-0 sm:p-0">
+        <DialogHeader className="pb-4">
           <DialogTitle>Export attendance register</DialogTitle>
           <DialogDescription>
             Choose the month and 2–{REGISTER_MAX_SESSIONS} ended sessions for{" "}
@@ -273,7 +273,7 @@ function ExportRegisterDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4">
+        <div className="grid gap-4 p-6">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="register-month" className="text-sm font-medium">
               Month
@@ -297,24 +297,24 @@ function ExportRegisterDialog({
             </div>
 
             {loading ? (
-              <div className="flex items-center gap-2 rounded-md border px-3 py-6 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 rounded-2xl border border-border/60 px-4 py-6 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />
                 Loading ended sessions…
               </div>
             ) : monthSessions.length === 0 ? (
-              <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
+              <p className="rounded-2xl border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground">
                 {sessions.length === 0
                   ? "No ended sessions yet."
                   : "No ended sessions in this month."}
               </p>
             ) : (
-              <div className="max-h-56 divide-y overflow-y-auto rounded-md border">
+              <div className="max-h-56 divide-y overflow-y-auto rounded-2xl border border-border/60">
                 {monthSessions.map((session) => {
                   const checked = selectedSet.has(session.id)
                   return (
                     <label
                       key={session.id}
-                      className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm"
+                      className="rounded-xl cursor-pointer items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors"
                     >
                       <input
                         type="checkbox"
@@ -346,11 +346,15 @@ function ExportRegisterDialog({
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={generating}>
+        <DialogFooter className="p-4">
+          <Button variant="outline" onClick={onClose} disabled={generating} className="h-9 px-4 rounded-full">
             Cancel
           </Button>
-          <Button onClick={() => void handleExport()} disabled={!canExport}>
+          <Button
+            onClick={() => void handleExport()}
+            disabled={!canExport}
+            className="h-9 px-4 rounded-full"
+          >
             {generating ? (
               <Loader2 data-icon="inline-start" className="animate-spin" />
             ) : (
@@ -487,7 +491,7 @@ export default function LecturerCourses() {
       title="Courses"
       description="Courses you can schedule sessions for."
     >
-      <Card>
+      <Card className="rounded-3xl bg-muted/60 p-5 sm:p-6">
         <CardHeader>
           <CardTitle>Add a course</CardTitle>
           <CardDescription>
@@ -534,20 +538,20 @@ export default function LecturerCourses() {
                 className={inputClass}
               />
             </div>
-            <Button type="submit" disabled={creating} className="sm:self-end">
+            <Button type="submit" disabled={creating} className="h-11 rounded-full bg-foreground text-background">
               <Plus data-icon="inline-start" />
               {creating ? "Adding…" : "Add course"}
             </Button>
+            {createError && (
+              <p className="mt-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {createError}
+              </p>
+            )}
           </form>
-          {createError && (
-            <p className="mt-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {createError}
-            </p>
-          )}
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-3xl bg-muted/60 p-5 sm:p-6">
         <CardHeader>
           <CardTitle>My courses</CardTitle>
           <CardDescription>{courses.length} registered</CardDescription>
@@ -561,21 +565,21 @@ export default function LecturerCourses() {
           {loading ? (
             <ul className="divide-y">
               {Array.from({ length: 3 }).map((_, i) => (
-                <li key={i} className="py-3">
-                  <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+                <li key={i} className="py-4">
+                  <div className="h-4 w-2/3 animate-pulse rounded-2xl bg-muted" />
                 </li>
               ))}
             </ul>
           ) : courses.length === 0 ? (
-            <p className="rounded-md border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+            <p className="rounded-2xl border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground">
               No courses yet. Add your first one above.
             </p>
           ) : (
-            <ul className="divide-y">
+            <ul className="divide-y divide-border/60 gap-2">
               {courses.map((course) => (
                 <li
                   key={course.id}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3"
+                  className="rounded-xl bg-background p-4 flex flex-wrap items-center justify-between gap-3"
                 >
                   {editingId === course.id ? (
                     <>
@@ -603,6 +607,7 @@ export default function LecturerCourses() {
                           variant="outline"
                           onClick={() => void saveEdit(course)}
                           disabled={savingId === course.id || !editName.trim()}
+                          className="h-9 rounded-full"
                         >
                           {savingId === course.id ? (
                             <Loader2 className="animate-spin" />
@@ -610,7 +615,7 @@ export default function LecturerCourses() {
                             <Check />
                           )}
                         </Button>
-                        <Button size="icon-sm" variant="ghost" onClick={cancelEdit}>
+                        <Button size="icon-sm" variant="ghost" onClick={cancelEdit} className="h-9 rounded-full">
                           <X />
                         </Button>
                       </div>
@@ -634,6 +639,7 @@ export default function LecturerCourses() {
                           variant="outline"
                           onClick={() => setExportCourse(course)}
                           disabled={editingId !== null}
+                          className="h-9 px-4 rounded-full"
                         >
                           <FileDown data-icon="inline-start" />
                           Export register
@@ -643,6 +649,7 @@ export default function LecturerCourses() {
                           variant="ghost"
                           onClick={() => startEdit(course)}
                           disabled={editingId !== null && editingId !== course.id}
+                          className="h-9 rounded-full"
                           aria-label={`Edit ${course.course_code}`}
                         >
                           <Pencil />

@@ -3,7 +3,7 @@ import type { AttendanceStatus } from "@/types/db"
 export const REGISTER_MIN_SESSIONS = 2
 export const REGISTER_MAX_SESSIONS = 8
 
-export type RegisterCell = "pr" | "ab" | "prf"
+export type RegisterCell = "p" | "a" | "f"
 
 export type RegisterSession = {
   id: string
@@ -35,13 +35,13 @@ export function cellForStatus(
   switch (status) {
     case "present":
     case "late":
-      return "pr"
+      return "p"
     case "flagged":
-      return "prf"
+      return "f"
     case "absent":
     case null:
     case undefined:
-      return "ab"
+      return "a"
   }
 }
 
@@ -134,7 +134,7 @@ export function buildRegisterMatrix(
     students: orderedStudents.map((entry) => entry.student),
     cells: orderedStudents.map((entry) =>
       orderedSessions.map(
-        (session) => entry.cells.get(session.id) ?? "ab",
+        (session) => entry.cells.get(session.id) ?? "a",
       ),
     ),
   }

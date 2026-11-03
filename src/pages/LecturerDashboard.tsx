@@ -115,8 +115,8 @@ export default function LecturerDashboard() {
             value={liveSessions}
             icon={Radio}
             loading={loading}
-            accent="bg-emerald-500/10 text-emerald-600"
-            pulse
+            tone={liveSessions > 0 ? "green" : "lime"}
+            pulse={liveSessions > 0}
           />
           <StatCard
             label="Upcoming"
@@ -134,16 +134,28 @@ export default function LecturerDashboard() {
           />
         </div>
 
-        <Card className="hairline-border">
-          <CardHeader>
-            <CardTitle>Recent sessions</CardTitle>
-            <CardDescription>Your latest class sessions, newest first.</CardDescription>
+        <Card className="rounded-3xl bg-muted/60 p-5 sm:p-6">
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <CardTitle>Recent sessions</CardTitle>
+              <CardDescription>Your latest class sessions, newest first.</CardDescription>
+            </div>
             <CardAction>
-              <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/sessions/new")}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 px-4 rounded-full"
+                onClick={() => navigate("/dashboard/sessions/new")}
+              >
                 <Plus data-icon="inline-start" aria-hidden="true" />
                 New session
               </Button>
-              <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/sessions")}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 px-4 rounded-full"
+                onClick={() => navigate("/dashboard/sessions")}
+              >
                 All sessions
               </Button>
             </CardAction>
@@ -155,35 +167,37 @@ export default function LecturerDashboard() {
               </p>
             )}
             {loading ? (
-              <ul className="divide-y border-border">
+              <ul className="divide-y divide-border/60">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <li key={i} className="py-4">
-                    <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+                    <div className="h-4 w-2/3 animate-pulse rounded-2xl bg-muted" />
                   </li>
                 ))}
               </ul>
             ) : recentSessions.length === 0 ? (
-              <p className="rounded-md border border-dashed border-border px-4 py-10 text-center text-sm muted-text">
+              <p className="rounded-2xl border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground">
                 No sessions yet. Create your first session to get started.
               </p>
             ) : (
-              <ul className="divide-y border-border">
+              <ul className="divide-y divide-border/60 gap-2">
                 {recentSessions.map((s) => (
-                  <SessionRow
-                    key={s.id}
-                    id={s.id}
-                    courseCode={s.courses?.course_code ?? "—"}
-                    courseName={s.courses?.course_name ?? "—"}
-                    venueName={s.venues?.name ?? null}
-                    scheduledStart={s.scheduled_start}
-                    scheduledEnd={s.scheduled_end}
-                    status={s.status}
-                    actions
-                    busyId={busyId}
-                    onAction={(_sessionId, action) =>
-                      void runSessionAction(s, action)
-                    }
-                  />
+                  <li key={s.id} className="rounded-2xl bg-background p-4">
+                    <SessionRow
+                      key={s.id}
+                      id={s.id}
+                      courseCode={s.courses?.course_code ?? "—"}
+                      courseName={s.courses?.course_name ?? "—"}
+                      venueName={s.venues?.name ?? null}
+                      scheduledStart={s.scheduled_start}
+                      scheduledEnd={s.scheduled_end}
+                      status={s.status}
+                      actions
+                      busyId={busyId}
+                      onAction={(_sessionId, action) =>
+                        void runSessionAction(s, action)
+                      }
+                    />
+                  </li>
                 ))}
               </ul>
             )}

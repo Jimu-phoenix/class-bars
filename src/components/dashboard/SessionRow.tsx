@@ -15,7 +15,7 @@ const statusVariant: Record<
   string,
   "default" | "secondary" | "destructive" | "outline"
 > = {
-  scheduled: "secondary",
+  scheduled: "outline",
   ongoing: "default",
   completed: "outline",
   cancelled: "destructive",
@@ -163,8 +163,8 @@ export default function SessionRow({
         <Badge variant={statusVariant[status] ?? "outline"} className="gap-1.5">
           {status === "ongoing" && (
             <span className="relative flex size-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-black/30 opacity-75" />
+              <span className="relative inline-flex size-1.5 rounded-full bg-black" />
             </span>
           )}
           {status}

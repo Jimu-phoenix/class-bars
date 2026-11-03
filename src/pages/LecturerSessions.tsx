@@ -131,7 +131,7 @@ export default function LecturerSessions() {
           <select
             value={courseFilter ?? ""}
             onChange={(e) => setCourseFilter(e.target.value || null)}
-            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            className="h-11 rounded-full border border-border bg-muted/40 px-4 text-sm"
             disabled={loading}
           >
             <option value="">All courses</option>
@@ -153,7 +153,7 @@ export default function LecturerSessions() {
             <Loader2 className="size-6 animate-spin text-muted-foreground" />
           </div>
         ) : sessions.length === 0 ? (
-          <Card>
+          <Card className="rounded-3xl bg-muted/60 p-5 sm:p-6">
             <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
               <p className="text-sm text-muted-foreground">
                 No sessions found{courseFilter ? " for this course" : ""}.
@@ -162,26 +162,33 @@ export default function LecturerSessions() {
           </Card>
         ) : (
           <>
-            <ul className="divide-y divide-border">
+            <ul className="divide-y divide-border/60 gap-2">
               {sessions.map((s) => (
-                <SessionRow
-                  key={s.session_id}
-                  id={s.session_id}
-                  courseCode={s.course_code}
-                  courseName={s.course_name}
-                  venueName={s.venue_name ?? null}
-                  scheduledStart={s.scheduled_start}
-                  status={s.status as
-                    | "scheduled"
-                    | "ongoing"
-                    | "completed"
-                    | "cancelled"}
-                />
+                <li key={s.session_id} className="rounded-2xl bg-background p-4">
+                  <SessionRow
+                    key={s.session_id}
+                    id={s.session_id}
+                    courseCode={s.course_code}
+                    courseName={s.course_name}
+                    venueName={s.venue_name ?? null}
+                    scheduledStart={s.scheduled_start}
+                    status={s.status as
+                      | "scheduled"
+                      | "ongoing"
+                      | "completed"
+                      | "cancelled"}
+                  />
+                </li>
               ))}
             </ul>
             {hasMore && (
               <div className="mt-4 flex justify-center">
-                <Button onClick={handleLoadMore} disabled={loading} className="h-10">
+                <Button
+                  onClick={handleLoadMore}
+                  disabled={loading}
+                  variant="outline"
+                  className="h-9 px-4 rounded-full"
+                >
                   {loading ? (
                     <Loader2 className="mr-2 size-3.5 animate-spin" aria-hidden="true" />
                   ) : null}

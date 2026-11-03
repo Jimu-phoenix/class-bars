@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { BookOpen, Loader2, Search, UserPlus } from "lucide-react"
+import { BookOpen, Loader2, Search, UserPlus, Users } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
 import { enrollSelf } from "@/lib/realAttendance"
@@ -25,7 +25,7 @@ function ListSkeleton() {
   return (
     <div className="space-y-2" aria-hidden="true">
       {[0, 1, 2].map((i) => (
-        <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
+        <div key={i} className="h-16 animate-pulse rounded-2xl bg-muted" />
       ))}
     </div>
   )
@@ -33,9 +33,14 @@ function ListSkeleton() {
 
 function EmptyState({ children }: { children: string }) {
   return (
-    <p className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-      {children}
-    </p>
+    <div className="rounded-3xl bg-muted/60 p-5 sm:p-6 flex flex-col items-center gap-2 py-12 text-center">
+      <div className="size-12 rounded-2xl bg-muted flex items-center justify-center">
+        <Users className="size-6 text-muted-foreground" />
+      </div>
+      <h2 className="font-heading text-base font-semibold tracking-tight">
+        {children}
+      </h2>
+    </div>
   )
 }
 
@@ -155,11 +160,16 @@ export default function StudentCourses() {
           {loading ? (
             <ListSkeleton />
           ) : myCourses.length === 0 ? (
-            <EmptyState>You&apos;re not enrolled in any courses yet. Open Browse to join one.</EmptyState>
+            <EmptyState>
+              You&apos;re not enrolled in any courses yet. Open Browse to join one.
+            </EmptyState>
           ) : (
-            <ul className="space-y-2">
+            <ul className="divide-y divide-border/60 gap-2">
               {myCourses.map((c) => (
-                <li key={c.id} className="rounded-xl border border-border bg-card p-4">
+                <li
+                  key={c.id}
+                  className="rounded-xl bg-background p-4"
+                >
                   <p className="truncate text-sm font-semibold">
                     {c.courses?.course_code} — {c.courses?.course_name}
                   </p>
@@ -177,7 +187,7 @@ export default function StudentCourses() {
         <TabsContent value="browse" className="space-y-3">
           <div className="relative">
             <Search
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
               aria-hidden="true"
             />
             <Input
@@ -186,7 +196,7 @@ export default function StudentCourses() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search by code or name"
               aria-label="Search courses"
-              className="h-11 pl-9"
+              className="h-11 rounded-full border border-border bg-muted/40 pl-10 pr-4 text-sm"
             />
           </div>
 
@@ -197,21 +207,34 @@ export default function StudentCourses() {
               {query ? "No courses match your search." : "Nothing else to enroll in right now."}
             </EmptyState>
           ) : (
-            <ul className="space-y-2">
+            <ul className="divide-y divide-border/60 gap-2">
               {catalog.map((c) => (
                 <li
                   key={c.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-4"
+                  className="rounded-xl bg-background p-4 cursor-pointer"
+                  role="link"
+                  tabIndex={0}
+                  aria-label={`Enroll in ${c.course_code} — ${c.course_name}`}
+                  onClick={() => setPending(c)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      setPending(c)
+                    }
+                  }}
                 >
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">
                       {c.course_code} — {c.course_name}
                     </p>
-                    <p className="truncate text-xs text-muted-foreground">{c.department ?? "—"}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {c.department ?? "—"}
+                    </p>
                   </div>
                   <Button
                     variant="outline"
-                    className="h-10 shrink-0"
+                    size="sm"
+                    className="h-9 px-4 rounded-full shrink-0"
                     disabled={busyCourseCode !== null}
                     onClick={() => setPending(c)}
                   >
@@ -230,25 +253,25 @@ export default function StudentCourses() {
           if (!open && busyCourseCode === null) setPending(null)
         }}
       >
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto p-0 sm:p-0">
+          <DialogHeader className="pb-4">
             <DialogTitle>Enroll in this course?</DialogTitle>
             <DialogDescription>
               {pending ? `${pending.course_code} — ${pending.course_name}` : ""}. Live sessions for
               it will appear on your Home screen.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 max-sm:flex-col-reverse">
+          <DialogFooter className="p-4">
             <Button
               variant="outline"
-              className="h-11 sm:h-9"
+              className="h-9 px-4 rounded-full shrink-0"
               disabled={busyCourseCode !== null}
               onClick={() => setPending(null)}
             >
               Cancel
             </Button>
             <Button
-              className="h-11 sm:h-9"
+              className="h-9 px-4 rounded-full"
               disabled={busyCourseCode !== null || !pending}
               onClick={() => pending && void enroll(pending)}
             >
