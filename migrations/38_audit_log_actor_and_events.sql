@@ -151,7 +151,7 @@ set search_path = public
 as $$
 begin
   return query
-  select u.id, u.email
+  select u.id, u.email::text
   from auth.users u
   where u.id = any(user_ids);
 end;

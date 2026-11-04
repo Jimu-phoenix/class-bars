@@ -70,7 +70,7 @@ on conflict (key) do nothing;
 -- ---------------------------------------------------------------------
 create or replace function public.send_admin_magic_link(
   p_email text
-) returns void
+) returns text
 language plpgsql
 security definer
 set search_path = public, extensions
@@ -140,6 +140,8 @@ begin
     raise exception 'Failed to send magic link (status %): %',
       v_status, coalesce(v_response->>'body', 'unknown error');
   end if;
+
+  return 'ok';
 end;
 $$;
 
