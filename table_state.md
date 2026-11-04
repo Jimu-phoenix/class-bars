@@ -283,6 +283,19 @@ Single-row calibration for the server-side face match score.
 | `effective_from` | `timestamptz` |  |
 | `updated_at` | `timestamptz` |  |
 
+## Table `attendance_pdfs`
+
+Verification codes for lecturer attendance-register PDFs. One row per issued code. `course_id` is nullable (`ON DELETE SET NULL`) so a verified PDF stays verifiable if its course is later deleted. RLS enabled with no policies; all table privileges revoked — access goes through `record_attendance_pdf` and `verify_attendance_pdf` only.
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary, default `gen_random_uuid()` |
+| `course_id` | `uuid` | Nullable, references `public.courses(id)` `ON DELETE SET NULL` |
+| `pdf_code` | `text` | Not null, Unique, CHECK `^[A-HJ-NP-Z2-9]{6}$` |
+| `created_at` | `timestamptz` | Not null, default `now()` |
+
 ## Custom Types / Enums
 
 ### `user_role`
@@ -484,6 +497,13 @@ Single-row calibration for the server-side face match score.
 | `public.get_my_history(p_course_id uuid)` | `table(session_id, session_start, session_status, result)` | STABLE SECURITY DEFINER | EXECUTE to authenticated |
 | `public.get_student_header_for_lecturer(p_student_id uuid)` | `table(student_id, full_name, registration_number)` | STABLE SECURITY DEFINER | EXECUTE to authenticated |
 | `public.list_my_students()` | `table(student_id, full_name, registration_number, course_codes)` | STABLE SECURITY DEFINER | EXECUTE to authenticated |
+
+### New RPCs (migration 37)
+
+| Function | Returns | Security | Grants |
+|----------|---------|----------|--------|
+| `public.record_attendance_pdf(p_course_id uuid, p_pdf_code text)` | `table(id uuid, created_at timestamptz)` | STABLE SECURITY DEFINER | EXECUTE to authenticated |
+| `public.verify_attendance_pdf(p_code text)` | `table(course_code text, course_name text, created_at timestamptz)` | STABLE SECURITY DEFINER | EXECUTE to anon, authenticated |
 
 All six are lecturer-only (`is_lecturer_user()`), revoked from `public`/`anon`, granted `EXECUTE` to `authenticated`, run with a fixed `search_path` and `lock_timeout`/`statement_timeout`. None of them expose `flag_reason`, `match_score`, `match_band`, `match_distance`, `location_distance_m`, `location_accuracy_m` or `confidence_score`.
 

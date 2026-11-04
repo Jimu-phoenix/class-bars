@@ -1,9 +1,11 @@
 import { jsPDF } from "jspdf"
 import { autoTable } from "jspdf-autotable"
+import { toDataURL } from "qrcode"
 import type {
   RegisterMatrix,
   RegisterSession,
 } from "./buildRegisterMatrix"
+import { buildVerifyUrl } from "./pdfCode.ts"
 
 export type RegisterPdfMeta = {
   courseCode: string
@@ -44,6 +46,18 @@ const SHORT_MONTHS = [
 ]
 
 const LEGEND = "p = present, a = absent, f = present, flagged for review"
+
+// Verification QR layout (units are pt, matching jsPDF's unit).
+// The QR is ~22 mm (62 pt) square in the top-left inside the page margin,
+// with the code + a tiny caption beneath it. The header text block shifts
+// right by QR_SIZE + QR_GAP so it reads as one seamless header next to the QR.
+const QR_SIZE = 62 // ~22 mm
+const QR_GAP = 17 // ~6 mm
+const HEADER_SHIFT = QR_SIZE + QR_GAP
+const QR_TO_CODE = 6
+const CODE_SIZE = 9
+const CODE_TO_CAPTION = 4
+const CAPTION_SIZE = 7
 
 function pad(value: number): string {
   return String(value).padStart(2, "0")
@@ -101,9 +115,10 @@ export function registerFilename(courseCode: string, month: string): string {
   return `${sanitiseCourseCode(courseCode)}_register_${month}.pdf`
 }
 
-export function createRegisterPdf(
+export async function createRegisterPdf(
   matrix: RegisterMatrix,
   meta: RegisterPdfMeta,
+  verificationCode?: string,
 ) {
   const doc = new jsPDF({
     orientation: "landscape",
@@ -117,16 +132,55 @@ export function createRegisterPdf(
   const margin = 30
   const contentWidth = pageWidth - margin * 2
 
+  let verifyHost = ""
+  let qrBottom = margin // bottom of the QR block (code + caption included)
+  if (verificationCode) {
+    verifyHost = buildVerifyUrl(verificationCode).replace(/\/verify\/[^/]+$/, "")
+    qrBottom =
+      margin +
+      QR_SIZE +
+      QR_TO_CODE +
+      CODE_SIZE +
+      CODE_TO_CAPTION +
+      CAPTION_SIZE
+  }
+
+  // ------------------------------------------------------------------
+  // Verification QR (top-left, inside the margin) + code + caption.
+  // ------------------------------------------------------------------
+  if (verificationCode) {
+    const qrDataUrl = await toDataURL(verificationCode, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 256,
+    })
+    doc.addImage(qrDataUrl, "PNG", margin, margin, QR_SIZE, QR_SIZE)
+
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(CODE_SIZE)
+    doc.text(verificationCode, margin, margin + QR_SIZE + QR_TO_CODE)
+
+    doc.setFontSize(CAPTION_SIZE)
+    doc.text("Scan to verify", margin, margin + QR_SIZE + QR_TO_CODE + CODE_SIZE + CODE_TO_CAPTION)
+  }
+
+  // ------------------------------------------------------------------
+  // Header block: shifted right by HEADER_SHIFT when a QR is present so
+  // it reads as one seamless header next to the QR.
+  // ------------------------------------------------------------------
+  const headerX = verificationCode ? margin + HEADER_SHIFT : margin
+  const headerMaxWidth = verificationCode ? contentWidth - HEADER_SHIFT : contentWidth
+
   doc.setFont("helvetica", "bold")
   doc.setFontSize(15)
   const title = `${meta.courseCode} — ${meta.courseName}`
-  const titleLines = doc.splitTextToSize(title, contentWidth)
-  doc.text(titleLines, margin, margin + 6)
+  const titleLines = doc.splitTextToSize(title, headerMaxWidth)
+  doc.text(titleLines, headerX, margin + 6)
 
   let metaY = margin + 10 + titleLines.length * 17
   doc.setFont("helvetica", "normal")
   doc.setFontSize(9)
-  doc.text(`Attendance register · ${formatMonth(meta.month)}`, margin, metaY)
+  doc.text(`Attendance register · ${formatMonth(meta.month)}`, headerX, metaY)
   doc.text(
     `Generated: ${formatDateTime(meta.generatedAt)}`,
     pageWidth - margin,
@@ -135,7 +189,16 @@ export function createRegisterPdf(
   )
 
   metaY += 14
-  doc.text(`Lecturer: ${meta.lecturerName || "—"}`, margin, metaY)
+  doc.text(`Lecturer: ${meta.lecturerName || "—"}`, headerX, metaY)
+
+  // ------------------------------------------------------------------
+  // Table: start below the header, pushed down further when a QR is
+  // present so the table (which starts at the left margin) never
+  // overlaps the QR block.
+  // ------------------------------------------------------------------
+  const tableStartY = verificationCode
+    ? Math.max(metaY + 16, qrBottom + 12)
+    : metaY + 16
 
   const head = [
     [
@@ -172,7 +235,7 @@ export function createRegisterPdf(
   })
 
   autoTable(doc, {
-    startY: metaY + 16,
+    startY: tableStartY,
     head,
     body,
     theme: "grid",
@@ -214,9 +277,19 @@ export function createRegisterPdf(
     doc.setFont("helvetica", "normal")
     doc.setFontSize(7.5)
     doc.text(LEGEND, margin, pageHeight - 20)
-    doc.text(`Page ${page} of ${pageCount}`, pageWidth - margin, pageHeight - 20, {
-      align: "right",
-    })
+    const pageText = `Page ${page} of ${pageCount}`
+    const pageX = pageWidth - margin
+    doc.setFontSize(7.5)
+    const pageDim = doc.getTextDimensions(pageText)
+    if (verificationCode) {
+      const verifyText = `Verification code: ${verificationCode} · verify at ${verifyHost}`
+      doc.setFontSize(6)
+      const verifyDim = doc.getTextDimensions(verifyText)
+      const gap = 10
+      const verifyX = pageX - gap - pageDim.w - verifyDim.w
+      doc.text(verifyText, verifyX, pageHeight - 20)
+    }
+    doc.text(pageText, pageX, pageHeight - 20, { align: "right" })
   }
 
   return {
@@ -229,11 +302,12 @@ function onRegisterExported(): void {
   void 0
 }
 
-export function downloadRegisterPdf(
+export async function downloadRegisterPdf(
   matrix: RegisterMatrix,
   meta: RegisterPdfMeta,
-): void {
-  const { doc, filename } = createRegisterPdf(matrix, meta)
+  verificationCode?: string,
+): Promise<void> {
+  const { doc, filename } = await createRegisterPdf(matrix, meta, verificationCode)
   doc.save(filename)
   onRegisterExported()
 }

@@ -25,6 +25,7 @@ import {
   buildRegisterMatrix,
   type RegisterRpcRow,
 } from "@/lib/registerPdf/buildRegisterMatrix"
+import { registerPdfWithRetry } from "@/lib/registerPdf/pdfActions"
 import type { CourseRow } from "@/types/db"
 
 const inputClass =
@@ -225,6 +226,11 @@ function ExportRegisterDialog({
         (data as RegisterRpcRow[] | null) ?? [],
       )
 
+      // Register the verification code BEFORE building the PDF so every
+      // downloaded register is verifiable. Retries with a new code on
+      // collision; any other error aborts without producing a PDF.
+      const { code } = await registerPdfWithRetry(course.id)
+
       await new Promise<void>((resolve) => {
         window.setTimeout(resolve, 0)
       })
@@ -237,13 +243,13 @@ function ExportRegisterDialog({
         window.setTimeout(resolve, 0)
       })
 
-      downloadRegisterPdf(matrix, {
+      await downloadRegisterPdf(matrix, {
         courseCode: course.course_code,
         courseName: course.course_name,
         lecturerName,
         month,
         generatedAt: new Date(),
-      })
+      }, code)
       onClose()
     } catch (err) {
       setExportError(
@@ -263,7 +269,7 @@ function ExportRegisterDialog({
         if (!open) onClose()
       }}
     >
-      <DialogContent className="max-h-[90dvh] overflow-y-auto p-0 sm:p-0">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto p-3 sm:p-6">
         <DialogHeader className="pb-4">
           <DialogTitle>Export attendance register</DialogTitle>
           <DialogDescription>
@@ -273,7 +279,7 @@ function ExportRegisterDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 p-6">
+        <div className="grid gap-4 p-3">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="register-month" className="text-sm font-medium">
               Month
@@ -308,13 +314,13 @@ function ExportRegisterDialog({
                   : "No ended sessions in this month."}
               </p>
             ) : (
-              <div className="max-h-56 divide-y overflow-y-auto rounded-2xl border border-border/60">
+              <div className="flex flex-col max-h-[220px] min-h-[120px] divide-y overflow-y-auto rounded-2xl border border-border/60">
                 {monthSessions.map((session) => {
                   const checked = selectedSet.has(session.id)
                   return (
                     <label
                       key={session.id}
-                      className="rounded-xl cursor-pointer items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors"
+                      className="rounded-xl cursor-pointer flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors"
                     >
                       <input
                         type="checkbox"
@@ -325,7 +331,9 @@ function ExportRegisterDialog({
                         }
                         className="size-4 shrink-0"
                       />
-                      <span>{formatSessionLabel(session.scheduled_start)}</span>
+                      <span className="truncate">
+                        {formatSessionLabel(session.scheduled_start)}
+                      </span>
                     </label>
                   )
                 })}
