@@ -12,8 +12,10 @@
 -- Everything runs inside a transaction with lock/statement timeouts.
 --
 -- Run order:
---   1. 35_lecturer_manual_mark.sql (this file)
---   2. 35_lecturer_manual_mark_rollback.sql only if needed
+--   1. 38_audit_log_actor_and_events.sql   (must be applied first: provides
+--      public.write_audit_log(), used below for the audit write)
+--   2. 35_lecturer_manual_mark.sql (this file)
+--   3. 35_lecturer_manual_mark_rollback.sql only if needed
 --
 -- Apply to a Supabase branch/staging project first.
 -- =====================================================================
@@ -173,18 +175,12 @@ begin
   )
   returning * into v_record;
 
-  insert into public.audit_logs (
-    user_id,
-    action,
-    entity_type,
-    entity_id,
-    metadata
-  ) values (
-    auth.uid(),
+  perform public.write_audit_log(
     'attendance.manual_marked',
     'attendance_records',
     v_record.id,
-    jsonb_build_object('session_id', p_session_id)
+    jsonb_build_object('session_id', p_session_id),
+    auth.uid()
   );
 
   return jsonb_build_object(

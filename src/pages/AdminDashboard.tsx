@@ -42,7 +42,7 @@ import {
 import type { Corner, FenceShape } from "@/lib/geofence"
 import { cn } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { StaffEmailRow, VenueRow } from "@/types/db"
+import type { AuditLogRow, StaffEmailRow, VenueRow } from "@/types/db"
 
 const ROOT = "/admin"
 
@@ -1099,22 +1099,67 @@ function AdminUsers() {
 /* ---------------------------------------------------------------- */
 
 function AdminLogs() {
-  const [logs, setLogs] = useState<{ action: string; entity_type: string; created_at: string }[]>([])
+  const PAGE_SIZE = 50
+  const [logs, setLogs] = useState<AuditLogRow[]>([])
+  const [userEmails, setUserEmails] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
 
   const loadLogs = useCallback(async () => {
-    const { data, error: fetchError } = await supabase
-      .from("audit_logs")
-      .select("action, entity_type, created_at")
-      .order("created_at", { ascending: false })
-      .limit(50)
-    if (fetchError) {
+    setError(null)
+    const from = (page - 1) * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+    const [countResult, dataResult] = await Promise.all([
+      supabase.from("audit_logs").select("id", { head: true, count: "exact" }),
+      supabase
+        .from("audit_logs")
+        .select("id, action, entity_type, entity_id, user_id, user_agent, created_at")
+        .order("created_at", { ascending: false })
+        .range(from, to),
+    ])
+    if (countResult.error) {
+      setError(countResult.error.message)
       setLoading(false)
       return
     }
-    setLogs((data ?? []) as { action: string; entity_type: string; created_at: string }[])
+    if (dataResult.error) {
+      setError(dataResult.error.message)
+      setLoading(false)
+      return
+    }
+    setTotal(countResult.count ?? 0)
+    setLogs((dataResult.data ?? []) as AuditLogRow[])
+
+    // Resolve actor emails server-side via the user_id lookup RPC.
+    const ids = Array.from(
+      new Set(
+        (dataResult.data ?? [])
+          .map((row) => row.user_id)
+          .filter((id): id is string => id != null)
+      )
+    )
+    if (ids.length > 0) {
+      const { data: emails, error: emailError } = await supabase.rpc(
+        "get_user_emails",
+        { user_ids: ids }
+      )
+      if (emailError) {
+        setError(emailError.message)
+        setLoading(false)
+        return
+      }
+      const map: Record<string, string> = {}
+      for (const row of (emails ?? []) as { user_id: string; email: string }[]) {
+        map[row.user_id] = row.email
+      }
+      setUserEmails(map)
+    } else {
+      setUserEmails({})
+    }
     setLoading(false)
-  }, [])
+  }, [page])
 
   useEffect(() => {
     async function load() {
@@ -1122,6 +1167,11 @@ function AdminLogs() {
     }
     void load()
   }, [loadLogs])
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  const goPrev = () => setPage((p) => Math.max(p - 1, 1))
+  const goNext = () => setPage((p) => Math.min(p + 1, totalPages))
 
   return (
     <Card>
@@ -1137,27 +1187,72 @@ function AdminLogs() {
       <CardContent className="pt-0">
         {loading ? (
           <p className="text-sm text-muted-foreground italic">Loading…</p>
+        ) : error ? (
+          <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </p>
         ) : logs.length === 0 ? (
           <p className="text-sm text-muted-foreground italic">No audit events recorded.</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-muted-foreground">
-                <th className="pb-2">Time</th>
-                <th className="pb-2">Action</th>
-                <th className="pb-2">Entity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((log) => (
-                <tr key={`${log.created_at}-${log.action}`} className="border-t border-border">
-                  <td className="py-2 text-muted-foreground">{new Date(log.created_at).toLocaleString()}</td>
-                  <td className="py-2 font-medium">{log.action}</td>
-                  <td className="py-2 text-muted-foreground">{log.entity_type}</td>
+          <>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground">
+                  <th className="pb-2">Time</th>
+                  <th className="pb-2">User email</th>
+                  <th className="pb-2">Action</th>
+                  <th className="pb-2">Entity</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {logs.map((log) => (
+                  <tr key={log.id} className="border-t border-border">
+                    <td className="py-2 text-muted-foreground">
+                      {new Date(log.created_at).toLocaleString()}
+                    </td>
+                    <td className="py-2">
+                      <span className="text-xs text-muted-foreground truncate max-w-xs block" title={userEmails[log.user_id ?? ""] ?? "—"}>
+                        {userEmails[log.user_id ?? ""] ?? "—"}
+                      </span>
+                    </td>
+                    <td className="py-2 font-medium">{log.action}</td>
+                    <td className="py-2 text-muted-foreground">
+                      {log.entity_type}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex items-center justify-between pt-4">
+              <p className="text-xs text-muted-foreground">
+                Showing{" "}
+                {logs.length > 0
+                  ? `${(page - 1) * PAGE_SIZE + 1}–${Math.min(
+                      page * PAGE_SIZE,
+                      total
+                    )}`
+                  : "0"
+                } of {total} events
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={goPrev}
+                  disabled={page === 1 || total === 0}
+                >
+                  Previous
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  onClick={goNext}
+                  disabled={page * PAGE_SIZE >= total || total === 0}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>

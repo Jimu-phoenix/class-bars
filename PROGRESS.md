@@ -500,3 +500,32 @@ PROGRESS.md                                     # UPDATED — decisions log, sec
 ```
 
 ---
+
+### 3.8 Audit logs: actor email + four new event types (BUILT, NOT APPLIED)
+
+- `migrations/38_audit_log_actor_and_events_{backup, ,rollback}.sql` (migration 38 — NOT applied to the database; migrations 34 and 35 must follow it):
+  - `public.write_audit_log(action, entity_type, entity_id, metadata, actor_id)` — the single SECURITY DEFINER audit-write helper (`set search_path = public`); EXECUTE revoked from public/anon/authenticated and never granted, so clients cannot call it and cannot insert into audit_logs directly (audit_logs stays select-only for clients, no INSERT/UPDATE/DELETE policies). `user_agent` stores ONLY the real user agent (truncated to 512 chars) — the actor email is NOT stored in user_agent; it is resolved separately from the actor's `user_id`. IP read from `current_setting('request.headers', true)` inside an exception-guarded block, NULL when absent (triggers/cron).
+  - `public.get_user_emails(p_user_ids uuid[])` — SECURITY DEFINER RPC that reads `auth.users.email` server-side; EXECUTE granted to `authenticated`, revoked from `public`/`anon`. Used by the audit-log UI to map `user_id` → email.
+  - Four AFTER triggers, each wrapping the audit write in an exception handler (RAISE WARNING) so logging can never block the underlying operation:
+    - `trg_audit_session_started` on `public.class_sessions` (INSERT into `ongoing`); actor = session lecturer; metadata = course_id, venue_id only; entity_type `class_session`.
+    - `trg_audit_session_status_ongoing` on `public.class_sessions` (UPDATE where status changes INTO `ongoing`); actor = session lecturer; metadata = course_id, venue_id only; entity_type `class_session`.
+    - `trg_audit_account_created` on `public.profiles`; actor = new user; metadata = role only (no biometric data); entity_type `profiles`.
+    - `trg_audit_venue_created` on `public.venues`; actor = auth.uid(); metadata = venue name only; entity_type `venues`.
+    - `trg_audit_lecturer_email_added` on `public.staff_emails`; actor = auth.uid(); metadata = the added email; entity_type `staff_email`.
+  - Index `idx_audit_logs_action_created_at` on `(action, created_at desc)` for the audit page ordering/filtering.
+  - Migrations 34 (`consent.recorded`, `account.deleted`) and 35 (`attendance.manual_marked`) refactored to write audit_logs through `write_audit_log` instead of direct inserts — one write path. Apply 38 before 34/35.
+- Frontend (`src/pages/AdminDashboard.tsx`): System Logs page now does server-side pagination (count + ranged select, 50/page, newest first), selects only needed columns, shows a "User email" column resolved from each row's `user_id` via `get_user_emails` (rendered small font via `text-xs`, plain text, "—" when the account was deleted / user_id is null); the parsed "User" column and the "User agent" column are removed. Admin-only enforcement via the existing AdminRoute is unchanged. No action label map existed, so the four actions render as plain text.
+- `src/types/db.ts`: added `AuditLogRow`.
+- Verification: `tsc -b` clean, ESLint on changed files clean. Vite production build could not run in this shell (node_modules carries only the Windows `@rolldown` binding — pre-existing environment issue, unrelated to this change).
+
+### 3.9 Admin captcha: reverted (NOT APPLIED)
+
+- `migrations/39_admin_magic_link_rpc_{,rollback}.sql` — migration 39 files exist but were NOT applied. Abandoned `pg_net`-based RPC approach.
+- Frontend reverted to original captcha-free admin login:
+  - `src/contexts/AuthContext.tsx`: `signInWithOtp` uses plain `supabase.auth.signInWithOtp({ email })` (no captcha param).
+  - `src/pages/AdminLogin.tsx`: No `<CaptchaGate>`, no captcha token, no captcha gating. Calls `signInWithOtp(email)` directly.
+- Verification: `tsc -b` clean, ESLint on changed files clean.
+
+**The captcha 400 error is a Supabase server-side config issue, not a client code issue.** Supabase is rejecting `signInWithOtp` without a captcha token, meaning captcha is enforced at the project level despite the dashboard toggle appearing disabled. To fix, disable captcha at Supabase Dashboard → Authentication → Settings → Captcha (and any provider-specific captcha toggles), then restart the project. No client-side code change can bypass a server-side captcha requirement without a valid token.
+
+---

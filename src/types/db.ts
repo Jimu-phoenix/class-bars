@@ -95,6 +95,16 @@ export type StaffEmailRow = {
   created_at: string
 }
 
+export type AuditLogRow = {
+  id: string
+  action: string
+  entity_type: string
+  entity_id: string | null
+  user_id: string | null
+  user_agent: string | null
+  created_at: string
+}
+
 
 export type ClassSessionRow = {
   id: string
