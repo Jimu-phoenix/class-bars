@@ -30,8 +30,11 @@ npm run dev
 VITE_SUPABASE_URL=              # Supabase project URL
 VITE_SUPABASE_PUBLISHABLE_KEY=  # anon/publishable key
 VITE_RECAPTCHA_SITE_KEY=    # PUBLIC sitekey from Google reCAPTCHA (v2 checkbox) |
+VITE_PUBLIC_APP_URL=        # Public production URL of the app, e.g. https://class-bars.example.com
 
 The reCAPTCHA **secret key** is not bundled (anything `VITE_` is public). If you want server-side verification later, store it outside the client (e.g. Supabase Edge Functions / your backend). No backend verification is enforced in this build.
+
+`VITE_PUBLIC_APP_URL` must be set to the production URL. Verification QR codes point at `<VITE_PUBLIC_APP_URL>/verify/<code>`; if it is unset the QR falls back to `window.location.origin`, which will be `localhost` when printed from a dev machine.
 
 ## Database setup
 
@@ -62,6 +65,7 @@ SQL files are applied manually via Supabase Dashboard -> SQL Editor, **in this o
 23. `migrations/34_consent_and_account_deletion.sql` — recorded consent on profiles + self-service account deletion (students only); run `34_consent_and_account_deletion_backup.sql` first
 24. `migrations/35_lecturer_manual_mark.sql` — lecturer manual "mark present" on live sessions; `get_session_enrolled_students` and `lecturer_mark_present` RPCs; students can no longer self-mark as `manual`
 25. `migrations/36_history_rpcs.sql` — attendance history RPCs (`get_lecturer_sessions`, `search_my_students`, `get_student_history_for_lecturer`, `get_my_history`, `get_student_header_for_lecturer`); all lecturer-only, SECURITY DEFINER, STABLE
+26. `migrations/37_attendance_pdfs.sql` — verifiable attendance register PDFs: `attendance_pdfs` table, `record_attendance_pdf` (lecturer-owned course) and `verify_attendance_pdf` (public). No backup script needed (new data only); rolling back invalidates every PDF already issued.
 
 `migrations/03_table_details.sql` is **not** part of the chain — it's a read-only report of your live schema (columns, constraints, RLS policies, triggers) for verification and drift checks. Migrations 15, 26–35 have not been applied to every environment; apply them in order before deploying the matching client.
 
@@ -74,6 +78,7 @@ Apply migrations strictly in the numbered order above on a staging/branch projec
 3. Run `migrations/34_consent_and_account_deletion_backup.sql`, then `34_consent_and_account_deletion.sql`. Run `tests/sql/consent_and_deletion_checks.sql` afterward.
 4. Run `migrations/35_lecturer_manual_mark.sql`. Run `tests/sql/lecturer_manual_mark_checks.sql` afterward.
 5. Run `migrations/36_history_rpcs.sql`. Run `tests/sql/history_checks.sql` afterward.
+6. Run `migrations/37_attendance_pdfs.sql`. Run `tests/sql/attendance_pdf_checks.sql` afterward.
 
 `scripts/reset_supabase_project.sql` is missing migrations 10–15 and must not be used to rebuild an environment that needs the staff allowlist, admin/geofence policies, geofencing, or register export until it is updated.
 

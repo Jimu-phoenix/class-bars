@@ -119,18 +119,38 @@ export default function StudentHistory() {
     })),
   )
 
+  const statusBadge = (code: string | null) => {
+    switch (code) {
+      case "pr":
+        return "bg-emerald-400/10 text-emerald-900"
+      case "prf":
+        return "bg-amber-400/10 text-amber-900"
+      case "ab":
+        return "bg-destructive/10 text-destructive"
+      default:
+        return "bg-muted text-muted-foreground"
+    }
+  }
+
   if (courses.length === 0) {
     return (
       <DashboardShell title="History" description="Your attendance history by course.">
-        <Card>
+        <Card className="rounded-3xl bg-muted/60 p-5 sm:p-6">
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
-            <BookOpen className="size-6 text-muted-foreground" />
+            <div className="size-12 rounded-2xl bg-muted flex items-center justify-center">
+              <BookOpen className="size-6 text-muted-foreground" />
+            </div>
             <CardTitle>No enrolled courses</CardTitle>
             <CardDescription>
               You are not enrolled in any courses yet. Browse the catalog and
               join a course to see your attendance history here.
             </CardDescription>
-            <Button onClick={() => void navigate("/student/courses")} className="h-10">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 px-4 rounded-full"
+              onClick={() => void navigate("/student/courses")}
+            >
               Go to Courses
             </Button>
           </CardContent>
@@ -150,7 +170,7 @@ export default function StudentHistory() {
             id="history-course"
             value={selectedCourseId ?? ""}
             onChange={(e) => setSelectedCourseId(e.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            className="h-11 rounded-full border border-border bg-muted/40 px-4 text-sm"
             disabled={loading}
           >
             {courses.map((c) => (
@@ -172,18 +192,22 @@ export default function StudentHistory() {
       )}
 
       <div className="mt-4 flex items-center gap-3">
-        <Badge variant="secondary">
-          {ended} ended session{ended !== 1 ? "s" : ""}
-        </Badge>
-        <Badge
-          variant="default"
-          className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-        >
-          Present {present} of {ended}
-        </Badge>
+        <Card className="rounded-3xl bg-muted/60 p-3 sm:p-4">
+          <CardContent className="flex items-center gap-4 sm:gap-6">
+            <span className="text-xs text-muted-foreground">
+              Ended session{ended !== 1 ? "s" : ""}
+            </span>
+            <span className="text-sm font-semibold tabular-nums">{ended}</span>
+            <span className="text-xs text-muted-foreground">Present</span>
+            <span className="text-sm font-semibold tabular-nums text-emerald-900">
+              {present}
+            </span>
+            <span className="text-xs text-muted-foreground">of {ended}</span>
+          </CardContent>
+        </Card>
       </div>
 
-      <Card>
+      <Card className="rounded-3xl bg-muted/60 p-5 sm:p-6">
         <CardHeader>
           <CardTitle>
             {selectedCourse?.courses?.course_code} —{" "}
@@ -197,11 +221,11 @@ export default function StudentHistory() {
               <Loader2 className="size-6 animate-spin text-muted-foreground" />
             </div>
           ) : history.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+            <p className="rounded-2xl border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground">
               No sessions for this course yet.
             </p>
           ) : (
-            <ul className="divide-y divide-border">
+            <ul className="divide-y divide-border/60 gap-2">
               {history.map((s) => {
                 const label = studentResultLabel(s.result as
                   | "present"
@@ -214,32 +238,39 @@ export default function StudentHistory() {
                 const isUpcoming = s.session_status === "scheduled"
                 const isLive = s.session_status === "ongoing"
                 return (
-                  <li key={s.session_id} className="flex items-center justify-between gap-4 py-3.5">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate">
-                        {new Date(s.session_start).toLocaleDateString(undefined, {
-                          weekday: "short",
-                          day: "numeric",
-                          month: "short",
-                        })}
-                        {formatDateTime(s.session_start)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {isUpcoming ? "Upcoming" : isLive ? "Live" : "Ended"}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Badge
-                        variant={s.result === "absent" || s.result === null ? "outline" : "secondary"}
-                        className={cn(
-                          s.result === "present" && "text-green-700 dark:text-green-400",
-                          s.result === "late" && "text-amber-700 dark:text-amber-400",
-                          s.result === "flagged" && "text-amber-700 dark:text-amber-400",
-                          s.result === "absent" && "text-muted-foreground dark:text-muted-foreground",
-                        )}
-                      >
-                        {label ?? "—"}
-                      </Badge>
+                  <li key={s.session_id} className="rounded-2xl bg-background p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold truncate">
+                          {new Date(s.session_start).toLocaleDateString(undefined, {
+                            weekday: "short",
+                            day: "numeric",
+                            month: "short",
+                          })}
+                          {formatDateTime(s.session_start)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {isUpcoming ? "Upcoming" : isLive ? "Live" : "Ended"}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "rounded-full px-2.5 py-0.5 text-xs font-medium",
+                            statusBadge(s.result as
+                              | "present"
+                              | "late"
+                              | "flagged"
+                              | "absent"
+                              | "upcoming"
+                              | "live"
+                              | null),
+                          )}
+                        >
+                          {isUpcoming ? "Upcoming" : isLive ? "Live" : label ?? "—"}
+                        </Badge>
+                      </div>
                     </div>
                   </li>
                 )

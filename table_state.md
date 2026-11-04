@@ -9,10 +9,10 @@
 | `role` | `user_role` |  |
 | `student_number` | `text` |  Nullable Unique |
 | `phone_number` | `text` |  Nullable |
-| `consent_given_at` | `timestamptz` |  Nullable |
-| `consent_version` | `text` |  Nullable |
 | `created_at` | `timestamptz` |  |
 | `updated_at` | `timestamptz` |  |
+| `consent_given_at` | `timestamptz` |  Nullable |
+| `consent_version` | `text` |  Nullable |
 
 ## Table `courses`
 
@@ -91,7 +91,7 @@
 |------|------|-------------|
 | `id` | `uuid` | Primary |
 | `session_id` | `uuid` |  |
-| `student_id` | `uuid` |  |
+| `student_id` | `uuid` |  Nullable |
 | `method` | `attendance_method` |  |
 | `status` | `attendance_status` |  |
 | `check_in_time` | `timestamptz` |  |
@@ -283,6 +283,19 @@ Single-row calibration for the server-side face match score.
 | `effective_from` | `timestamptz` |  |
 | `updated_at` | `timestamptz` |  |
 
+## Table `attendance_pdfs`
+
+Verification codes for lecturer attendance-register PDFs. One row per issued code.
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `course_id` | `uuid` |  Nullable |
+| `pdf_code` | `text` |  Unique |
+| `created_at` | `timestamptz` |  |
+
 ## Custom Types / Enums
 
 ### `user_role`
@@ -436,55 +449,15 @@ Single-row calibration for the server-side face match score.
 | `Admins insert profiles` | INSERT | public | PERMISSIVE | — | `is_admin_user()` |
 | `Lecturers view enrolled students` | SELECT | public | PERMISSIVE | `(is_lecturer_user() AND (EXISTS ( SELECT 1    FROM (enrollments e      JOIN courses c ON ((c.id = e.course_id)))   WHERE ((e.student_id = profiles.id) AND (c.lecturer_id = auth.uid())))))` | — |
 
-**Trigger:** `trg_protect_profiles_consent` (BEFORE UPDATE, for each row) → `public.protect_profiles_consent()`. Raises if `consent_given_at` or `consent_version` changed and `current_user IN ('authenticated', 'anon')`; SECURITY DEFINER RPCs pass.
-
 ### `audit_logs`
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
 | `Admins view audit_logs` | SELECT | public | PERMISSIVE | `is_admin_user()` | — |
 
-**Note:** `audit_logs.user_id` is nullable with no FK. `delete_my_account()` sets `user_id = NULL` for the deleted user's existing rows; the deletion audit row itself carries no user reference.
-
-### New RPCs (migration 34)
-
-| Function | Returns | Security | Grants |
-|----------|---------|----------|--------|
-| `public.record_consent(p_version text)` | `void` | SECURITY DEFINER | EXECUTE to authenticated |
-| `public.delete_my_account()` | `void` | SECURITY DEFINER | EXECUTE to authenticated |
-
-### Modified RPCs (migration 34)
-
-| Function | Change |
-|----------|--------|
-| `public.upsert_face_embedding(jsonb, text)` | Raises `consent_required` when `profiles.consent_given_at IS NULL` |
-| `public._check_in_attendance(...)` | Raises `consent_required` when `p_method = 'face'` and `consent_given_at IS NULL`; raises `manual_not_allowed` when `p_method = 'manual'` |
-| `public.check_in_attendance(uuid, uuid, uuid, attendance_method, numeric, double precision, double precision, double precision)` | Raises `manual_not_allowed` when `p_method = 'manual'` |
-
-### New RPCs (migration 35)
-
-| Function | Returns | Security | Grants |
-|----------|---------|----------|--------|
-| `public.get_session_enrolled_students(p_session_id uuid)` | `table(student_id, full_name, registration_number, checked_in)` | SECURITY DEFINER | EXECUTE to authenticated |
-| `public.lecturer_mark_present(p_session_id uuid, p_student_id uuid)` | `jsonb` | SECURITY DEFINER | EXECUTE to authenticated |
-
 ### `face_match_config`
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
 | `Admin users read face match config` | SELECT | authenticated | PERMISSIVE | `is_admin_user()` | — |
-
-### New RPCs (migration 36)
-
-| Function | Returns | Security | Grants |
-|----------|---------|----------|--------|
-| `public.get_lecturer_sessions(p_course_id uuid, p_limit int, p_offset int)` | `table(session_id, course_id, course_code, course_name, venue_name, scheduled_start, actual_start, status, checked_in_count, total_count)` | STABLE SECURITY DEFINER | EXECUTE to authenticated |
-| `public.search_my_students(p_query text, p_limit int)` | `table(student_id, full_name, registration_number)` | STABLE SECURITY DEFINER | EXECUTE to authenticated |
-| `public.get_student_history_for_lecturer(p_student_id uuid, p_course_id uuid)` | `table(session_id, course_id, course_code, course_name, session_start, session_status, result, method)` | STABLE SECURITY DEFINER | EXECUTE to authenticated |
-| `public.get_my_history(p_course_id uuid)` | `table(session_id, session_start, session_status, result)` | STABLE SECURITY DEFINER | EXECUTE to authenticated |
-| `public.get_student_header_for_lecturer(p_student_id uuid)` | `table(student_id, full_name, registration_number)` | STABLE SECURITY DEFINER | EXECUTE to authenticated |
-| `public.list_my_students()` | `table(student_id, full_name, registration_number, course_codes)` | STABLE SECURITY DEFINER | EXECUTE to authenticated |
-
-All six are lecturer-only (`is_lecturer_user()`), revoked from `public`/`anon`, granted `EXECUTE` to `authenticated`, run with a fixed `search_path` and `lock_timeout`/`statement_timeout`. None of them expose `flag_reason`, `match_score`, `match_band`, `match_distance`, `location_distance_m`, `location_accuracy_m` or `confidence_score`.
-
 

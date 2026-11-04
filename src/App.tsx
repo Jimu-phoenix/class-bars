@@ -17,6 +17,7 @@ import StudentHome from './pages/StudentHome'
 import StudentCourses from './pages/StudentCourses'
 import StudentHistory from './pages/StudentHistory'
 import StudentProfile from './pages/StudentProfile'
+import VerifyPdf from './pages/VerifyPdf'
 import NotFound from './pages/NotFound'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import SandboxLanding from './pages/SandboxLanding'
@@ -70,6 +71,7 @@ function App() {
         <Route path="/admin/users" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/logs" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/verify/:code" element={<VerifyPdf />} />
         <Route path="/sandbox" element={<SandboxLanding />} />
         <Route path="/sandbox/lecturer" element={<SandboxLecturer />} />
         <Route path="/sandbox/student" element={<SandboxStudent />} />

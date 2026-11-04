@@ -5,9 +5,11 @@
 -- Everything runs inside a transaction with lock/statement timeouts.
 --
 -- Run order:
---   1. 34_consent_and_account_deletion_backup.sql
---   2. 34_consent_and_account_deletion.sql (this file)
---   3. 34_consent_and_account_deletion_rollback.sql only if needed
+--   1. 38_audit_log_actor_and_events.sql   (must be applied first: provides
+--      public.write_audit_log(), used below for all audit writes)
+--   2. 34_consent_and_account_deletion_backup.sql
+--   3. 34_consent_and_account_deletion.sql (this file)
+--   4. 34_consent_and_account_deletion_rollback.sql only if needed
 --
 -- Apply to a Supabase branch/staging project first.
 -- =====================================================================
@@ -123,18 +125,12 @@ begin
       consent_version = p_version
   where id = auth.uid();
 
-  insert into public.audit_logs (
-    user_id,
-    action,
-    entity_type,
-    entity_id,
-    metadata
-  ) values (
-    auth.uid(),
+  perform public.write_audit_log(
     'consent.recorded',
     'profiles',
     auth.uid(),
-    jsonb_build_object('version', p_version)
+    jsonb_build_object('version', p_version),
+    auth.uid()
   );
 end;
 $$;
@@ -219,18 +215,12 @@ begin
   where metadata::text like '%' || v_uid::text || '%';
 
   -- 4. Insert account.deleted audit row (no personal data of any kind).
-  insert into public.audit_logs (
-    user_id,
-    action,
-    entity_type,
-    entity_id,
-    metadata
-  ) values (
-    null,
+  perform public.write_audit_log(
     'account.deleted',
     'profiles',
     null,
-    '{}'::jsonb
+    '{}'::jsonb,
+    null
   );
 
   -- 5. Delete profile row.

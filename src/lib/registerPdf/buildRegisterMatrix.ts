@@ -3,7 +3,26 @@ import type { AttendanceStatus } from "@/types/db"
 export const REGISTER_MIN_SESSIONS = 2
 export const REGISTER_MAX_SESSIONS = 8
 
-export type RegisterCell = "pr" | "ab" | "prf"
+export type RegisterCell = "p" | "a" | "f"
+
+// Visual style for each register cell, used by the PDF renderer.
+// shape "rect": filled rectangle, height = cell height, width = widthRatio * cell width.
+// shape "leftBorder": colored left border the full cell height.
+export type CellStyle = {
+  color: string
+  shape: "rect" | "leftBorder"
+  widthRatio?: number
+}
+
+export const CELL_STYLES: Record<RegisterCell, CellStyle> = {
+  p: { color: "#22c55e", shape: "rect", widthRatio: 0.2 },   // green
+  a: { color: "#ef4444", shape: "rect", widthRatio: 0.2 },   // red
+  f: { color: "#eab308", shape: "rect", widthRatio: 0.2 },   // yellow
+}
+
+export function cellStyleFor(cell: RegisterCell): CellStyle {
+  return CELL_STYLES[cell]
+}
 
 export type RegisterSession = {
   id: string
@@ -35,13 +54,13 @@ export function cellForStatus(
   switch (status) {
     case "present":
     case "late":
-      return "pr"
+      return "p"
     case "flagged":
-      return "prf"
+      return "f"
     case "absent":
     case null:
     case undefined:
-      return "ab"
+      return "a"
   }
 }
 
@@ -134,7 +153,7 @@ export function buildRegisterMatrix(
     students: orderedStudents.map((entry) => entry.student),
     cells: orderedStudents.map((entry) =>
       orderedSessions.map(
-        (session) => entry.cells.get(session.id) ?? "ab",
+        (session) => entry.cells.get(session.id) ?? "a",
       ),
     ),
   }

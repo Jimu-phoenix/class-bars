@@ -205,3 +205,42 @@ test("history migration adds list_my_students RPC with 1000 cap", async () => {
   assert.match(sql, /limit 1000/i)
   assert.match(sql, /group by/i)
 })
+
+test("attendance PDF migration adds the attendance_pdfs table", async () => {
+  const sql = await read("migrations/37_attendance_pdfs.sql")
+  assert.match(sql, /create table if not exists public\.attendance_pdfs/)
+  assert.match(sql, /pdf_code\s+text\s+not null unique/)
+  assert.match(sql, /check \(pdf_code ~ '\^\[A-HJ-NP-Z2-9\]\{6\}\$'\)/)
+  assert.match(sql, /references public\.courses\(id\) on delete set null/)
+  assert.match(sql, /alter table public\.attendance_pdfs enable row level security/)
+  assert.match(sql, /revoke all on table public\.attendance_pdfs from public, anon, authenticated/)
+})
+
+test("attendance PDF migration adds record_attendance_pdf RPC", async () => {
+  const sql = await read("migrations/37_attendance_pdfs.sql")
+  assert.match(sql, /record_attendance_pdf/)
+  assert.match(sql, /is_lecturer_user/)
+  assert.match(sql, /'Course not found or not owned by you'/)
+  assert.match(sql, /'invalid_pdf_code'/)
+  assert.match(sql, /'pdf_code_taken'/)
+  assert.match(sql, /register\.exported/)
+  assert.match(sql, /jsonb_build_object\('course_id'/)
+  assert.match(sql, /revoke all on function public\.record_attendance_pdf\(uuid, text\) from public, anon/)
+  assert.match(sql, /grant execute on function public\.record_attendance_pdf\(uuid, text\) to authenticated/)
+})
+
+test("attendance PDF migration adds verify_attendance_pdf RPC", async () => {
+  const sql = await read("migrations/37_attendance_pdfs.sql")
+  assert.match(sql, /verify_attendance_pdf/)
+  assert.match(sql, /stable/)
+  assert.match(sql, /security definer/)
+  assert.match(sql, /grant execute on function public\.verify_attendance_pdf\(text\) to anon/)
+  assert.match(sql, /grant execute on function public\.verify_attendance_pdf\(text\) to authenticated/)
+})
+
+test("attendance PDF rollback drops functions and table", async () => {
+  const sql = await read("migrations/37_attendance_pdfs_rollback.sql")
+  assert.match(sql, /drop function if exists public\.record_attendance_pdf\(uuid, text\)/)
+  assert.match(sql, /drop function if exists public\.verify_attendance_pdf\(text\)/)
+  assert.match(sql, /drop table if exists public\.attendance_pdfs/)
+})

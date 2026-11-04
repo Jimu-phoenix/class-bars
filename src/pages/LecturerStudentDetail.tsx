@@ -161,7 +161,7 @@ export default function LecturerStudentDetail() {
   if (notFound) {
     return (
       <DashboardShell title="Student" description="Attendance history.">
-        <Card>
+        <Card className="rounded-3xl bg-muted/60 p-5 sm:p-6">
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
             <p className="text-sm font-medium text-destructive">
               Student not found in your courses
@@ -170,7 +170,12 @@ export default function LecturerStudentDetail() {
               This student is not enrolled in any of your courses, so their
               history is not available to you.
             </CardDescription>
-            <Button onClick={() => navigate("/dashboard/students")} className="h-10">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 px-4 rounded-full"
+              onClick={() => navigate("/dashboard/students")}
+            >
               Back to students
             </Button>
           </CardContent>
@@ -213,39 +218,60 @@ export default function LecturerStudentDetail() {
 
   const showCourseFilter = sharedCourses.length > 1
 
+  const statusBadge = (code: string | null) => {
+    switch (code) {
+      case "pr":
+        return "bg-emerald-400/10 text-emerald-900"
+      case "prf":
+        return "bg-amber-400/10 text-amber-900"
+      case "ab":
+        return "bg-destructive/10 text-destructive"
+      default:
+        return "bg-muted text-muted-foreground"
+    }
+  }
+
   return (
     <DashboardShell title="Student" description="Attendance history.">
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
-          className="flex items-center gap-2"
+          className="h-9 px-4 rounded-full flex items-center gap-2"
           onClick={() => navigate("/dashboard/students")}
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
           Back
         </Button>
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold">{student.full_name}</h1>
-          <Badge variant="outline">{student.registration_number ?? "—"}</Badge>
+          <h1 className="font-heading text-base font-semibold tracking-tight">
+            {student.full_name}
+          </h1>
+          <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xs font-medium">
+            {student.registration_number ?? "—"}
+          </Badge>
         </div>
       </div>
 
       <div className="mb-6 flex items-center gap-3">
-        <Badge variant="secondary">
-          {ended} ended session{ended !== 1 ? "s" : ""}
-        </Badge>
-        <Badge
-          variant="default"
-          className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-        >
-          Present {present} of {ended}
-        </Badge>
+        <Card className="rounded-3xl bg-muted/60 p-3 sm:p-4">
+          <CardContent className="flex items-center gap-4 sm:gap-6">
+            <span className="text-xs text-muted-foreground">
+              Ended session{ended !== 1 ? "s" : ""}
+            </span>
+            <span className="text-sm font-semibold tabular-nums">{ended}</span>
+            <span className="text-xs text-muted-foreground">Present</span>
+            <span className="text-sm font-semibold tabular-nums text-emerald-900">
+              {present}
+            </span>
+            <span className="text-xs text-muted-foreground">of {ended}</span>
+          </CardContent>
+        </Card>
         {showCourseFilter && (
           <select
             value={selectedCourseId ?? ""}
             onChange={(e) => setSelectedCourseId(e.target.value || null)}
-            className="h-9 rounded-md border border-input bg-background px-3 py-2 text-sm ml-4"
+            className="h-11 rounded-full border border-border bg-muted/40 px-4 text-sm"
           >
             {sharedCourses.map((c) => (
               <option key={c.course_id} value={c.course_id}>
@@ -262,7 +288,7 @@ export default function LecturerStudentDetail() {
         </p>
       )}
 
-      <Card>
+      <Card className="rounded-3xl bg-muted/60 p-5 sm:p-6">
         <CardHeader>
           <CardTitle>Sessions</CardTitle>
           <CardDescription>
@@ -271,11 +297,11 @@ export default function LecturerStudentDetail() {
         </CardHeader>
         <CardContent>
           {history.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+            <p className="rounded-2xl border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground">
               No sessions for this course.
             </p>
           ) : (
-            <ul className="divide-y divide-border">
+            <ul className="divide-y divide-border/60 gap-2">
               {history.map((s) => {
                 const code = lecturerStatusCode(
                   s.result as
@@ -301,32 +327,40 @@ export default function LecturerStudentDetail() {
                 const isLive = s.session_status === "ongoing"
                 const hasRecord = s.result !== null && s.method !== null
                 return (
-                  <li key={s.session_id} className="flex items-center justify-between gap-4 py-3.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate">
-                        {s.course_code} — {s.course_name}
-                      </p>
-                      <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <CalendarDays className="size-3" aria-hidden="true" />
-                        {formatDateTime(s.session_start)}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Badge
-                        variant={code === null ? "outline" : "secondary"}
-                        className={cn(
-                          code === "pr" && "text-green-700 dark:text-green-400",
-                          code === "prf" && "text-amber-700 dark:text-amber-400",
-                          code === "ab" && "text-muted-foreground dark:text-muted-foreground",
-                        )}
-                      >
-                        {isUpcoming ? "Upcoming" : isLive ? "Live" : label ?? code ?? "—"}
-                      </Badge>
-                      {hasRecord && s.method && (
-                        <Badge variant="ghost" className="text-xs">
-                          {methodLabel(s.method as "face" | "otp" | "manual")}
+                  <li key={s.session_id} className="rounded-2xl bg-background p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold truncate">
+                          {s.course_code} — {s.course_name}
+                        </p>
+                        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <CalendarDays className="size-3" aria-hidden="true" />
+                          {formatDateTime(s.session_start)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "rounded-full px-2.5 py-0.5 text-xs font-medium",
+                            statusBadge(code),
+                          )}
+                        >
+                          {isUpcoming
+                            ? "Upcoming"
+                            : isLive
+                              ? "Live"
+                              : label ?? code ?? "—"}
                         </Badge>
-                      )}
+                        {hasRecord && s.method && (
+                          <Badge
+                            variant="outline"
+                            className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-muted text-muted-foreground"
+                          >
+                            {methodLabel(s.method as "face" | "otp" | "manual")}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </li>
                 )

@@ -125,7 +125,11 @@ export default function AdminLogin() {
                       No password. Supabase will send a confirmation link to
                       this address.
                     </p>
-                    <Button type="submit" className="w-full" disabled={submitting}>
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={submitting}
+                    >
                       {submitting ? "Sending magic link…" : (
                         <>
                           <Mail className="mr-2 h-4 w-4" />

@@ -7,11 +7,7 @@ import type { StudentListRow } from "@/types/db"
 import DashboardShell from "@/components/DashboardShell"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 
 const PAGE_SIZE = 50
@@ -92,7 +88,7 @@ export default function LecturerStudents() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by name or registration number…"
           aria-label="Search students"
-          className="h-10 pl-9"
+          className="h-11 rounded-full border border-border bg-muted/40 pl-10 pr-4 text-sm"
           disabled={loading}
         />
       </div>
@@ -102,12 +98,16 @@ export default function LecturerStudents() {
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       ) : filtered.length === 0 ? (
-        <Card>
+        <Card className="rounded-3xl bg-muted/60 p-5 sm:p-6">
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
             {query.trim().length === 0 ? (
               <>
-                <Users className="size-6 text-muted-foreground" />
-                <CardTitle>No students are enrolled in your courses yet</CardTitle>
+                <div className="size-12 rounded-2xl bg-muted flex items-center justify-center">
+                  <Users className="size-6 text-muted-foreground" />
+                </div>
+                <h2 className="font-heading text-base font-semibold tracking-tight">
+                  No students are enrolled in your courses yet
+                </h2>
               </>
             ) : (
               <>
@@ -120,11 +120,11 @@ export default function LecturerStudents() {
         </Card>
       ) : (
         <>
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-border/60 gap-2">
             {displayRows.map((student) => (
               <li
                 key={student.student_id}
-                className="flex items-center justify-between gap-4 py-4 cursor-pointer"
+                className="rounded-2xl bg-background p-4 cursor-pointer"
                 role="link"
                 tabIndex={0}
                 aria-label={`View ${student.full_name}`}
@@ -146,7 +146,11 @@ export default function LecturerStudents() {
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {student.course_codes.map((code) => (
-                    <Badge key={code} variant="outline" className="text-xs">
+                    <Badge
+                      key={code}
+                      variant="outline"
+                      className="rounded-full px-2.5 py-0.5 text-xs font-medium"
+                    >
                       {code}
                     </Badge>
                   ))}
@@ -158,7 +162,8 @@ export default function LecturerStudents() {
             <div className="mt-4 flex justify-center">
               <Button
                 onClick={() => setPage((prev) => prev + 1)}
-                className="h-10"
+                variant="outline"
+                className="h-9 px-4 rounded-full"
               >
                 Show more
               </Button>
