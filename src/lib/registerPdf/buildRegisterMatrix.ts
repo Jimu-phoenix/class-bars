@@ -5,6 +5,25 @@ export const REGISTER_MAX_SESSIONS = 8
 
 export type RegisterCell = "p" | "a" | "f"
 
+// Visual style for each register cell, used by the PDF renderer.
+// shape "rect": filled rectangle, height = cell height, width = widthRatio * cell width.
+// shape "leftBorder": colored left border the full cell height.
+export type CellStyle = {
+  color: string
+  shape: "rect" | "leftBorder"
+  widthRatio?: number
+}
+
+export const CELL_STYLES: Record<RegisterCell, CellStyle> = {
+  p: { color: "#22c55e", shape: "rect", widthRatio: 0.2 },   // green
+  a: { color: "#ef4444", shape: "rect", widthRatio: 0.2 },   // red
+  f: { color: "#eab308", shape: "rect", widthRatio: 0.2 },   // yellow
+}
+
+export function cellStyleFor(cell: RegisterCell): CellStyle {
+  return CELL_STYLES[cell]
+}
+
 export type RegisterSession = {
   id: string
   scheduledStart: string

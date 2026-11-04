@@ -5,6 +5,7 @@ import type {
   RegisterMatrix,
   RegisterSession,
 } from "./buildRegisterMatrix"
+import { cellStyleFor, type RegisterCell } from "./buildRegisterMatrix"
 import { buildVerifyUrl } from "./pdfCode.ts"
 
 export type RegisterPdfMeta = {
@@ -87,6 +88,12 @@ function formatDateTime(date: Date): string {
   return `${pad(date.getDate())} ${SHORT_MONTHS[date.getMonth()]} ${date.getFullYear()}, ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace(/^#/, "")
+  const bigint = parseInt(h, 16)
+  return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255]
+}
+
 function sessionHeadings(sessions: RegisterSession[]): string[] {
   const dates = sessions.map((session) => formatDate(session.scheduledStart))
   const counts = new Map<string, number>()
@@ -158,10 +165,10 @@ export async function createRegisterPdf(
 
     doc.setFont("helvetica", "normal")
     doc.setFontSize(CODE_SIZE)
-    doc.text(verificationCode, margin, margin + QR_SIZE + QR_TO_CODE)
+    doc.text(verificationCode, margin+3, margin+2 + QR_SIZE + QR_TO_CODE)
 
     doc.setFontSize(CAPTION_SIZE)
-    doc.text("Scan to verify", margin, margin + QR_SIZE + QR_TO_CODE + CODE_SIZE + CODE_TO_CAPTION)
+    doc.text("Scan to verify", margin+3, margin-3 + QR_SIZE + QR_TO_CODE + CODE_SIZE + CODE_TO_CAPTION)
   }
 
   // ------------------------------------------------------------------
@@ -175,7 +182,7 @@ export async function createRegisterPdf(
   doc.setFontSize(15)
   const title = `${meta.courseCode} — ${meta.courseName}`
   const titleLines = doc.splitTextToSize(title, headerMaxWidth)
-  doc.text(titleLines, headerX, margin + 6)
+  doc.text(titleLines, headerX, margin + 12)
 
   let metaY = margin + 10 + titleLines.length * 17
   doc.setFont("helvetica", "normal")
@@ -269,6 +276,23 @@ export async function createRegisterPdf(
       fillColor: [255, 255, 255],
     },
     columnStyles,
+    didDrawCell: (data) => {
+      const { cell, doc, section } = data
+      if (section !== "body") return
+      // Session columns start at index 3 (after #, name, reg no.)
+      if (data.column.index < 3) return
+      const value = cell.raw as RegisterCell | undefined
+      if (value !== "p" && value !== "a" && value !== "f") return
+      const style = cellStyleFor(value)
+      const borderWidth = 0.5 // matches autoTable lineWidth
+      const rectWidth = cell.width * 0.15
+      const x = cell.x + borderWidth
+      const y = cell.y + borderWidth
+      const h = cell.height - borderWidth * 2
+      const [r, g, b] = hexToRgb(style.color)
+      doc.setFillColor(r, g, b)
+      doc.rect(x, y, rectWidth, h, "F")
+    },
   })
 
   const pageCount = doc.getNumberOfPages()
