@@ -45,10 +45,12 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "sharp": "^0.34.5",
     "tw-animate-css": "^1.4.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
-    "vite": "^8.0.12"
+    "vite": "^8.0.12",
+    "vite-plugin-pwa": "^2.0.0"
   },
   "description": "**Class-BARS (Biometric Attendance Recording System)** is a web application for recording student class attendance using facial recognition. Lecturers start a session for a course/venue; enrolled students check in by looking at their camera — a face embedding is matched against the student's stored template and attendance is recorded. Check-in also verifies the student is near the session venue using a PostGIS geofence (a circle or a four-corner class box); only the gap from the fence and reported GPS accuracy are stored, never raw coordinates. OTP fallback is still deferred.",
   "main": "eslint.config.js",

@@ -544,4 +544,35 @@ PROGRESS.md                                     # UPDATED — decisions log, sec
 
 ---
 
+### 3.11 PWA (vite-plugin-pwa)
+
+**What is cached:**
+- App shell: `index.html`, all built JS/CSS chunks, fonts, manifest, and PWA icons (192, 512, maskable 512) — precached by `generateSW`
+- Face-api model weights under `/models/` — runtime `CacheFirst`, cache name `face-models-v1`, no expiration (bump cache name if models change)
+
+**What is never cached:**
+- All `*.supabase.co` requests (REST, RPC, auth, realtime, storage) — `NetworkOnly`, user-specific and short-lived
+- No background sync, no offline queue, no offline check-in
+
+**Update flow:**
+- `registerType: 'prompt'` — a new service worker is waiting; `PwaUpdatePrompt` shows a non-blocking "A new version is available" banner with "Update" (calls `updateServiceWorker(true)`, which reloads the page) and "Later" buttons
+- `devOptions.enabled: false` — no SW during `npm run dev`
+- `maximumFileSizeToCacheInBytes: 6MB` — face-api bundle is not excluded from precache
+
+**Install:**
+- `InstallPrompt` captures `beforeinstallprompt` on Android/Chrome and shows an "Install app" pill button; on iOS Safari (UA detection, not standalone) shows "Tap Share, then Add to Home Screen"; hidden when already installed (`display-mode: standalone`)
+- `OfflineBanner` shows "You're offline. Check-in needs an internet connection." when `navigator.onLine` is false — informational only, nothing disabled or queued
+
+**Vercel (`vercel.json`):**
+- SPA rewrite excludes `/sw.js`, `/manifest.webmanifest`, `/models/*`, `/assets/*`, icon files, and `/favicon.svg` (served as real files)
+- `/sw.js`: `Cache-Control: no-cache, no-store, must-revalidate`, `Service-Worker-Allowed: /`
+- `/manifest.webmanifest`: `Cache-Control: public, max-age=86400`, `Content-Type: application/manifest+json`
+
+**Known limitations:**
+- Service worker caches static assets only — returning user gets the app shell offline but cannot check in
+- iOS install is manual (Share → Add to Home Screen)
+- Camera and location permissions in standalone mode must be tested on real Android and iOS devices
+
+---
+
 ## 6. Known issues / follow-ups
