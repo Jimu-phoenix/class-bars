@@ -168,6 +168,8 @@ export default function StudentHome() {
 
   const [consentProfile, setConsentProfile] = useState<{ consent_given_at: string | null; consent_version: string | null } | null>(null)
   const [consentLoading, setConsentLoading] = useState(true)
+  const [studentNumber, setStudentNumber] = useState<string | null>(null)
+  const [profileLoaded, setProfileLoaded] = useState(false)
 
   const [checkLocOpen, setCheckLocOpen] = useState(false)
   const [checkLocSession, setCheckLocSession] = useState<LiveSessionListItem | null>(null)
@@ -242,10 +244,12 @@ export default function StudentHome() {
     if (!user) return
     const { data } = await supabase
       .from("profiles")
-      .select("full_name")
+      .select("full_name, student_number")
       .eq("id", user.id)
       .single()
     setFullName(data?.full_name ?? (user.user_metadata?.full_name as string | undefined) ?? "")
+    setStudentNumber(data?.student_number ?? null)
+    setProfileLoaded(true)
   }, [user])
 
   const loadConsent = useCallback(async () => {
@@ -668,6 +672,28 @@ export default function StudentHome() {
             </Link>
           </div>
         </div>
+      )}
+
+      {!profileLoaded ? null : (
+        !studentNumber || studentNumber.trim() === "" ? (
+          <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 sm:p-4">
+            <AlertCircle className="size-5 shrink-0 text-amber-600" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-400">
+                Add registration number in profile
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Set your registration number once from your profile — it cannot
+                be changed later.
+              </p>
+            </div>
+            <Link to="/student/profile" className="shrink-0">
+              <Button size="sm" variant="outline">
+                Add now
+              </Button>
+            </Link>
+          </div>
+        ) : null
       )}
 
       {(embedding.status === "missing" || embedding.status === "stale") && (

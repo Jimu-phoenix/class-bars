@@ -529,3 +529,19 @@ PROGRESS.md                                     # UPDATED — decisions log, sec
 **The captcha 400 error is a Supabase server-side config issue, not a client code issue.** Supabase is rejecting `signInWithOtp` without a captcha token, meaning captcha is enforced at the project level despite the dashboard toggle appearing disabled. To fix, disable captcha at Supabase Dashboard → Authentication → Settings → Captcha (and any provider-specific captcha toggles), then restart the project. No client-side code change can bypass a server-side captcha requirement without a valid token.
 
 ---
+
+### 3.10 Student registration number lock (migration 40)
+
+- `migrations/40_student_number_lock_backup.sql` — snapshot of `public.profiles` before the lock is added.
+- `migrations/40_student_number_lock.sql` — `public.profiles_guard_student_number()` BEFORE UPDATE trigger function + `trg_protect_profiles_student_number` trigger on `public.profiles`, plus `public.update_my_profile(p_full_name, p_phone_number, p_student_number)` SECURITY DEFINER RPC.
+  - **Trigger:** locks `student_number` once it holds a value — if `OLD.student_number` is non-blank and `NEW.student_number` differs, raises `Registration number is locked`. Only enforced when `auth.uid()` IS NOT NULL; service-role and SQL-editor sessions (`auth.uid()` is null) may correct a mistaken value (administrator route). Normalises new values (btrim + upper), rejects empty-after-trim and values > 30 chars.
+  - **RPC `update_my_profile`:** SECURITY DEFINER, `search_path = public`, EXECUTE granted to `authenticated` only. Operates only on `auth.uid()`'s own row. Validates `full_name` (trimmed, 2–100 chars) and `phone_number` (trimmed, empty→NULL, otherwise 7–20 chars from digits/spaces/+/-). Updates full_name and phone_number always. Sets `student_number` only when the existing value is NULL/blank AND a non-blank value is passed (normalised as above); if a value already exists and a different one is passed, raises `Registration number is locked`; same value ignored. Student role only for `student_number`; other roles ignore it. Maps `unique_violation` to `This registration number is already registered`. Writes `audit_logs` rows: `profile_updated` (changed field names only, no values) and `student_number_set` (one time). Returns the updated profile row.
+- `migrations/40_student_number_lock_rollback.sql` — drops the trigger, function and RPC.
+- `src/components/dashboard/ProfileSettings.tsx` — uses `update_my_profile` RPC instead of direct `profiles.update()`. Registration number editable (with confirm dialog "Save registration number? — you will not be able to change this later") when empty; read-only with note once set. Name and phone always editable. Inline errors for validation, locked and duplicate messages. Reloads after success.
+- `src/pages/StudentHome.tsx` — dashboard banner "Add registration number in profile" (amber-styled, same as the consent banner), shown after the consent banner and only for students whose `student_number` is NULL/blank once the profile has loaded (no flash while loading). Points to `/student/profile`. Informational only — does not block any feature.
+- Depends on migration 38 (`public.write_audit_log()` must exist).
+- **NOT applied to the database** — run backup → main → tests on a Supabase branch/staging project first.
+
+---
+
+## 6. Known issues / follow-ups
