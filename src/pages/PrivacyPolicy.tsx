@@ -10,8 +10,9 @@ const sections = [
       <ul className="list-disc list-inside space-y-2 mt-4">
         <li><strong>Account Information:</strong> Email address, name, and role (lecturer/student) for authentication and authorization.</li>
         <li><strong>Face Embeddings:</strong> A 128-dimensional numerical vector (face descriptor) derived from facial landmarks. This is a mathematical representation, not an image.</li>
+        <li><strong>Location:</strong> Only your distance to a class venue and device accuracy are stored. No Longitude or Latitude data is stored</li>
         <li><strong>Attendance Records:</strong> Timestamp, session ID, course ID, and verification method when you check in.</li>
-        <li><strong>Device Information:</strong> Browser fingerprint and device ID for fraud prevention (optional, opt-in).</li>
+        <li><strong>Device Information:</strong> Browser fingerprint for fraud prevention</li>
       </ul>
     `,
   },
@@ -22,7 +23,6 @@ const sections = [
       <p className="text-lg font-medium mb-4">Your biometric data is handled with the highest security standards:</p>
       <ul className="list-disc list-inside space-y-3">
         <li><strong>No Images Stored:</strong> We never store, transmit, or process raw face images or photos. Only the 128-dimensional face descriptor (embedding) is stored.</li>
-        <li><strong>Encrypted at Rest:</strong> All face embeddings are encrypted in the database using AES-256 encryption. Database backups are also encrypted.</li>
         <li><strong>Encrypted in Transit:</strong> All data transmission uses TLS 1.3 encryption.</li>
         <li><strong>Self-Sovereign Templates:</strong> Each user owns their face template. You can delete your face embedding at any time from your profile settings.</li>
         <li><strong>Local Processing:</strong> Face detection and descriptor generation happen entirely in your browser using face-api.js. Raw camera frames never leave your device.</li>
@@ -35,8 +35,7 @@ const sections = [
     content: `
       <ul className="list-disc list-inside space-y-2">
         <li>Face embeddings are retained until you delete them or your account is deleted.</li>
-        <li>Attendance records are retained for 7 years for institutional compliance, then anonymized.</li>
-        <li>Account data is deleted within 30 days of account deletion request.</li>
+        <li>Account data is deleted immediately after account deletion request.</li>
         <li>You can request full data export or deletion at any time via your profile settings.</li>
       </ul>
     `,
@@ -60,7 +59,6 @@ const sections = [
       <ul className="list-disc list-inside space-y-2">
         <li>Row-Level Security (RLS) policies enforce data isolation at the database level.</li>
         <li>All API endpoints require authentication; sensitive operations use SECURITY DEFINER functions.</li>
-        <li>Rate limiting on authentication endpoints prevents brute-force attacks.</li>
         <li>Content Security Policy (CSP) headers restrict resource loading.</li>
         <li>Regular security audits and dependency scanning.</li>
       </ul>
@@ -70,7 +68,7 @@ const sections = [
     id: "rights",
     title: "Your Rights",
     content: `
-      <p>Under GDPR and similar regulations, you have the right to:</p>
+      <p>Under GDPR and Malawi DPA Act of 2024, you have the right to:</p>
       <ul className="list-disc list-inside space-y-2 mt-4">
         <li>Access your personal data</li>
         <li>Rectify inaccurate data</li>
@@ -79,7 +77,7 @@ const sections = [
         <li>Data portability</li>
         <li>Object to processing</li>
       </ul>
-      <p className="mt-4">Exercise these rights via your profile settings or contact us at privacy@class-bars.example.com.</p>
+      <p className="mt-4">Exercise these rights via your profile settings or contact us at bis22-pjimu@mubas.ac.mw.</p>
     `,
   },
 ]
@@ -93,7 +91,7 @@ export default function PrivacyPolicy() {
           <header className="mb-12 md:mb-16 text-center">
             <h1 className="heading-1 font-heading tracking-tighter">Privacy Policy</h1>
             <p className="mt-4 body-lg muted-text max-w-2xl mx-auto">
-              Last updated: September 2026. This policy explains how Class-BARS collects, uses, and protects your data.
+              Last updated: November 2026. This policy explains how Class-BARS collects, uses, and protects your data.
             </p>
           </header>
 
@@ -115,9 +113,9 @@ export default function PrivacyPolicy() {
           <div className="mt-16 p-6 rounded-xl border border-border bg-muted/50 text-center">
             <h3 className="font-heading text-lg font-semibold">Questions?</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              Contact our Data Protection Officer at
-              <a href="mailto:privacy@class-bars.example.com" className="underline hover:text-primary">
-                privacy@class-bars.example.com
+              {"Contact the developer and researcher at "}
+              <a href="mailto:bis22-pjimu@mubas.ac.mw" className="underline hover:text-primary">
+                {"bis22-pjimu@mubas.ac.mw"}
               </a>
             </p>
           </div>

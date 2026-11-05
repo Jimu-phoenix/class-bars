@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Home, ScanFace } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import CaptchaGate from "@/components/CaptchaGate"
 import { useCaptcha } from "@/hooks/useCaptcha"
+
+const inputClass =
+  "w-full h-11 rounded-2xl border border-input bg-muted/40 px-4 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
 
 export default function Login() {
   const { signIn } = useAuth()
@@ -57,88 +59,97 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden bg-background">
-      <main className="flex-1 relative z-10">
-        <div className="fixed inset-0 -z-10 pointer-events-none" aria-hidden="true">
-          <div className="absolute inset-0 hero-gradient opacity-5" />
-          <div className="absolute inset-0 opacity-20 grid-bg-primary" />
-          <div className="absolute inset-0 opacity-10 grid-bg-secondary animate-grid-move" />
-        </div>
+    <div className="flex min-h-dvh flex-col bg-background">
+      <main className="flex flex-1 items-center justify-center px-3 py-8 sm:px-4 sm:py-16">
+        <div className="w-full max-w-md">
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <button
+              onClick={handleBack}
+              className="inline-flex h-9 items-center gap-2 rounded-full px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="size-4" aria-hidden="true" />
+              Back
+            </button>
+            <Link
+              to="/"
+              className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              <Home className="size-4" aria-hidden="true" />
+              Back to home
+            </Link>
+          </div>
 
-        <div className="relative py-16 md:py-24 lg:py-32 px-4 md:px-6 lg:px-8">
-          <div className="container-narrow">
-            <div className="max-w-md mx-auto">
-              <button
-                onClick={handleBack}
-                className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Go back"
-              >
-                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                Back
-              </button>
-
-              <Card className="hairline-border bg-card/80 backdrop-blur-sm">
-                <CardHeader className="text-center pb-6">
-                  <CardTitle className="heading-3">Sign in</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <form onSubmit={handleSubmit} className="space-y-5">
-                    {error && (
-                      <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                        {error}
-                      </p>
-                    )}
-                    <div className="space-y-1.5">
-                      <label htmlFor="email" className="text-sm font-medium">
-                        Email
-                      </label>
-                      <input
-                        id="email"
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full input-radius border border-input bg-background px-3 py-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 transition-colors"
-                        placeholder="you@example.com"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label htmlFor="password" className="text-sm font-medium">
-                        Password
-                      </label>
-                      <input
-                        id="password"
-                        type="password"
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full input-radius border border-input bg-background px-3 py-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 transition-colors"
-                        placeholder="••••••••"
-                      />
-                    </div>
-                    <CaptchaGate
-                      ref={captchaRef}
-                      onVerify={onVerify}
-                      onExpire={onExpire}
-                      onError={onError}
-                    />
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={submitting || !captchaReady}
-                    >
-                      {submitting ? "Signing in…" : "Sign in"}
-                    </Button>
-                    <p className="text-center text-sm muted-text">
-                      Don&apos;t have an account?{" "}
-                      <Link to="/signup" className="text-primary hover:underline font-medium">
-                        Sign up
-                      </Link>
-                    </p>
-                  </form>
-                </CardContent>
-              </Card>
+          <div className="rounded-3xl border border-border/60 bg-card p-5 sm:p-8">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <span className="flex size-14 items-center justify-center rounded-2xl bg-muted text-foreground">
+                <ScanFace className="size-7" strokeWidth={1.5} aria-hidden="true" />
+              </span>
+              <h1 className="font-heading text-2xl font-medium tracking-tight">Sign in</h1>
+              <p className="text-sm text-muted-foreground">Welcome back to Class-BARS.</p>
             </div>
+
+            <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+              {error && (
+                <p
+                  role="alert"
+                  className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                >
+                  {error}
+                </p>
+              )}
+              <div className="space-y-1.5">
+                <label htmlFor="email" className="text-sm font-medium">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputClass}
+                  placeholder="you@example.com"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="password" className="text-sm font-medium">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={inputClass}
+                  placeholder="••••••••"
+                />
+              </div>
+              <div className="flex justify-center overflow-x-auto">
+                <CaptchaGate
+                  ref={captchaRef}
+                  onVerify={onVerify}
+                  onExpire={onExpire}
+                  onError={onError}
+                />
+              </div>
+              <Button
+                type="submit"
+                className="h-11 w-full rounded-full bg-foreground text-sm font-medium text-background hover:bg-foreground/85"
+                disabled={submitting || !captchaReady}
+              >
+                {submitting ? "Signing in…" : "Sign in"}
+              </Button>
+              <p className="text-center text-sm muted-text">
+                Don&apos;t have an account?{" "}
+                <Link to="/signup" className="font-medium text-foreground underline underline-offset-4 hover:text-foreground/80">
+                  Sign up
+                </Link>
+              </p>
+            </form>
           </div>
         </div>
       </main>

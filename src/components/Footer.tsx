@@ -14,9 +14,7 @@ const productLinks = [
 ]
 
 const legalLinks = [
-  { label: "Privacy Policy", to: "/privacy" },
-  { label: "Terms of Service", to: "/terms" },
-  { label: "Cookie Policy", to: "/cookies" },
+  { label: "Privacy Policy", to: "/privacy" }
 ]
 
 export default function Footer() {
@@ -88,7 +86,7 @@ export default function Footer() {
           </p>
           <div className="flex items-center gap-6">
             <a
-              href="https://github.com"
+              href="https://github.com/Jimu-phoenix"
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-muted-foreground transition-colors hover:text-foreground"
@@ -97,13 +95,13 @@ export default function Footer() {
               GitHub
             </a>
             <a
-              href="https://twitter.com"
+              href="https://www.instagram.com/phoenix_visi0n/"
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-              aria-label="Twitter"
+              aria-label="Instagram"
             >
-              Twitter
+              Instagram
             </a>
           </div>
         </div>

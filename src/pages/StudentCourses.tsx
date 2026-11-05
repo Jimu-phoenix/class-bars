@@ -253,15 +253,15 @@ export default function StudentCourses() {
           if (!open && busyCourseCode === null) setPending(null)
         }}
       >
-        <DialogContent className="max-h-[90dvh] overflow-y-auto p-0 sm:p-0">
-          <DialogHeader className="pb-4">
+        <DialogContent className="max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
             <DialogTitle>Enroll in this course?</DialogTitle>
             <DialogDescription>
               {pending ? `${pending.course_code} — ${pending.course_name}` : ""}. Live sessions for
               it will appear on your Home screen.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="p-4">
+          <DialogFooter className="pt-4 pb-4">
             <Button
               variant="outline"
               className="h-9 px-4 rounded-full shrink-0"
