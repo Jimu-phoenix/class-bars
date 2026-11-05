@@ -1,28 +1,5 @@
--- =====================================================================
 -- Class-BARS Migration 32: validate stored face descriptors
---
--- Adds immutable validation helpers and NOT VALID CHECK constraints for
--- real and sandbox face templates. Existing rows are NOT scanned by this
--- migration; run the preflight report, clean invalid rows, then run the
--- validate script.
---
--- Run order:
---   1. 32_face_descriptor_validation_backup.sql
---   2. 32_face_descriptor_validation.sql (this file)
---   3. 32_face_descriptor_validation_preflight.sql
---   4. clean invalid rows (manual review)
---   5. 32_face_descriptor_validation_validate.sql
---   6. 32_face_descriptor_validation_rollback.sql only if needed
---
--- Apply to a Supabase branch/staging project first. Do not run this
--- against production until the preflight output has been reviewed.
--- =====================================================================
 
--- ---------------------------------------------------------------------
--- Validate a jsonb descriptor: exactly 128 finite JSON numbers, non-zero
--- norm. jsonb numbers cannot be NaN/Infinity, so jsonb_typeof = 'number'
--- plus a numeric sum is sufficient.
--- ---------------------------------------------------------------------
 create or replace function public.is_valid_face_descriptor(
   p_descriptor jsonb
 ) returns boolean
@@ -60,10 +37,6 @@ $$;
 comment on function public.is_valid_face_descriptor(jsonb) is
   'True for a 128-element JSON number array with a non-zero norm.';
 
--- ---------------------------------------------------------------------
--- Safe text wrapper for columns that may be text or jsonb. Invalid JSON
--- returns false instead of raising.
--- ---------------------------------------------------------------------
 create or replace function public.is_valid_face_descriptor_text(
   p_descriptor text
 ) returns boolean
@@ -93,9 +66,6 @@ $$;
 comment on function public.is_valid_face_descriptor_text(text) is
   'Safe text/jsonb descriptor validator; malformed JSON returns false.';
 
--- ---------------------------------------------------------------------
--- Real face templates. NOT VALID means existing rows are not scanned.
--- ---------------------------------------------------------------------
 do $$
 begin
   if not exists (
@@ -112,10 +82,6 @@ begin
 end
 $$;
 
--- ---------------------------------------------------------------------
--- Sandbox templates. Both columns are text, so use the safe wrapper.
--- sandbox_checkins.embedding is nullable by design.
--- ---------------------------------------------------------------------
 do $$
 begin
   if not exists (

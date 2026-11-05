@@ -1,18 +1,4 @@
--- =====================================================================
 -- Class-BARS Migration 34: recorded consent + self-service account deletion (students only)
---
--- Adds consent recording on profiles and a delete-my-account RPC.
--- Everything runs inside a transaction with lock/statement timeouts.
---
--- Run order:
---   1. 38_audit_log_actor_and_events.sql   (must be applied first: provides
---      public.write_audit_log(), used below for all audit writes)
---   2. 34_consent_and_account_deletion_backup.sql
---   3. 34_consent_and_account_deletion.sql (this file)
---   4. 34_consent_and_account_deletion_rollback.sql only if needed
---
--- Apply to a Supabase branch/staging project first.
--- =====================================================================
 
 begin;
 
@@ -20,10 +6,6 @@ set local lock_timeout = '5s';
 set local statement_timeout = '30s';
 set local search_path = public, pg_temp;
 
--- ---------------------------------------------------------------------
--- 1. Consent columns on profiles.
--- consent_given_at NULL = not recorded. consent_version NULL = not recorded.
--- ---------------------------------------------------------------------
 alter table public.profiles
   add column if not exists consent_given_at timestamptz,
   add column if not exists consent_version text;
@@ -33,15 +15,6 @@ comment on column public.profiles.consent_given_at is
 comment on column public.profiles.consent_version is
   'Consent version string (YYYY-MM-vN). NULL means consent has not been recorded.';
 
--- ---------------------------------------------------------------------
--- 2. Block direct client updates/inserts to consent columns.
--- BEFORE INSERT OR UPDATE trigger:
---   INSERT: reject when NEW.consent_given_at or NEW.consent_version is not null
---   UPDATE: reject when either differs from OLD
--- Only applies when current_user is 'authenticated' or 'anon' (a direct
--- client call). SECURITY DEFINER RPCs run as the owner so current_user is
--- not 'authenticated'/'anon' and the trigger passes.
--- ---------------------------------------------------------------------
 create or replace function public.protect_profiles_consent()
 returns trigger
 language plpgsql
@@ -71,12 +44,6 @@ create trigger trg_protect_profiles_consent
   for each row
   execute function public.protect_profiles_consent();
 
--- ---------------------------------------------------------------------
--- 3. record_consent(p_version) RPC.
--- Students only. Fixed search_path. Validates version format.
--- Idempotent: same version keeps original timestamp; new version updates both.
--- Writes an audit_logs row.
--- ---------------------------------------------------------------------
 create or replace function public.record_consent(p_version text)
 returns void
 language plpgsql
@@ -116,7 +83,6 @@ begin
   where id = auth.uid();
 
   if v_existing is not null and v_existing_version = p_version then
-    -- Idempotent: same version, keep original timestamp.
     return;
   end if;
 
@@ -138,21 +104,6 @@ $$;
 revoke all on function public.record_consent(text) from public, anon;
 grant execute on function public.record_consent(text) to authenticated;
 
--- ---------------------------------------------------------------------
--- 4. delete_my_account() RPC.
--- Students only. ONE transaction. Fixed search_path. Derives user from
--- auth.uid(); takes no user id argument.
---
--- Order:
---   1. Delete personal rows: face_embeddings, enrollments, otp_codes.
---   2. Anonymise attendance_records: NULL all personal/derived columns.
---   3. Unlink audit_logs: ip_address, user_agent, user_id (one update);
---      entity_id = null where entity_id = v_uid;
---      metadata = '{}' where metadata contains v_uid.
---   4. Insert account.deleted audit row (no personal data).
---   5. Delete profiles row.
---   6. Delete auth.users row.
--- ---------------------------------------------------------------------
 create or replace function public.delete_my_account()
 returns void
 language plpgsql
@@ -179,12 +130,10 @@ begin
     raise exception 'Only students can delete their account';
   end if;
 
-  -- 1. Delete personal rows (no FKs, no cascades -- explicit deletes).
   delete from public.face_embeddings where user_id = v_uid;
   delete from public.enrollments where student_id = v_uid;
   delete from public.otp_codes where user_id = v_uid;
 
-  -- 2. Anonymise attendance records (keep for class statistics).
   update public.attendance_records
   set student_id = null,
       confidence_score = null,
@@ -197,24 +146,20 @@ begin
       match_config_version = null
   where student_id = v_uid;
 
-  -- 3. Unlink audit logs: ip_address, user_agent, user_id in ONE update.
   update public.audit_logs
   set ip_address = null,
       user_agent = null,
       user_id = null
   where user_id = v_uid;
 
-  -- Null entity_id where it references the deleted user.
   update public.audit_logs
   set entity_id = null
   where entity_id = v_uid;
 
-  -- Redact metadata containing the deleted user id.
   update public.audit_logs
   set metadata = '{}'::jsonb
   where metadata::text like '%' || v_uid::text || '%';
 
-  -- 4. Insert account.deleted audit row (no personal data of any kind).
   perform public.write_audit_log(
     'account.deleted',
     'profiles',
@@ -223,11 +168,9 @@ begin
     null
   );
 
-  -- 5. Delete profile row.
   delete from public.profiles
   where id = v_uid;
 
-  -- 6. Delete auth user so sign-in is gone and sessions end.
   delete from auth.users
   where id = v_uid;
 end;
@@ -236,17 +179,9 @@ $$;
 revoke all on function public.delete_my_account() from public, anon;
 grant execute on function public.delete_my_account() to authenticated;
 
--- ---------------------------------------------------------------------
--- 5. Make attendance_records.student_id nullable for anonymisation.
--- (Safe if already nullable; confirm via information_schema.)
--- ---------------------------------------------------------------------
 alter table public.attendance_records
   alter column student_id drop not null;
 
--- ---------------------------------------------------------------------
--- 6. Consent enforcement on face enrolment (upsert_face_embedding).
--- Rejects when profiles.consent_given_at IS NULL with 'consent_required'.
--- ---------------------------------------------------------------------
 create or replace function public.upsert_face_embedding(
   p_embedding jsonb,
   p_model_version text
@@ -305,11 +240,6 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------------
--- 7. Consent enforcement on face check-in (_check_in_attendance).
--- When p_method = 'face' and consent_given_at IS NULL, raise 'consent_required'.
--- OTP/manual (p_method <> 'face') never require consent.
--- ---------------------------------------------------------------------
 create or replace function public._check_in_attendance(
   p_session_id     uuid,
   p_student_id     uuid,
@@ -352,12 +282,10 @@ begin
     raise exception 'invalid_method';
   end if;
 
-  -- a caller may only ever check in as themselves
   if p_student_id is distinct from auth.uid() then
     raise exception 'Cannot check in on behalf of another student';
   end if;
 
-  -- Consent required for face check-in only.
   if p_method = 'face' then
     select consent_given_at into v_consent
     from public.profiles
@@ -368,7 +296,6 @@ begin
     end if;
   end if;
 
-  -- Location validation
   if p_latitude is null
      or p_longitude is null
      or p_accuracy_m is null

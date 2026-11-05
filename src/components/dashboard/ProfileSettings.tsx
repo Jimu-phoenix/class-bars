@@ -51,8 +51,6 @@ export default function ProfileSettings() {
   const [role, setRole] = useState<ProfileRow["role"] | null>(null)
   const [studentNumber, setStudentNumber] = useState("")
   const [phoneNumber, setPhoneNumber] = useState("")
-  // The registration number as loaded from the database. Determines whether
-  // the field is editable (empty on load) or read-only (already set on load).
   const [loadedStudentNumber, setLoadedStudentNumber] = useState("")
   // Whether the user is about to set a (new) registration number.
   const [pendingStudentNumber, setPendingStudentNumber] = useState<string | null>(null)
@@ -110,8 +108,6 @@ export default function ProfileSettings() {
       const fullNameValue = fullName.trim()
       const phoneValue = phoneNumber.trim() || null
 
-      // Only send student_number when setting it for the first time. Never
-      // send it when it is already set — the RPC treats it as locked.
       let studentNumberValue: string | null = null
       if (role === "student" && loadedStudentNumber === "") {
         const trimmed = pendingStudentNumber?.trim() ?? ""
@@ -125,11 +121,8 @@ export default function ProfileSettings() {
       })
       if (rpcError) throw rpcError
 
-      // Clear the pending value after a successful save.
       setPendingStudentNumber(null)
       setSuccess(true)
-      // Reload so loadedStudentNumber reflects the saved value and the
-      // field becomes read-only if a registration number was just set.
       void loadProfileFromDb()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update profile")
@@ -140,9 +133,6 @@ export default function ProfileSettings() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    // If a registration number is being set for the first time, require
-    // confirmation before saving anything. The confirm dialog's Save button
-    // then performs the actual save.
     if (
       role === "student" &&
       loadedStudentNumber === "" &&
@@ -293,7 +283,6 @@ export default function ProfileSettings() {
         )}
       </div>
 
-      {/* Confirm dialog for setting the registration number (one-time). */}
       <Dialog open={confirmOpen} onOpenChange={handleCancel}>
         <DialogContent className="max-w-md">
           <DialogHeader>

@@ -1,4 +1,4 @@
--- Proper profiles RLS without recursion
+-- Class-BARS Migration 26: proper profiles RLS without recursion
 ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
@@ -12,8 +12,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- SECURITY DEFINER functions to avoid recursion
-CREATE OR REPLACE FUNCTION public.current_user_role()
+
 RETURNS user_role
 LANGUAGE sql
 STABLE

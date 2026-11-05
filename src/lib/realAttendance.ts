@@ -15,11 +15,6 @@ import type {
   FaceEmbeddingRow,
 } from "@/types/db"
 
-// ---------------------------------------------------------------------------
-// face_embeddings (self-owned under RLS; writes go through SECURITY DEFINER
-// RPCs -- see migrations/06_real_attendance_flow.sql)
-// ---------------------------------------------------------------------------
-
 export { FACE_MODEL_VERSION, faceConfidence, parseEmbedding }
 
 export async function getActiveFaceEmbedding(
@@ -54,10 +49,6 @@ export async function clearFaceEmbedding(): Promise<void> {
   if (error) throw error
 }
 
-// ---------------------------------------------------------------------------
-// enrollments
-// ---------------------------------------------------------------------------
-
 export async function enrollSelf(courseCode: string): Promise<EnrollmentRow> {
   const { data, error } = await supabase.rpc("enroll_self", {
     p_course_code: courseCode,
@@ -65,10 +56,6 @@ export async function enrollSelf(courseCode: string): Promise<EnrollmentRow> {
   if (error) throw error
   return data as EnrollmentRow
 }
-
-// ---------------------------------------------------------------------------
-// attendance
-// ---------------------------------------------------------------------------
 
 export type SessionAttendanceRow = {
   record_id: string

@@ -1,17 +1,4 @@
--- =====================================================================
 -- Class-BARS Migration 36: attendance history RPCs
---
--- Adds read-only history RPCs:
---   get_lecturer_sessions(p_course_id, p_limit, p_offset) -> lecturer's sessions
---   search_my_students(p_query, p_limit) -> students matching a query
---   get_student_history_for_lecturer(p_student_id, p_course_id) -> a student's results
---   get_my_history(p_course_id) -> the caller's own results for a course
---   get_student_header_for_lecturer(p_student_id) -> student header + enrolment check
---
--- All are STABLE SECURITY DEFINER with a fixed search_path, lecturer-only
--- (is_lecturer_user()), explicit ::text casts, revoked from public/anon and
--- granted to authenticated. Run on a Supabase branch/staging project first.
--- =====================================================================
 
 begin;
 
@@ -19,12 +6,6 @@ set local lock_timeout = '5s';
 set local statement_timeout = '30s';
 set local search_path = public, pg_temp;
 
--- ---------------------------------------------------------------------
--- 1. get_lecturer_sessions(p_course_id, p_limit, p_offset)
--- Returns the lecturer's sessions across all courses (or one course when
--- p_course_id is not null), newest first, with checked-in counts and a
--- stable total_count for pagination. Cancelled sessions are excluded.
--- ---------------------------------------------------------------------
 create or replace function public.get_lecturer_sessions(
   p_course_id uuid,
   p_limit int,
@@ -95,12 +76,6 @@ $$;
 revoke all on function public.get_lecturer_sessions(uuid, int, int) from public, anon;
 grant execute on function public.get_lecturer_sessions(uuid, int, int) to authenticated;
 
--- ---------------------------------------------------------------------
--- 2. search_my_students(p_query, p_limit)
--- Server-side student search for a lecturer: students enrolled in at least
--- one of the lecturer's courses, matched by full name or registration
--- number. Returns nothing for queries shorter than 2 characters.
--- ---------------------------------------------------------------------
 create or replace function public.search_my_students(
   p_query text,
   p_limit int
@@ -152,13 +127,6 @@ $$;
 revoke all on function public.search_my_students(text, int) from public, anon;
 grant execute on function public.search_my_students(text, int) to authenticated;
 
--- ---------------------------------------------------------------------
--- 3. list_my_students()
--- Returns every distinct student enrolled in at least one of the lecturer's
--- courses, with the distinct course codes (as text[]) of that lecturer's
--- courses the student is in. Hard cap LIMIT 1000. No email, no face data,
--- no other profile fields.
--- ---------------------------------------------------------------------
 create or replace function public.list_my_students() returns table (
   student_id        uuid,
   full_name         text,
@@ -201,17 +169,6 @@ $$;
 revoke all on function public.list_my_students() from public, anon;
 grant execute on function public.list_my_students() to authenticated;
 
--- ---------------------------------------------------------------------
--- 4. get_student_history_for_lecturer(p_student_id, p_course_id)
--- One row per non-cancelled session of a course, with result derivation:
---   record present  -> result = record status (present/late/flagged/absent)
---   completed, no record -> 'absent'
---   ongoing, no record   -> 'live'
---   scheduled, no record -> 'upcoming'
--- Sessions before the student's enrolment date are excluded unless a record
--- exists. The student must be enrolled in at least one of the lecturer's
--- courses (else 'Student not found in your courses').
--- ---------------------------------------------------------------------
 create or replace function public.get_student_history_for_lecturer(
   p_student_id uuid,
   p_course_id  uuid
@@ -294,13 +251,6 @@ $$;
 revoke all on function public.get_student_history_for_lecturer(uuid, uuid) from public, anon;
 grant execute on function public.get_student_history_for_lecturer(uuid, uuid) to authenticated;
 
--- ---------------------------------------------------------------------
--- 4. get_my_history(p_course_id)
--- The caller's own session results for one course. Same result derivation
--- as get_student_history_for_lecturer but no method column (students never
--- see methods). Raises 'You are not enrolled in this course' when the
--- caller has no enrolment for the course.
--- ---------------------------------------------------------------------
 create or replace function public.get_my_history(
   p_course_id uuid
 ) returns table (
@@ -360,13 +310,6 @@ $$;
 revoke all on function public.get_my_history(uuid) from public, anon;
 grant execute on function public.get_my_history(uuid) to authenticated;
 
--- ---------------------------------------------------------------------
--- 5. get_student_header_for_lecturer(p_student_id)
--- Returns the student's name + registration number only when the student is
--- enrolled in at least one of the lecturer's courses; otherwise raises
--- 'Student not found in your courses'. Used so a refresh or direct link to
--- /dashboard/students/:id resolves the header server-side.
--- ---------------------------------------------------------------------
 create or replace function public.get_student_header_for_lecturer(
   p_student_id uuid
 ) returns table (

@@ -1,16 +1,4 @@
--- Fix box geofence evaluation in check_in_attendance.
---
--- Migration 29 replaced the geography ST_Covers call with ST_Contains, but
--- PostGIS has no ST_Contains(geography, geography) overload, so any box
--- venue raised "function st_contains(geography, geography) does not exist".
--- The same edit also computed sqrt(st_area(geometry)) where the geometry is
--- EPSG:4326, yielding square degrees instead of square metres. This restores
--- the migration 12 behaviour (geography covers + geography area) and keeps
--- the 200 m usable-accuracy ceiling from migration 30.
---
--- Signature, ownership, SECURITY DEFINER, search_path, grants and the rest
--- of the decision table are unchanged.
-
+-- Class-BARS Migration 31: fix box geofence ST_Covers in check-in
 create or replace function public.check_in_attendance(
   p_session_id uuid,
   p_student_id uuid,

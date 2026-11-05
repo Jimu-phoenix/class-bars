@@ -9,10 +9,6 @@ import type {
   StudentHeaderRow,
 } from "@/types/db"
 
-// ---------------------------------------------------------------------------
-// Error mapping for the migration's stable messages.
-// ---------------------------------------------------------------------------
-
 const HISTORY_ERROR_MESSAGES: Record<string, string> = {
   "Student not found in your courses": "Student not found in your courses",
   "You are not enrolled in this course": "You are not enrolled in this course",
@@ -46,10 +42,6 @@ function mapHistoryError(error: unknown): HistoryError {
   }
   return new HistoryError("An unexpected error occurred.", "server_error")
 }
-
-// ---------------------------------------------------------------------------
-// RPC wrappers.
-// ---------------------------------------------------------------------------
 
 export async function getLecturerSessions({
   courseId,
@@ -154,10 +146,6 @@ export async function getStudentHeaderForLecturer({
   return rows[0]
 }
 
-// ---------------------------------------------------------------------------
-// Pure helpers.
-// ---------------------------------------------------------------------------
-
 const PRESENT_LIKE = new Set(["present", "late", "flagged"])
 
 export type HistorySummary = {
@@ -245,10 +233,6 @@ export function formatStartedAt(iso: string) {
     minute: "2-digit",
   })
 }
-
-// ---------------------------------------------------------------------------
-// Stale-response guard for debounced search.
-// ---------------------------------------------------------------------------
 
 export function makeRequestGuard() {
   let current = 0

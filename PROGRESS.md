@@ -575,4 +575,22 @@ PROGRESS.md                                     # UPDATED — decisions log, sec
 
 ---
 
+### 3.12 Comment minimization
+
+**Rules applied:**
+- Files with >7 total comment lines reduced to max 4
+- Migration headers converted to one-liners (`-- Class-BARS Migration NN: <title>`)
+- Migrations 12 and 33 kept intact (valuable business-rule / calibration comments)
+- Decorative separators (`-- ------`, `/* --- */`) removed entirely
+- Redundant JSDoc comments (restating self-naming functions) removed
+
+**~58 files edited:**
+- `src/` (8 files): `AdminDashboard.tsx` (15 decorative lines removed), `geofence.ts` (8 JSDoc removed, kept cross-layer MAX_ACCURACY_M note), `ProfileSettings.tsx` (12 lines removed, kept security constraint), `renderRegisterPdf.ts` (9 lines removed, kept QR layout), `history.ts` (12 separator lines removed), `faceCapture.ts` (5 lines removed, kept PROVISIONAL note), `realAttendance.ts` (7 separator lines removed), `rolePolicy.ts` (17 lines condensed to 2)
+- `migrations/` (37 files): All headers → one-liners, all separators removed, all section headers removed; only migrations 12 and 33 retain full comment blocks
+- Config: `vite.config.ts` (6 lines → 3), `index.html` (unchanged, already ≤3)
+
+**Verification:** `tsc -b` clean, ESLint clean, `vite build` clean.
+
+---
+
 ## 6. Known issues / follow-ups

@@ -1,43 +1,15 @@
--- =====================================================================
 -- Class-BARS Migration 06: real student/lecturer attendance flow
--- Applies on top of 05_sandbox_participants.sql
---
--- 1. face_embeddings: rename embedding_encrypted -> embedding_json
---    (plaintext descriptor array; the column is self-read only under RLS,
---    so a client-bundled encryption key would be security theater)
--- 2. enrollments: students may read their own enrollments (RLS was on
---    with zero policies, so the class_sessions "enrolled" subquery was
---    silently returning nothing for students)
--- 3. RPC upsert_face_embedding   -- deactivate previous active, insert new
--- 4. RPC clear_face_embedding    -- deactivate the active row
--- 5. RPC enroll_self             -- student enrolls by course code
--- 6. RPC get_session_attendance  -- lecturer roster joined to profiles
---    (lecturers may not read arbitrary profiles under RLS, so the join
---    must happen inside a SECURITY DEFINER function that first checks
---    the caller owns the session)
---
--- Re-runnable: replace functions and drop/recreate its policies.
--- =====================================================================
 
--- ---------------------------------------------------------------------
--- face_embeddings column rename
--- ---------------------------------------------------------------------
 alter table face_embeddings rename column embedding_encrypted to embedding_json;
 
 comment on column face_embeddings.embedding_json is
   'JSON array of the 128-d face descriptor. RLS exposes it only to the owner.';
 
--- ---------------------------------------------------------------------
--- enrollments: students view their own rows
--- ---------------------------------------------------------------------
 drop policy if exists "Students view own enrollments" on enrollments;
 create policy "Students view own enrollments"
   on enrollments for select
   using (student_id = auth.uid());
 
--- ---------------------------------------------------------------------
--- RPC: upsert the caller's active face embedding
--- ---------------------------------------------------------------------
 create or replace function public.upsert_face_embedding(
   p_embedding jsonb,
   p_model_version text
@@ -71,9 +43,6 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------------
--- RPC: deactivate the caller's active face embedding
--- ---------------------------------------------------------------------
 create or replace function public.clear_face_embedding()
 returns face_embeddings
 language plpgsql
@@ -93,9 +62,6 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------------
--- RPC: student self-enrolls into a course by course code
--- ---------------------------------------------------------------------
 create or replace function public.enroll_self(
   p_course_code text,
   p_academic_year text default '2025',
@@ -144,9 +110,6 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------------
--- RPC: lecturer roster for a session (attendance joined to profiles)
--- ---------------------------------------------------------------------
 create or replace function public.get_session_attendance(
   p_session_id uuid
 ) returns table (

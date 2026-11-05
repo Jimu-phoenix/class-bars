@@ -76,10 +76,6 @@ function formatLatLng(lat: number, lng: number): string {
   return `${Number(lat.toFixed(6))}, ${Number(lng.toFixed(6))}`
 }
 
-/* ---------------------------------------------------------------- */
-/* Home section                                                     */
-/* ---------------------------------------------------------------- */
-
 function AdminHome() {
   const [stats, setStats] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
@@ -128,10 +124,6 @@ function AdminHome() {
     </div>
   )
 }
-
-/* ---------------------------------------------------------------- */
-/* Venues section                                                   */
-/* ---------------------------------------------------------------- */
 
 function AdminVenues() {
   const [venues, setVenues] = useState<VenueRow[]>([])
@@ -957,10 +949,6 @@ function AdminVenues() {
   )
 }
 
-/* ---------------------------------------------------------------- */
-/* Users & Roles section                                            */
-/* ---------------------------------------------------------------- */
-
 function AdminUsers() {
   const [emails, setEmails] = useState<StaffEmailRow[]>([])
   const [newEmail, setNewEmail] = useState("")
@@ -1093,10 +1081,6 @@ function AdminUsers() {
     </Card>
   )
 }
-
-/* ---------------------------------------------------------------- */
-/* System Logs section                                              */
-/* ---------------------------------------------------------------- */
 
 function AdminLogs() {
   const PAGE_SIZE = 50
@@ -1258,10 +1242,6 @@ function AdminLogs() {
     </Card>
   )
 }
-
-/* ---------------------------------------------------------------- */
-/* AdminDashboard                                                   */
-/* ---------------------------------------------------------------- */
 
 export default function AdminDashboard() {
   const location = useLocation()

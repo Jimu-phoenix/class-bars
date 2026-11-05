@@ -1,12 +1,5 @@
--- =====================================================================
 -- Class-BARS Migration 36: rollback
---
--- Drops the five history RPCs added by migrations/36_history_rpcs.sql:
---   get_lecturer_sessions, search_my_students, get_student_history_for_lecturer,
---   get_my_history, get_student_header_for_lecturer.
---
--- No data is changed by this migration; no backup script is needed.
--- =====================================================================
+
 
 begin;
 

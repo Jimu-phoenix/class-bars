@@ -1,13 +1,5 @@
--- =====================================================================
 -- Class-BARS Migration 34: backup before consent + account deletion
---
--- Run this BEFORE 34_consent_and_account_deletion.sql. Backup tables live
--- in migration_backups and are not used by the app.
---
--- Hardening: transactional, fresh (drop+recreate) backup tables every run.
--- The profiles backup uses SELECT * so it does NOT reference consent
--- columns (they do not exist yet at backup time).
--- =====================================================================
+
 
 begin;
 

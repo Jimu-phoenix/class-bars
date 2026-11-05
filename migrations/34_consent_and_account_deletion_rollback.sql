@@ -1,23 +1,10 @@
--- =====================================================================
 -- Class-BARS Migration 34: rollback
---
--- Drops the consent trigger/function, record_consent, delete_my_account,
--- restores upsert_face_embedding and _check_in_attendance without the
--- consent check, and restores attendance_records.student_id NULLability
--- handling.
---
--- NOTE: consent columns on public.profiles are NOT dropped here. Account
--- deletion is irreversible and consent records must be preserved for
--- audit purposes. Drop them manually only if you are certain no data
--- needs to be retained.
--- =====================================================================
 
 begin;
 
 set lock_timeout = '5s';
 set statement_timeout = '30s';
 
--- Revoke execute on new functions before dropping.
 do $$
 begin
   if to_regprocedure('public.record_consent(text)') is not null then
@@ -37,16 +24,10 @@ $$;
 drop function if exists public.record_consent(text);
 drop function if exists public.delete_my_account();
 
--- Drop consent trigger and function.
 drop trigger if exists trg_protect_profiles_consent on public.profiles;
 drop function if exists public.protect_profiles_consent();
 
--- NOTE: consent columns are intentionally NOT dropped.
--- alter table public.profiles
---   drop column if exists consent_given_at,
---   drop column if exists consent_version;
 
--- Restore upsert_face_embedding without the consent check.
 create or replace function public.upsert_face_embedding(
   p_embedding jsonb,
   p_model_version text
@@ -96,7 +77,6 @@ begin
 end;
 $$;
 
--- Restore _check_in_attendance without the consent check.
 create or replace function public._check_in_attendance(
   p_session_id     uuid,
   p_student_id     uuid,

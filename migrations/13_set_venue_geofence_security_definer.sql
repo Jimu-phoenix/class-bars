@@ -1,15 +1,5 @@
--- =====================================================================
 -- Class-BARS Migration 13: Make set_venue_geofence SECURITY DEFINER
---
--- Fixes "Venue not found or not editable" when updating venues/geofences
--- from the admin UI. The restrictive RLS policies added in migration 12
--- combined with profiles RLS caused SECURITY INVOKER to be blocked by
--- policy checks. Making the function SECURITY DEFINER and enforcing
--- admin role explicitly avoids relying on profiles RLS inside policy
--- subqueries while still restricting access to admins.
---
--- Re-runnable (idempotent). Run in the SQL Editor as postgres.
--- =====================================================================
+
 
 drop function if exists public.set_venue_geofence(
   uuid, text, double precision, double precision, numeric, jsonb

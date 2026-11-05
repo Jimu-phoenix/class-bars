@@ -1,13 +1,5 @@
--- =====================================================================
 -- Class-BARS Migration 38: backup before audit-log actor + new events
---
--- Run this BEFORE 38_audit_log_actor_and_events.sql. Backup tables live
--- in the migration_backups schema and are not used by the app.
---
--- Snapshots public.audit_logs plus the exact definitions of every public
--- function this migration touches or replaces (write_audit_log is new, so
--- it is backed up only if it already exists from a previous run).
--- =====================================================================
+
 
 begin;
 
