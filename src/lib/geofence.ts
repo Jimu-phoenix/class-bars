@@ -10,7 +10,7 @@ export const SMALL_FENCE_NOTICE =
 
 export const LOCATION_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
-  timeout: 10_000,
+  timeout: 20_000,
   maximumAge: 0,
 }
 
@@ -48,7 +48,7 @@ export const LOCATION_UNAVAILABLE_MESSAGE =
 export const LOCATION_TIMEOUT_MESSAGE =
   "Getting your location timed out. Try again."
 export const ACCURACY_TOO_POOR_MESSAGE =
-  "Your location accuracy is too poor to check in. Move somewhere with a clearer view of the sky and try again."
+  "Your location accuracy is too poor to check in. Try again from a location with better signal."
 export const NO_GEOFENCE_MESSAGE =
   "This room has no location set. Ask your lecturer to set the room's geofence."
 export const OUTSIDE_ROOM_MESSAGE =
