@@ -29,10 +29,16 @@ import SandboxLecturer from './pages/SandboxLecturer'
 import ProtectedRoute from './components/ProtectedRoute'
 import GuestRoute from './components/GuestRoute'
 import RoleRoute from './components/RoleRoute'
+import PwaUpdatePrompt from './components/PwaUpdatePrompt'
+import OfflineBanner from './components/OfflineBanner'
+import InstallPrompt from './components/InstallPrompt'
 
 function App() {
   return (
     <BrowserRouter>
+      <PwaUpdatePrompt />
+      <OfflineBanner />
+      <InstallPrompt />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route
