@@ -73,7 +73,7 @@ export default function Home() {
   const { role } = useRole()
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-background bg-[url('data:image/svg+xml,%3Csvg%20width=%2224%22%20height=%2224%22%20xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cpath%20fill=%22none%22%20stroke=%22%2394a3b8%22%20stroke-width=%220.5%22%20stroke-opacity=%220.16%22%20d=%22M24%200v24M24%2024H0%22/%3E%3C/svg%3E')] [background-size:96px_96px] [background-repeat:repeat] [background-attachment:fixed]">
       <Navbar />
 
       <main className="flex-1">
@@ -150,7 +150,7 @@ export default function Home() {
               {methods.map(({ label, icon: Icon, description }) => (
                 <li
                   key={label}
-                  className="flex flex-col items-start gap-4 rounded-3xl bg-muted/60 p-5 md:p-6"
+                  className="flex flex-col items-start gap-4 rounded-3xl bg-background p-5 md:p-6"
                 >
                   <span className="flex size-12 items-center justify-center rounded-2xl bg-background text-foreground">
                     <Icon className="size-6" strokeWidth={1.5} aria-hidden="true" />
@@ -168,7 +168,7 @@ export default function Home() {
         {/* Facts */}
         <section className="px-4 pb-20 md:px-6 md:pb-28 lg:px-8">
           <div className="container-default">
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-8 rounded-3xl border border-border px-6 py-8 text-center md:grid-cols-4 md:py-10">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-8 rounded-3xl border border-border bg-background px-6 py-8 text-center md:grid-cols-4 md:py-10">
               {stats.map((stat) => (
                 <div key={stat.label}>
                   <dt className="sr-only">{stat.label}</dt>
@@ -218,7 +218,7 @@ export default function Home() {
               {features.map((feature) => (
                 <article
                   key={feature.title}
-                  className="rounded-3xl border border-border p-7 transition-colors hover:bg-muted/40 md:p-9"
+                  className="rounded-3xl border border-border bg-background p-7 transition-colors hover:bg-muted/40 md:p-9"
                 >
                   <span className="flex size-12 items-center justify-center rounded-2xl bg-muted text-foreground">
                     <feature.icon className="size-6" strokeWidth={1.5} aria-hidden="true" />
@@ -234,7 +234,7 @@ export default function Home() {
         {/* Final call to action */}
         <section className="px-4 py-16 md:px-6 md:py-24 lg:px-8 lg:pb-32">
           <div className="container-default">
-            <div className="rounded-[2rem] bg-muted/60 px-6 py-14 text-center md:px-12 md:py-20">
+              <div className="rounded-[2rem] bg-background px-6 py-14 text-center md:px-12 md:py-20">
               <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-foreground text-background">
                 <Fingerprint className="size-7" strokeWidth={1.5} aria-hidden="true" />
               </span>

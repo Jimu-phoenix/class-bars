@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useCallback, useEffect, useState, type FormEvent } from "react"
 import { Loader2, Mail, Save } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
@@ -7,6 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import type { ProfileRow } from "@/types/db"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 type ProfileFields = Pick<ProfileRow, "full_name" | "role" | "student_number" | "phone_number">
 
@@ -37,71 +45,92 @@ export default function ProfileSettings() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const [fullName, setFullName] = useState("")
   const [role, setRole] = useState<ProfileRow["role"] | null>(null)
   const [studentNumber, setStudentNumber] = useState("")
   const [phoneNumber, setPhoneNumber] = useState("")
+  // The registration number as loaded from the database. Determines whether
+  // the field is editable (empty on load) or read-only (already set on load).
+  const [loadedStudentNumber, setLoadedStudentNumber] = useState("")
+  // Whether the user is about to set a (new) registration number.
+  const [pendingStudentNumber, setPendingStudentNumber] = useState<string | null>(null)
+
+  function applyProfile(data: ProfileFields) {
+    setFullName(data.full_name)
+    setRole(data.role)
+    const loaded = data.student_number ?? ""
+    setStudentNumber(loaded)
+    setLoadedStudentNumber(loaded)
+    setPhoneNumber(data.phone_number ?? "")
+  }
+
+  const loadProfileFromDb = useCallback(async () => {
+    if (!user) return
+    const userId = user.id
+
+    const { data, error: fetchError } = await supabase
+      .from("profiles")
+      .select("full_name, role, student_number, phone_number")
+      .eq("id", userId)
+      .maybeSingle()
+
+    if (fetchError) {
+      setError("Failed to load profile")
+    } else if (data) {
+      applyProfile(data)
+    } else {
+      // No profile row. The row is created server-side by the signup
+      // trigger; the client must NOT insert its own — doing so used to
+      // let a user authorise themselves into a role they had not been granted.
+      setError(
+        "Your profile has not been created yet. Please sign out and back in, or contact support.",
+      )
+    }
+    setLoading(false)
+  }, [user])
 
   useEffect(() => {
     const currentUser = user
     if (!currentUser) return
 
-    const userId = currentUser.id
-
-    async function loadProfile() {
-      const { data, error: fetchError } = await supabase
-        .from("profiles")
-        .select("full_name, role, student_number, phone_number")
-        .eq("id", userId)
-        .maybeSingle()
-
-      if (fetchError) {
-        setError("Failed to load profile")
-      } else if (data) {
-        applyProfile(data)
-      } else {
-        // No profile row. The row is created server-side by the signup
-        // trigger; the client must NOT insert its own — doing so used to let
-        // a user authorise themselves into a role they had not been granted.
-        setError(
-          "Your profile has not been created yet. Please sign out and back in, or contact support.",
-        )
-      }
-      setLoading(false)
+    async function init() {
+      await loadProfileFromDb()
     }
+    void init()
+  }, [user, loadProfileFromDb])
 
-    function applyProfile(data: ProfileFields) {
-      setFullName(data.full_name)
-      setRole(data.role)
-      setStudentNumber(data.student_number ?? "")
-      setPhoneNumber(data.phone_number ?? "")
-    }
-
-    loadProfile()
-  }, [user])
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
+  const doSave = async () => {
     if (!user) return
     setError("")
     setSuccess(false)
     setSaving(true)
     try {
-      const updates: Record<string, string | null> = {
-        full_name: fullName.trim() || null,
-        phone_number: phoneNumber.trim() || null,
-      }
-      if (role === "student") {
-        updates.student_number = studentNumber.trim() || null
+      const fullNameValue = fullName.trim()
+      const phoneValue = phoneNumber.trim() || null
+
+      // Only send student_number when setting it for the first time. Never
+      // send it when it is already set — the RPC treats it as locked.
+      let studentNumberValue: string | null = null
+      if (role === "student" && loadedStudentNumber === "") {
+        const trimmed = pendingStudentNumber?.trim() ?? ""
+        studentNumberValue = trimmed || null
       }
 
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update(updates)
-        .eq("id", user.id)
-      if (updateError) throw updateError
+      const { error: rpcError } = await supabase.rpc("update_my_profile", {
+        p_full_name: fullNameValue,
+        p_phone_number: phoneValue,
+        p_student_number: studentNumberValue,
+      })
+      if (rpcError) throw rpcError
+
+      // Clear the pending value after a successful save.
+      setPendingStudentNumber(null)
       setSuccess(true)
+      // Reload so loadedStudentNumber reflects the saved value and the
+      // field becomes read-only if a registration number was just set.
+      void loadProfileFromDb()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update profile")
     } finally {
@@ -109,7 +138,36 @@ export default function ProfileSettings() {
     }
   }
 
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    // If a registration number is being set for the first time, require
+    // confirmation before saving anything. The confirm dialog's Save button
+    // then performs the actual save.
+    if (
+      role === "student" &&
+      loadedStudentNumber === "" &&
+      pendingStudentNumber === null &&
+      studentNumber.trim().length > 0
+    ) {
+      setPendingStudentNumber(studentNumber.trim())
+      setConfirmOpen(true)
+      return
+    }
+    await doSave()
+  }
+
+  const handleConfirmSet = async () => {
+    setConfirmOpen(false)
+    await doSave()
+  }
+
+  const handleCancel = () => {
+    setConfirmOpen(false)
+    setPendingStudentNumber(null)
+  }
+
   const isStudent = role === "student"
+  const studentNumberSet = loadedStudentNumber !== ""
 
   return (
     <section aria-labelledby="details-heading" className="rounded-xl border border-border bg-card">
@@ -174,13 +232,38 @@ export default function ProfileSettings() {
             <div className="grid gap-4 sm:grid-cols-2">
               {isStudent ? (
                 <Field id="id_number" label="Student number">
-                  <Input
-                    id="id_number"
-                    placeholder="STU-2025-0001"
-                    value={studentNumber}
-                    onChange={(e) => setStudentNumber(e.target.value)}
-                    className="h-11"
-                  />
+                  {studentNumberSet ? (
+                    <>
+                      <Input
+                        id="id_number"
+                        placeholder="BIS/2X/SS/00X"
+                        value={studentNumber}
+                        readOnly
+                        className="h-11 bg-muted/50"
+                        disabled
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Registration number cannot be changed. Contact an
+                        administrator for corrections.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Input
+                        id="id_number"
+                        placeholder="BIS/2X/SS/00X"
+                        value={studentNumber}
+                        onChange={(e) => setStudentNumber(e.target.value)}
+                        className="h-11"
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        You can only save this once. Check it carefully.
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Type it above, then click Save changes to confirm.
+                      </p>
+                    </>
+                  )}
                 </Field>
               ) : null}
 
@@ -209,6 +292,42 @@ export default function ProfileSettings() {
           </form>
         )}
       </div>
+
+      {/* Confirm dialog for setting the registration number (one-time). */}
+      <Dialog open={confirmOpen} onOpenChange={handleCancel}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save registration number?</DialogTitle>
+            <DialogDescription>
+              You are about to set your registration number to{" "}
+              <strong>{pendingStudentNumber ?? ""}</strong>. You will not be
+              able to change this later. Contact an administrator if you need
+              a correction.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              disabled={saving}
+              className="h-10"
+              autoFocus
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmSet}
+              disabled={saving || !pendingStudentNumber}
+              className="h-10"
+            >
+              {saving ? (
+                <Loader2 className="mr-2 size-3.5 animate-spin" aria-hidden="true" />
+              ) : null}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }
