@@ -1,12 +1,4 @@
--- =====================================================================
 -- Class-BARS Migration 35: rollback
---
--- Drops get_session_enrolled_students and lecturer_mark_present, and
--- restores _check_in_attendance and the 8-argument check_in_attendance
--- to their pre-migration-35 definitions (from migrations 34 and 33).
---
--- No backup script is needed: this migration changes no data.
--- =====================================================================
 
 begin;
 
@@ -14,7 +6,6 @@ set local lock_timeout = '5s';
 set local statement_timeout = '30s';
 set local search_path = public, pg_temp;
 
--- Revoke execute on new functions before dropping.
 do $$
 begin
   if to_regprocedure('public.get_session_enrolled_students(uuid)') is not null then
@@ -36,8 +27,6 @@ $$;
 drop function if exists public.get_session_enrolled_students(uuid);
 drop function if exists public.lecturer_mark_present(uuid, uuid);
 
--- Restore _check_in_attendance to migration 34's version
--- (consent check present, no 'manual_not_allowed' rejection).
 create or replace function public._check_in_attendance(
   p_session_id     uuid,
   p_student_id     uuid,
@@ -80,12 +69,10 @@ begin
     raise exception 'invalid_method';
   end if;
 
-  -- a caller may only ever check in as themselves
   if p_student_id is distinct from auth.uid() then
     raise exception 'Cannot check in on behalf of another student';
   end if;
 
-  -- Consent required for face check-in only.
   if p_method = 'face' then
     select consent_given_at into v_consent
     from public.profiles
@@ -96,7 +83,6 @@ begin
     end if;
   end if;
 
-  -- Location validation
   if p_latitude is null
      or p_longitude is null
      or p_accuracy_m is null
@@ -290,8 +276,6 @@ revoke all on function public._check_in_attendance(
   double precision, double precision, double precision, double precision
 ) from public, anon, authenticated;
 
--- Restore 8-argument check_in_attendance to migration 33's version
--- (rejects 'face', no 'manual_not_allowed' rejection).
 create or replace function public.check_in_attendance(
   p_session_id uuid,
   p_student_id uuid,

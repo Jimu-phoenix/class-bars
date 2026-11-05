@@ -1,10 +1,5 @@
--- =====================================================================
 -- Class-BARS Migration 32: rollback
---
--- Drops the constraints and helper functions. Backup tables created by
--- 32_face_descriptor_validation_backup.sql are intentionally left in
--- migration_backups for manual review/restore.
--- =====================================================================
+
 
 alter table public.face_embeddings
   drop constraint if exists face_embeddings_embedding_json_valid;

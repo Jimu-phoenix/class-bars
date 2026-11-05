@@ -1,9 +1,5 @@
--- =====================================================================
 -- Class-BARS Migration 40: rollback
---
--- Drops the student-number lock trigger, its function, and the
--- update_my_profile RPC. Does NOT touch data.
--- =====================================================================
+
 
 begin;
 

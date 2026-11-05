@@ -1,14 +1,4 @@
--- Raise the maximum usable GPS accuracy from 100 m to 200 m.
---
--- Accuracy up to 10 m stays "good": a reported point inside the fence passes,
--- outside is rejected. Accuracy above 10 m is "poor": if the accuracy circle
--- overlaps the fence the check-in passes and is flagged for review, otherwise
--- it is rejected. Readings above 200 m (or missing/invalid) are no_location.
---
--- This replaces only the MAX_USABLE_ACCURACY_M constant in the latest
--- check_in_attendance definition (migration 29). Signature, ownership,
--- SECURITY DEFINER, search_path, grants and the decision table are unchanged.
-
+-- Class-BARS Migration 30: raise max usable GPS accuracy to 200 m
 create or replace function public.check_in_attendance(
   p_session_id uuid,
   p_student_id uuid,

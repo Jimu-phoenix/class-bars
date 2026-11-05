@@ -1,14 +1,5 @@
--- =====================================================================
--- Class-BARS Migration 37 rollback: verifiable attendance register PDFs
---
--- Drops the verify and record functions, revokes their privileges, and
--- drops the public.attendance_pdfs table.
---
--- WARNING: this invalidates every PDF already issued (their verification
--- codes will no longer resolve).
---
--- Re-runnable. Run in the SQL Editor as postgres.
--- =====================================================================
+-- Class-BARS Migration 37: migration 37
+
 
 begin;
 

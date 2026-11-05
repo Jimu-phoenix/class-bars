@@ -1,34 +1,5 @@
--- =====================================================================
 -- Class-BARS Migration 03: Schema table-details report (READ-ONLY)
---
--- Purpose: produces a full report of every table in the `public`
--- schema of the connected Supabase project -- straight from the live
--- catalogs, so it always reflects reality (including any drift from
--- class_bars_schema_no_geo.sql / 01 / 02).
---
--- It contains ONLY SELECT statements: safe to paste into Supabase
--- Dashboard -> SQL Editor and re-run at any time. It creates nothing
--- and must NOT be treated as part of the DDL chain.
---
--- Output sections (each its own result grid):
---   1. Table overview        -- RLS flags, estimated rows, disk size
---   2. Columns               -- type, nullability, default, identity
---   3. Constraints           -- PK / UNIQUE / FK / CHECK definitions
---   4. Indexes               -- full CREATE INDEX definitions
---   5. RLS policies          -- command, roles, USING / WITH CHECK
---   6. Triggers              -- timing, events, function called
---   7. Enum types            -- labels in declared order
---   8. Per-table JSON        -- one pretty JSON blob per table
---
--- To inspect other schemas (e.g. auth), replace the literal
--- `n.nspname = 'public'` filters below accordingly.
--- =====================================================================
 
--- ---------------------------------------------------------------------
--- 1. Table overview
---    est_rows comes from pg_class.reltuples (planner estimate, refreshed
---    by ANALYZE/vacuum) -- treat as approximate, never exact.
--- ---------------------------------------------------------------------
 select
   n.nspname                                   as schema,
   c.relname                                   as table_name,
@@ -47,9 +18,6 @@ where n.nspname = 'public'
   and c.relkind in ('r', 'p')
 order by c.relname;
 
--- ---------------------------------------------------------------------
--- 2. Columns (one row per column, in ordinal position)
--- ---------------------------------------------------------------------
 select
   c.relname                                     as table_name,
   a.attnum                                      as "position",
@@ -73,9 +41,6 @@ where n.nspname = 'public'
   and not a.attisdropped
 order by c.relname, a.attnum;
 
--- ---------------------------------------------------------------------
--- 3. Constraints (PK / UNIQUE / FOREIGN KEY / CHECK)
--- ---------------------------------------------------------------------
 select
   c.relname as table_name,
   con.conname as constraint_name,
@@ -111,9 +76,6 @@ where n.nspname = 'public'
   and c.relkind in ('r', 'p')
 order by c.relname, constraint_type, con.conname;
 
--- ---------------------------------------------------------------------
--- 4. Indexes (includes unique/partial indexes backing constraints)
--- ---------------------------------------------------------------------
 select
   schemaname as schema,
   tablename  as table_name,
@@ -123,9 +85,6 @@ from pg_indexes
 where schemaname = 'public'
 order by tablename, indexname;
 
--- ---------------------------------------------------------------------
--- 5. Row Level Security policies
--- ---------------------------------------------------------------------
 select
   schemaname as schema,
   tablename  as table_name,
@@ -139,9 +98,6 @@ from pg_policies
 where schemaname = 'public'
 order by tablename, policyname;
 
--- ---------------------------------------------------------------------
--- 6. Triggers (one row per trigger x event)
--- ---------------------------------------------------------------------
 select distinct
   n.nspname                    as schema,
   c.relname                    as table_name,
@@ -155,9 +111,6 @@ where n.nspname = 'public'
   and not t.tgisinternal
 order by table_name, trigger_name;
 
--- ---------------------------------------------------------------------
--- 7. Enum types (labels in declaration order)
--- ---------------------------------------------------------------------
 select
   n.nspname  as schema,
   t.typname  as enum_type,
@@ -169,12 +122,6 @@ where n.nspname = 'public'
 group by n.nspname, t.typname
 order by t.typname;
 
--- ---------------------------------------------------------------------
--- 8. Consolidated per-table JSON
---    One row per table; `details` holds columns, constraints, indexes,
---    RLS flags and policies as pretty-printed JSON -- handy for docs,
---    diffs, or feeding to tooling.
--- ---------------------------------------------------------------------
 select
   c.relname as table_name,
   jsonb_pretty(jsonb_build_object(

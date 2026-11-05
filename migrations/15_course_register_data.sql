@@ -1,13 +1,5 @@
--- =====================================================================
 -- Class-BARS Migration 15: Course register data for lecturer PDF export
---
--- One SECURITY DEFINER RPC returns the roster and final attendance status
--- for 2 to 8 completed sessions of a course owned by the calling lecturer.
--- It deliberately returns no face data, confidence, coordinates, distance
--- or accuracy. Table RLS is unchanged.
---
--- Re-runnable. Run in the SQL Editor as postgres.
--- =====================================================================
+
 
 drop function if exists public.get_register_data(uuid, uuid[]);
 

@@ -152,9 +152,6 @@ export async function createRegisterPdf(
       CAPTION_SIZE
   }
 
-  // ------------------------------------------------------------------
-  // Verification QR (top-left, inside the margin) + code + caption.
-  // ------------------------------------------------------------------
   if (verificationCode) {
     const qrDataUrl = await toDataURL(verificationCode, {
       errorCorrectionLevel: "M",
@@ -171,10 +168,6 @@ export async function createRegisterPdf(
     doc.text("Scan to verify", margin+3, margin-3 + QR_SIZE + QR_TO_CODE + CODE_SIZE + CODE_TO_CAPTION)
   }
 
-  // ------------------------------------------------------------------
-  // Header block: shifted right by HEADER_SHIFT when a QR is present so
-  // it reads as one seamless header next to the QR.
-  // ------------------------------------------------------------------
   const headerX = verificationCode ? margin + HEADER_SHIFT : margin
   const headerMaxWidth = verificationCode ? contentWidth - HEADER_SHIFT : contentWidth
 
@@ -198,11 +191,6 @@ export async function createRegisterPdf(
   metaY += 14
   doc.text(`Lecturer: ${meta.lecturerName || "—"}`, headerX, metaY)
 
-  // ------------------------------------------------------------------
-  // Table: start below the header, pushed down further when a QR is
-  // present so the table (which starts at the left margin) never
-  // overlaps the QR block.
-  // ------------------------------------------------------------------
   const tableStartY = verificationCode
     ? Math.max(metaY + 16, qrBottom + 12)
     : metaY + 16
@@ -279,7 +267,6 @@ export async function createRegisterPdf(
     didDrawCell: (data) => {
       const { cell, doc, section } = data
       if (section !== "body") return
-      // Session columns start at index 3 (after #, name, reg no.)
       if (data.column.index < 3) return
       const value = cell.raw as RegisterCell | undefined
       if (value !== "p" && value !== "a" && value !== "f") return

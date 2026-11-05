@@ -1,9 +1,7 @@
 export const MIN_RADIUS_M = 2
 export const MAX_RADIUS_M = 50
-// Mirrors MAX_USABLE_ACCURACY_M in the SQL check_in_attendance function
-// (migrations/30_raise_max_accuracy_200.sql). Accuracy above this is
-// treated as no location and rejected server-side.
 export const MAX_ACCURACY_M = 200
+// Mirrors MAX_USABLE_ACCURACY_M in SQL check_in_attendance (migrations/30).
 export const GOOD_ACCURACY_M = 10
 export const SMALL_FENCE_THRESHOLD_M = 10
 
@@ -12,7 +10,7 @@ export const SMALL_FENCE_NOTICE =
 
 export const LOCATION_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
-  timeout: 10_000,
+  timeout: 20_000,
   maximumAge: 0,
 }
 
@@ -50,7 +48,7 @@ export const LOCATION_UNAVAILABLE_MESSAGE =
 export const LOCATION_TIMEOUT_MESSAGE =
   "Getting your location timed out. Try again."
 export const ACCURACY_TOO_POOR_MESSAGE =
-  "Your location accuracy is too poor to check in. Move somewhere with a clearer view of the sky and try again."
+  "Your location accuracy is too poor to check in. Try again from a location with better signal."
 export const NO_GEOFENCE_MESSAGE =
   "This room has no location set. Ask your lecturer to set the room's geofence."
 export const OUTSIDE_ROOM_MESSAGE =
@@ -110,7 +108,6 @@ function isValidCorner(corner: unknown): corner is Corner {
   return isValidLatitude(lat) && isValidLongitude(lng)
 }
 
-/** Average of the corners: close enough to the centroid for sorting. */
 export function boxCentroid(corners: Corner[]): Corner | null {
   if (corners.length === 0 || !corners.every(isValidCorner)) return null
   const lat = corners.reduce((sum, corner) => sum + corner.lat, 0) / corners.length
@@ -118,7 +115,6 @@ export function boxCentroid(corners: Corner[]): Corner | null {
   return { lat, lng }
 }
 
-/** Haversine distance in metres between two coordinates. */
 export function distanceMeters(a: Corner, b: Corner): number {
   const earthRadiusM = 6_371_008.8
   const dLat = toRadians(b.lat - a.lat)
@@ -131,10 +127,6 @@ export function distanceMeters(a: Corner, b: Corner): number {
   return 2 * earthRadiusM * Math.asin(Math.min(1, Math.sqrt(h)))
 }
 
-/**
- * Equirectangular area approximation in square metres. Accurate enough at
- * classroom scale, and matches the UI's "small fence" hint.
- */
 export function boxAreaM2(corners: Corner[]): number {
   if (corners.length < 3 || !corners.every(isValidCorner)) return 0
 
@@ -198,10 +190,6 @@ function isCrossedBox(corners: Corner[]): boolean {
   )
 }
 
-/**
- * Sort corners around the centroid so a saved ring is never a bow tie.
- * Clockwise and anticlockwise input both come out in the same order.
- */
 export function orderBoxCorners(corners: Corner[]): Corner[] {
   const centroid = boxCentroid(corners)
   if (!centroid) return [...corners]
@@ -253,10 +241,6 @@ export type FenceSizeInput = {
   corners?: Corner[] | null
 }
 
-/**
- * Half of the fence's smaller span, in metres. A circle uses its radius; a
- * box uses sqrt(area) / 2. Matches the SQL `half_size` calculation closely.
- */
 export function fenceHalfSize({
   shape,
   radius,
@@ -276,7 +260,6 @@ export function isSmallFence(halfSize: number | null): boolean {
   return halfSize !== null && halfSize < SMALL_FENCE_THRESHOLD_M
 }
 
-/** Parse a pasted "lat, lng" pair. Returns null for anything invalid. */
 export function parseLatLng(input: string): LatLng | null {
   const parts = input.split(",")
   if (parts.length !== 2) return null
@@ -330,11 +313,6 @@ export function geolocationErrorMessage(error: unknown): string | null {
   return null
 }
 
-/**
- * Map a server-side check-in block reason to a short plain message.
- * Returns null for unrelated errors (e.g. "already recorded"), so callers
- * can fall back to the original message.
- */
 export function checkInBlockMessage(error: unknown): string | null {
   const message = messageOf(error)
   if (/\bno_location\b/.test(message)) return ACCURACY_TOO_POOR_MESSAGE
@@ -344,10 +322,6 @@ export function checkInBlockMessage(error: unknown): string | null {
   return null
 }
 
-/**
- * Thin wrapper around navigator.geolocation. The argument is injectable so
- * the wrapper can be tested without a browser; callers normally omit it.
- */
 export function getCurrentPosition(
   geolocation: Geolocation | undefined = typeof navigator !== "undefined"
     ? navigator.geolocation

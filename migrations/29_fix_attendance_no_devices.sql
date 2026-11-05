@@ -1,8 +1,7 @@
--- Fix check_in_attendance to not use devices table and drop device_id column
+-- Class-BARS Migration 29: remove devices dependency from check-in
 drop function if exists public.check_in_attendance(uuid,uuid,uuid,attendance_method,numeric);
 drop function if exists public.check_in_attendance(uuid,uuid,uuid,attendance_method,numeric,double precision,double precision,double precision);
 
--- Remove device_id from attendance_records if exists
 alter table public.attendance_records drop column if exists device_id;
 
 create or replace function public.check_in_attendance(

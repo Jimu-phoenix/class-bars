@@ -1,26 +1,7 @@
--- =====================================================================
 -- Class-BARS Migration 01: security fixes + lecturer write policies
--- Applies on top of class_bars_schema_no_geo.sql
---
--- 1. check_in_attendance: verify caller identity + device ownership
--- 2. courses / venues: add missing SELECT policies (dashboard joins on
---    these tables silently returned NULL because RLS had zero policies)
--- 3. staff write policies for courses, venues, class_sessions
--- 4. immutability guards: profiles.role and courses.course_code cannot
---    be changed by client calls (service_role bypasses for trusted
---    server-side administration)
--- 5. optional demo venue seed (idempotent -- delete block if unwanted)
---
--- Re-runnable: replaces functions and drops/recreates its policies.
--- =====================================================================
 
 create extension if not exists pgcrypto;
 
--- ---------------------------------------------------------------------
--- Helper: staff check.
--- SECURITY DEFINER so policies can inspect profiles without tripping
--- its own RLS (profiles policies only expose the caller's own row).
--- ---------------------------------------------------------------------
 create or replace function public.is_staff()
 returns boolean
 language sql
@@ -35,9 +16,6 @@ as $$
   );
 $$;
 
--- ---------------------------------------------------------------------
--- courses: authenticated read; staff create/update
--- ---------------------------------------------------------------------
 drop policy if exists "Authenticated users view courses" on courses;
 create policy "Authenticated users view courses"
   on courses for select
@@ -54,9 +32,6 @@ create policy "Staff update courses"
   using (public.is_staff())
   with check (public.is_staff());
 
--- ---------------------------------------------------------------------
--- venues: authenticated read; staff create
--- ---------------------------------------------------------------------
 drop policy if exists "Authenticated users view venues" on venues;
 create policy "Authenticated users view venues"
   on venues for select
@@ -67,9 +42,6 @@ create policy "Staff create venues"
   on venues for insert
   with check (public.is_staff());
 
--- ---------------------------------------------------------------------
--- class_sessions: assigned lecturer creates and maintains
--- ---------------------------------------------------------------------
 drop policy if exists "Lecturers create own sessions" on class_sessions;
 create policy "Lecturers create own sessions"
   on class_sessions for insert
@@ -84,12 +56,6 @@ create policy "Lecturers update own sessions"
   using (lecturer_id = auth.uid())
   with check (lecturer_id = auth.uid());
 
--- =====================================================================
--- RPC: harden check_in_attendance
--- Fixes impersonation hole: the previous body accepted any
--- p_student_id without proving the caller is that student.
--- Also rejects devices not registered to the caller.
--- =====================================================================
 create or replace function check_in_attendance(
   p_session_id uuid,
   p_student_id uuid,
@@ -106,12 +72,10 @@ declare
   v_record   attendance_records;
   v_status   attendance_status := 'present';
 begin
-  -- a caller may only ever check in as themselves
   if p_student_id is distinct from auth.uid() then
     raise exception 'Cannot check in on behalf of another student';
   end if;
 
-  -- device, when supplied, must belong to the caller
   if p_device_id is not null and not exists (
     select 1 from devices
     where id = p_device_id
@@ -138,7 +102,6 @@ begin
     raise exception 'Student is not enrolled in this course';
   end if;
 
-  -- mark late if checking in more than 15 minutes after the scheduled start
   if now() > v_session.scheduled_start + interval '15 minutes' then
     v_status := 'late';
   end if;
@@ -159,13 +122,6 @@ begin
 end;
 $$;
 
--- =====================================================================
--- Immutability guards
--- Without these, the broad "Users update own profile" policy let any
--- user promote themselves to lecturer/admin by updating their own row.
--- Trusted server-side code (service_role JWT) remains able to change
--- these columns for account administration.
--- =====================================================================
 create or replace function public.protect_profiles_role()
 returns trigger
 language plpgsql
@@ -208,9 +164,6 @@ create trigger trg_protect_courses_code
   for each row
   execute function public.protect_courses_code();
 
--- =====================================================================
--- Optional demo venues (idempotent). Remove this block for production.
--- =====================================================================
 insert into venues (name, building)
 select v.name, v.building
 from (

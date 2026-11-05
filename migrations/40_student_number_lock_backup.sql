@@ -1,10 +1,5 @@
--- =====================================================================
 -- Class-BARS Migration 40: backup before student-number lock
---
--- Run this BEFORE 40_student_number_lock.sql. Snapshot profiles so any
--- pre-existing student_number values can be reviewed if the lock trigger
--- needs to be audited later.
--- =====================================================================
+
 
 begin;
 

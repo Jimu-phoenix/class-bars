@@ -1,9 +1,5 @@
--- =====================================================================
 -- Class-BARS Migration 32: preflight report
---
--- Run AFTER 32_face_descriptor_validation.sql and BEFORE the validate
--- script. This reports invalid rows without changing them.
--- =====================================================================
+
 
 select 'face_embeddings' as source,
        count(*) as total_rows,

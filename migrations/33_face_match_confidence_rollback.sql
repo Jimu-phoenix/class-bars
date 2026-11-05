@@ -1,15 +1,5 @@
--- =====================================================================
 -- Class-BARS Migration 33: rollback
---
--- Restores the migration 31 check-in RPC and the migration 12 lecturer
--- roster, then removes the match columns, config table and helper RPCs.
--- Backup tables created by 33_face_match_confidence_backup.sql are left
--- in migration_backups for manual review/restore.
---
--- Hardening: runs inside a transaction, revokes execute on the new
--- functions before dropping them, and uses IF EXISTS so it is safe to
--- re-run.
--- =====================================================================
+
 
 begin;
 

@@ -404,6 +404,13 @@ export default function StudentHome() {
       const location = await getCurrentPosition()
       setLocation(location)
       setLocationError("")
+      if (location.accuracy > MAX_ACCURACY_M) {
+        setError(
+          `Location accuracy (±${Math.round(location.accuracy)} m) is too poor to check in. Try again.`,
+        )
+        setSubmitting(false)
+        return
+      }
       const result = await checkInFace(
         selectedSession.id,
         user.id,

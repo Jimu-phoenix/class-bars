@@ -1,9 +1,5 @@
--- =====================================================================
 -- Class-BARS Migration 39: rollback
---
--- Drops public.send_admin_magic_link(), public.app_config table, and
--- the pg_net extension (if no other migration depends on it).
--- =====================================================================
+
 
 begin;
 

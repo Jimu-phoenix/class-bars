@@ -4,7 +4,6 @@ import tailwindcss from "@tailwindcss/vite"
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
@@ -12,7 +11,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       workbox: {
-        // Raise the default ~2 MB limit so the face-api bundle is precached.
+        // Raise default ~2 MB limit so face-api bundle is precached.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [
@@ -21,20 +20,16 @@ export default defineConfig({
           /^\/models\//,
         ],
         runtimeCaching: [
-          // Face-api model weights (.json manifest + extensionless shards).
-          // CacheFirst so returning students don't re-download models.
+          // Face-api model weights: CacheFirst so returning students don't re-download.
           {
             urlPattern: /^\/models\//,
             handler: 'CacheFirst',
             options: {
               cacheName: 'face-models-v1',
               cacheableResponse: { statuses: [200] },
-              // No expiration — bump cacheName if models ever change.
             },
           },
-          // Every Supabase request (REST, RPC, auth, realtime, storage):
-          // NetworkOnly. Supabase responses are user-specific, authenticated,
-          // and short-lived; caching them would risk stale or leaked data.
+          // Supabase requests: NetworkOnly (user-specific, authenticated, short-lived).
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\//,
             handler: 'NetworkOnly',

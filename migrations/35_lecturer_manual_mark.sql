@@ -1,24 +1,4 @@
--- =====================================================================
 -- Class-BARS Migration 35: lecturer manual "mark present" on live session
---
--- Adds get_session_enrolled_students() and lecturer_mark_present() RPCs so
--- a lecturer who owns an ongoing session can mark an enrolled student
--- present manually (after seeing them in the room). Also closes the
--- student-callable 8-argument check-in RPC for p_method = 'manual'.
---
--- attendance_method already contains 'manual' (see table_state.md), so no
--- separate enum migration is needed.
---
--- Everything runs inside a transaction with lock/statement timeouts.
---
--- Run order:
---   1. 38_audit_log_actor_and_events.sql   (must be applied first: provides
---      public.write_audit_log(), used below for the audit write)
---   2. 35_lecturer_manual_mark.sql (this file)
---   3. 35_lecturer_manual_mark_rollback.sql only if needed
---
--- Apply to a Supabase branch/staging project first.
--- =====================================================================
 
 begin;
 
@@ -26,14 +6,6 @@ set local lock_timeout = '5s';
 set local statement_timeout = '30s';
 set local search_path = public, pg_temp;
 
--- ---------------------------------------------------------------------
--- 1. get_session_enrolled_students(p_session_id)
--- STABLE SECURITY DEFINER. Caller must be an authenticated lecturer who
--- owns the session (same rule as get_session_attendance: class_sessions
--- lecturer_id = auth.uid()). Returns one row per enrolled student with
--- only student_id, full_name, registration_number (student_number aliased),
--- checked_in boolean. No face data, scores, email or coordinates.
--- ---------------------------------------------------------------------
 create or replace function public.get_session_enrolled_students(
   p_session_id uuid
 ) returns table (
@@ -87,16 +59,6 @@ $$;
 revoke all on function public.get_session_enrolled_students(uuid) from public, anon;
 grant execute on function public.get_session_enrolled_students(uuid) to authenticated;
 
--- ---------------------------------------------------------------------
--- 2. lecturer_mark_present(p_session_id, p_student_id) returns jsonb
--- SECURITY DEFINER. Caller = auth.uid() must be role 'lecturer' (read from
--- profiles, never user_metadata) AND own the session. Session status must
--- be 'ongoing'. Student must be enrolled. Inserts attendance_records with
--- method='manual', status='present', all match_*/location_*/confidence/
--- flag_reason NULL. On unique_violation raises 'already recorded'. Writes
--- audit_logs row with session_id only in metadata (no student identifiers).
--- Admins are NOT allowed.
--- ---------------------------------------------------------------------
 create or replace function public.lecturer_mark_present(
   p_session_id uuid,
   p_student_id uuid
@@ -199,10 +161,6 @@ $$;
 revoke all on function public.lecturer_mark_present(uuid, uuid) from public, anon;
 grant execute on function public.lecturer_mark_present(uuid, uuid) to authenticated;
 
--- ---------------------------------------------------------------------
--- 3. Close the student path: _check_in_attendance rejects p_method='manual'.
--- Copy migration 34's body, add the rejection early.
--- ---------------------------------------------------------------------
 create or replace function public._check_in_attendance(
   p_session_id     uuid,
   p_student_id     uuid,
@@ -245,17 +203,14 @@ begin
     raise exception 'invalid_method';
   end if;
 
-  -- Students cannot self-mark as manual; lecturers use lecturer_mark_present.
   if p_method = 'manual' then
     raise exception 'manual_not_allowed';
   end if;
 
-  -- a caller may only ever check in as themselves
   if p_student_id is distinct from auth.uid() then
     raise exception 'Cannot check in on behalf of another student';
   end if;
 
-  -- Consent required for face check-in only.
   if p_method = 'face' then
     select consent_given_at into v_consent
     from public.profiles
@@ -266,7 +221,6 @@ begin
     end if;
   end if;
 
-  -- Location validation
   if p_latitude is null
      or p_longitude is null
      or p_accuracy_m is null
@@ -460,10 +414,6 @@ revoke all on function public._check_in_attendance(
   double precision, double precision, double precision, double precision
 ) from public, anon, authenticated;
 
--- ---------------------------------------------------------------------
--- 4. 8-argument check_in_attendance (OTP/manual compatibility) rejects
---    p_method='manual'. Copy migration 33's body, add the rejection.
--- ---------------------------------------------------------------------
 create or replace function public.check_in_attendance(
   p_session_id uuid,
   p_student_id uuid,

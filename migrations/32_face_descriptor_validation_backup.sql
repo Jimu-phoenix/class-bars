@@ -1,9 +1,5 @@
--- =====================================================================
 -- Class-BARS Migration 32: backup before validation
---
--- Run this BEFORE 32_face_descriptor_validation.sql. The backup tables
--- live in the migration_backups schema and are not used by the app.
--- =====================================================================
+
 
 create schema if not exists migration_backups;
 

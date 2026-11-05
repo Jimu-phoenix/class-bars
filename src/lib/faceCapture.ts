@@ -1,35 +1,22 @@
 // Pure helpers and constants for the face capture pipeline.
 // This file has zero browser/face-api dependencies so it can be tested directly with node:test.
 
-// Pipeline configuration constants: single source of truth for enrolment and verification.
 export const DETECTOR_INPUT_SIZE = 320
 export const VERIFY_INPUT_SIZE = 416
 export const DETECTOR_SCORE_THRESHOLD = 0.4
-// Landmark model configuration: false uses the full 68-point net (faceLandmark68Net); true uses tiny net.
+// Landmark model: false uses full 68-point net; true uses tiny net.
 export const USE_TINY_LANDMARKS = false
 
-// Detector used for enrolment capture: 'ssd' uses SsdMobilenetv1 with fallback to tiny; 'tiny' uses TinyFaceDetector.
+export const SSD_MIN_CONFIDENCE = 0.6
 export type EnrolDetectorType = "ssd" | "tiny"
 export const ENROL_DETECTOR: EnrolDetectorType = "ssd"
-export const SSD_MIN_CONFIDENCE = 0.6
 
-// Camera constraints configuration
-export const CAMERA_IDEAL_WIDTH = 1280
-export const CAMERA_IDEAL_HEIGHT = 720
-export const ENABLE_CAMERA_CONSTRAINTS = true
-
-// Camera warm-up configuration (time to ignore frames after stream starts playing)
-export const WARMUP_MS = 800
-export const ENABLE_CAMERA_WARMUP = true
-
-// Burst capture configuration. These values are PROVISIONAL and need on-device calibration.
 export const CAPTURE_FRAME_COUNT = 3
 export const CAPTURE_MIN_INTERVAL_MS = 250
 export const CAPTURE_MAX_INTERVAL_MS = 400
 export const CAPTURE_TIMEOUT_MS = 10_000
 export const CAPTURE_INACTIVITY_STOP_MS = 60_000
-
-// Quality gate configuration. Sharpness is the variance of the Laplacian on 0-255 grayscale.
+// CAPTURE_* values are PROVISIONAL and need on-device calibration.
 export const QUALITY_MIN_DETECTION_SCORE = 0.6
 export const QUALITY_MIN_FACE_FRACTION = 0.25
 export const QUALITY_MAX_POSE_DEG = 20
@@ -37,6 +24,13 @@ export const QUALITY_MIN_SHARPNESS = 100
 export const QUALITY_BRIGHTNESS_MIN = 50
 export const QUALITY_BRIGHTNESS_MAX = 210
 export const QUALITY_SAMPLE_STEP = 2
+
+export const CAMERA_IDEAL_WIDTH = 1280
+export const CAMERA_IDEAL_HEIGHT = 720
+export const ENABLE_CAMERA_CONSTRAINTS = true
+
+export const WARMUP_MS = 800
+export const ENABLE_CAMERA_WARMUP = true
 
 export type CaptureFailureReason =
   | "no_face"
