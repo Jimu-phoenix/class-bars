@@ -4,6 +4,9 @@ export const MAX_ACCURACY_M = 200
 // Mirrors MAX_USABLE_ACCURACY_M in SQL check_in_attendance (migrations/30).
 export const GOOD_ACCURACY_M = 10
 export const SMALL_FENCE_THRESHOLD_M = 10
+export const TARGET_ACCURACY_M = 20
+export const LOCATION_DEADLINE_MS = 15_000
+export const LOCATION_ACCURACY_POOR_CODE = 4
 
 export const SMALL_FENCE_NOTICE =
   "This fence is smaller than phone GPS can usually resolve indoors. Students whose location is clearly inside will pass; others near the edge will be accepted and flagged for review instead of blocked."
@@ -305,10 +308,12 @@ export function geolocationErrorMessage(error: unknown): string | null {
   if (code === 1) return LOCATION_DENIED_MESSAGE
   if (code === 2) return LOCATION_UNAVAILABLE_MESSAGE
   if (code === 3) return LOCATION_TIMEOUT_MESSAGE
+  if (code === LOCATION_ACCURACY_POOR_CODE) return ACCURACY_TOO_POOR_MESSAGE
   if (error instanceof LocationError) {
     if (error.code === 1) return LOCATION_DENIED_MESSAGE
     if (error.code === 2) return LOCATION_UNAVAILABLE_MESSAGE
     if (error.code === 3) return LOCATION_TIMEOUT_MESSAGE
+    if (error.code === LOCATION_ACCURACY_POOR_CODE) return ACCURACY_TOO_POOR_MESSAGE
   }
   return null
 }
@@ -322,11 +327,19 @@ export function checkInBlockMessage(error: unknown): string | null {
   return null
 }
 
+export type GetCurrentPositionOptions = {
+  signal?: AbortSignal
+  onProgress?: (c: Coordinates) => void
+  targetAccuracyM?: number
+  deadlineMs?: number
+}
+
 export function getCurrentPosition(
   geolocation: Geolocation | undefined = typeof navigator !== "undefined"
     ? navigator.geolocation
     : undefined,
   options: PositionOptions = LOCATION_OPTIONS,
+  watchOptions?: GetCurrentPositionOptions,
 ): Promise<Coordinates> {
   if (!geolocation) {
     return Promise.reject(
@@ -334,17 +347,113 @@ export function getCurrentPosition(
     )
   }
 
+  const targetAccuracy =
+    watchOptions?.targetAccuracyM != null &&
+    Number.isFinite(watchOptions.targetAccuracyM) &&
+    watchOptions.targetAccuracyM > 0
+      ? watchOptions.targetAccuracyM
+      : TARGET_ACCURACY_M
+
+  const deadlineMs =
+    watchOptions?.deadlineMs != null &&
+    Number.isFinite(watchOptions.deadlineMs) &&
+    watchOptions.deadlineMs > 0
+      ? watchOptions.deadlineMs
+      : LOCATION_DEADLINE_MS
+
+  if (watchOptions?.signal?.aborted) {
+    let abortErr: Error | DOMException
+    if (typeof DOMException !== "undefined") {
+      abortErr = new DOMException("Aborted", "AbortError")
+    } else {
+      abortErr = new Error("Aborted")
+      abortErr.name = "AbortError"
+    }
+    return Promise.reject(abortErr)
+  }
+
   return new Promise((resolve, reject) => {
-    geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-        })
-      },
-      (error) => reject(new LocationError(error.code, error.message)),
-      options,
-    )
+    let settled = false
+    let watchId: number | null = null
+    let deadlineTimer: ReturnType<typeof setTimeout> | null = null
+    let best: Coordinates | null = null
+    let lastError: GeolocationPositionError | null = null
+
+    const clearAll = () => {
+      if (watchId !== null) {
+        geolocation.clearWatch(watchId)
+        watchId = null
+      }
+      if (deadlineTimer !== null) {
+        clearTimeout(deadlineTimer)
+        deadlineTimer = null
+      }
+    }
+
+    const settle = (value: Coordinates | null, err?: Error) => {
+      if (settled) return
+      settled = true
+      clearAll()
+      if (err) reject(err)
+      else resolve(value as Coordinates)
+    }
+
+    const handlePosition = (position: GeolocationPosition) => {
+      const { latitude, longitude, accuracy } = position.coords
+      if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude) || !isFiniteNumber(accuracy)) {
+        return
+      }
+      const coords: Coordinates = { latitude, longitude, accuracy }
+      if (best === null || accuracy < best.accuracy) {
+        best = coords
+        try {
+          watchOptions?.onProgress?.(coords)
+        } catch {
+          // ignore callback errors
+        }
+        if (accuracy <= targetAccuracy) {
+          settle(coords)
+        }
+      }
+    }
+
+    const handleError = (error: GeolocationPositionError) => {
+      lastError = error
+      if (error.code === 1) {
+        settle(null, new LocationError(error.code, error.message))
+      }
+    }
+
+    const handleDeadline = () => {
+      if (settled) return
+      if (best !== null && best.accuracy <= MAX_ACCURACY_M) {
+        settle(best)
+      } else if (lastError !== null) {
+        settle(null, new LocationError(lastError.code, lastError.message))
+      } else {
+        settle(null, new LocationError(3, LOCATION_TIMEOUT_MESSAGE))
+      }
+    }
+
+    watchId = geolocation.watchPosition(handlePosition, handleError, options)
+
+    deadlineTimer = setTimeout(handleDeadline, deadlineMs)
+
+    if (watchOptions?.signal) {
+      const onAbort = () => {
+        if (settled) return
+        settled = true
+        clearAll()
+        let abortErr: Error | DOMException
+        if (typeof DOMException !== "undefined") {
+          abortErr = new DOMException("Aborted", "AbortError")
+        } else {
+          abortErr = new Error("Aborted")
+          abortErr.name = "AbortError"
+        }
+        reject(abortErr)
+      }
+      watchOptions.signal.addEventListener("abort", onAbort, { once: true })
+    }
   })
 }
