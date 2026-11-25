@@ -1,7 +1,6 @@
 # Test Results — Class-BARS
 
 **Date:** 2026-08-24
-**Runner session:** opencode (PID 1550), executed after confirming the parallel build session (PID 888) had gone idle.
 **Scope:** Non-destructive verification of the current codebase following the sandbox-module build.
 
 ---
