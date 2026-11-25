@@ -15,6 +15,7 @@ import {
   fenceHalfSize,
   geolocationErrorMessage,
   getCurrentPosition,
+  isDesktopDevice,
   isSmallFence,
   isValidLatitude,
   isValidLongitude,
@@ -256,6 +257,69 @@ test("getCurrentPosition rejects with a typed LocationError", async () => {
   await assert.rejects(getCurrentPosition(geolocation), (error: unknown) => {
     assert.ok(error instanceof LocationError)
     assert.equal(error.code, 1)
+    return true
+  })
+})
+
+test("isDesktopDevice returns false in non-browser environments", () => {
+  assert.equal(isDesktopDevice(), false)
+})
+
+test("isDesktopDevice is memoised", () => {
+  const first = isDesktopDevice()
+  const second = isDesktopDevice()
+  assert.equal(first, second)
+})
+
+test("getCurrentPosition falls back to one-shot getCurrentPosition when watchPosition is absent", async () => {
+  let receivedOptions: PositionOptions | undefined
+  let calls = 0
+
+  const geolocation = {
+    getCurrentPosition: (
+      success: PositionCallback,
+      _error: PositionErrorCallback,
+      options?: PositionOptions,
+    ) => {
+      void _error
+      calls += 1
+      receivedOptions = options
+      success({
+        coords: {
+          latitude: -15.7894,
+          longitude: 35.038,
+          accuracy: 7,
+          altitude: null,
+          altitudeAccuracy: null,
+          heading: null,
+          speed: null,
+          toJSON: () => ({}),
+        },
+        timestamp: Date.now(),
+        toJSON: () => ({}),
+      })
+    },
+  } as unknown as Geolocation
+
+  const position = await getCurrentPosition(geolocation)
+  assert.deepEqual(position, {
+    latitude: -15.7894,
+    longitude: 35.038,
+    accuracy: 7,
+  })
+  assert.equal(calls, 1)
+  assert.deepEqual(receivedOptions, {
+    enableHighAccuracy: true,
+    timeout: 20_000,
+    maximumAge: 0,
+  })
+})
+
+test("getCurrentPosition watchPosition fallback rejects when neither method exists", async () => {
+  const geolocation = {} as unknown as Geolocation
+  await assert.rejects(getCurrentPosition(geolocation), (error: unknown) => {
+    assert.ok(error instanceof LocationError)
+    assert.equal(error.code, 2)
     return true
   })
 })

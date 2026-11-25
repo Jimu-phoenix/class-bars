@@ -17,6 +17,53 @@ export const LOCATION_OPTIONS: PositionOptions = {
   maximumAge: 0,
 }
 
+let _desktopCache: { value: boolean; computed: boolean } = {
+  value: false,
+  computed: false,
+}
+
+/**
+ * Detects desktop/laptop (pointer: fine) vs mobile/touch (pointer: coarse).
+ * Runs once and is memoised. Returns false in non-browser environments.
+ */
+export function isDesktopDevice(): boolean {
+  if (_desktopCache.computed) {
+    return _desktopCache.value
+  }
+  let result = false
+  if (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function"
+  ) {
+    result = window.matchMedia("(pointer: fine)").matches
+    const ua = navigator.userAgent
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      ua,
+    )
+    const isDesktopOS =
+      /Windows|Macintosh|Linux|CrOS/i.test(ua) && !isMobileUA
+    // A fine pointer or a desktop OS string indicates desktop/laptop.
+    result = result || isDesktopOS
+    if (isMobileUA) {
+      result = false
+    }
+  }
+  _desktopCache = { value: result, computed: true }
+  return result
+}
+
+function desktopLocationOptions(): PositionOptions {
+  return {
+    enableHighAccuracy: false,
+    timeout: 30_000,
+    maximumAge: 30_000,
+  }
+}
+
+function defaultLocationOptions(): PositionOptions {
+  return isDesktopDevice() ? desktopLocationOptions() : LOCATION_OPTIONS
+}
+
 export type Coordinates = {
   latitude: number
   longitude: number
@@ -338,7 +385,7 @@ export function getCurrentPosition(
   geolocation: Geolocation | undefined = typeof navigator !== "undefined"
     ? navigator.geolocation
     : undefined,
-  options: PositionOptions = LOCATION_OPTIONS,
+  options: PositionOptions = defaultLocationOptions(),
   watchOptions?: GetCurrentPositionOptions,
 ): Promise<Coordinates> {
   if (!geolocation) {
@@ -359,7 +406,9 @@ export function getCurrentPosition(
     Number.isFinite(watchOptions.deadlineMs) &&
     watchOptions.deadlineMs > 0
       ? watchOptions.deadlineMs
-      : LOCATION_DEADLINE_MS
+      : isDesktopDevice()
+        ? 30_000
+        : LOCATION_DEADLINE_MS
 
   if (watchOptions?.signal?.aborted) {
     let abortErr: Error | DOMException
@@ -404,6 +453,14 @@ export function getCurrentPosition(
         return
       }
       const coords: Coordinates = { latitude, longitude, accuracy }
+
+      // Desktop IP/Wi-Fi geolocation does not meaningfully improve over time,
+      // so accept the first fix immediately instead of hunting for GPS.
+      if (isDesktopDevice()) {
+        settle(coords)
+        return
+      }
+
       if (best === null || accuracy < best.accuracy) {
         best = coords
         try {
@@ -426,16 +483,29 @@ export function getCurrentPosition(
 
     const handleDeadline = () => {
       if (settled) return
-      if (best !== null && best.accuracy <= MAX_ACCURACY_M) {
+      // Desktop: return the best fix we have (may be coarse IP/Wi-Fi accuracy).
+      // Mobile: only accept fixes within the 200 m accuracy ceiling.
+      if (best !== null && (isDesktopDevice() || best.accuracy <= MAX_ACCURACY_M)) {
         settle(best)
-      } else if (lastError !== null) {
+        return
+      }
+      if (lastError !== null) {
         settle(null, new LocationError(lastError.code, lastError.message))
       } else {
         settle(null, new LocationError(3, LOCATION_TIMEOUT_MESSAGE))
       }
     }
 
-    watchId = geolocation.watchPosition(handlePosition, handleError, options)
+    if (typeof geolocation.watchPosition === "function") {
+      watchId = geolocation.watchPosition(handlePosition, handleError, options)
+    } else if (typeof geolocation.getCurrentPosition === "function") {
+      // One-shot fallback for environments without watchPosition (e.g. tests,
+      // some locked-down desktop browsers). Desktop settles on first fix via
+      // handlePosition; mobile waits for deadline like watchPosition mode.
+      geolocation.getCurrentPosition(handlePosition, handleError, options)
+    } else {
+      settle(null, new LocationError(2, "Geolocation is not available in this browser."))
+    }
 
     deadlineTimer = setTimeout(handleDeadline, deadlineMs)
 
